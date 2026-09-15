@@ -77,7 +77,7 @@ fn main() {
 	}
 	settings.handle('${settings_action_category}1') or { panic(err) }
 	settings.handle('${settings_action_theme}1') or { panic(err) }
-	assert desktop.settings.theme == .macos
+	assert desktop.settings.preset_id == 'macos'
 	settings.handle('${settings_action_category}4') or { panic(err) }
 	settings.handle(settings_scale_200_action) or { panic(err) }
 	assert desktop_requested_scale() == desktop_scale_200

@@ -146,3 +146,17 @@ fn test_every_preset_resolves() {
 		assert eff.decor.window_body != 0 || eff.decor.window_body == 0
 	}
 }
+
+// ── Bridge: wire-index round trip (low-coupling integration) ───────
+
+fn test_registry_index_round_trip() {
+	for i, lnf in lookandfeel_registry {
+		assert registry_index_of(lnf.id) == i
+		assert registry_id_at(i) == lnf.id
+	}
+	// Unknown id encodes as the default index (0); out-of-range index decodes
+	// to the default preset id.
+	assert registry_index_of('nope') == 0
+	assert registry_id_at(-1) == default_preset_id
+	assert registry_id_at(9999) == default_preset_id
+}

@@ -24,16 +24,15 @@ enum TaskbarMode {
 	combined
 }
 
-enum ThemeKind {
-	default_
-	macos
-}
-
 struct Settings {
 mut:
 	button_side  ButtonSide
 	taskbar_mode TaskbarMode
-	theme        ThemeKind
+	// The selected look-and-feel preset, by stable string id (Blue spec A/G).
+	// Replaces the old `ThemeKind` enum: selection is now registry-driven, so
+	// adding a preset needs no change here. `Desktop.theme()` maps this id to a
+	// concrete `Theme` via preset_theme().
+	preset_id string = default_preset_id
 	// Index into wallpaper_colors, used when no image is chosen.
 	wallpaper_color int
 	// Index into the wallpaper images, or -1 for the colour above.
@@ -219,10 +218,7 @@ const theme_macos = Theme{
 }
 
 fn (d &Desktop) theme() Theme {
-	return match d.settings.theme {
-		.default_ { theme_default }
-		.macos { theme_macos }
-	}
+	return preset_theme(d.settings.preset_id)
 }
 
 // ── Wallpaper ──────────────────────────────────────────────────────

@@ -170,7 +170,7 @@ fn (mut r WireReader) take_string() !string {
 fn wire_put_state(mut out []u8, state AppWireState) {
 	wire_put_i32(mut out, int(state.settings.button_side))
 	wire_put_i32(mut out, int(state.settings.taskbar_mode))
-	wire_put_i32(mut out, int(state.settings.theme))
+	wire_put_i32(mut out, registry_index_of(state.settings.preset_id))
 	wire_put_i32(mut out, state.settings.wallpaper_color)
 	wire_put_i32(mut out, state.settings.wallpaper_image)
 	wire_put_i32(mut out, state.requested_scale)
@@ -211,7 +211,7 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 	capture_report_fps := reader.take_i32()!
 	if button_side < int(ButtonSide.right) || button_side > int(ButtonSide.left)
 		|| taskbar_mode < int(TaskbarMode.standard) || taskbar_mode > int(TaskbarMode.combined)
-		|| theme < int(ThemeKind.default_) || theme > int(ThemeKind.macos)
+		|| theme < 0 || theme >= lookandfeel_registry.len
 		|| !desktop_scale_valid(requested_scale)
 		|| capture_command < int(CaptureCommand.none_)
 		|| capture_command > int(CaptureCommand.stop) || capture_delay < 0
@@ -226,7 +226,7 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 		settings: Settings{
 			button_side: unsafe { ButtonSide(button_side) }
 			taskbar_mode: unsafe { TaskbarMode(taskbar_mode) }
-			theme: unsafe { ThemeKind(theme) }
+			preset_id: registry_id_at(theme)
 			wallpaper_color: wallpaper_color
 			wallpaper_image: wallpaper_image
 		}

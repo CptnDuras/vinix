@@ -247,26 +247,32 @@ fn (a &SettingsApp) theme_pane(width int) []ui2.Element {
 	inner := width - 2 * settings_padding
 	half := (inner - settings_row_gap) / 2
 
-	mut out := frame_elements(8)
+	mut out := frame_elements(4 + 2 * lookandfeel_registry.len)
 	mut y := settings_padding
 
 	out << settings_heading('Theme', y, width)
 	y += 22
 	out << settings_note('How windows and the taskbar are drawn.', y, width)
 	y += 22
-	out << settings_choice('${settings_action_theme}0', 'Default', settings_padding, y, half, settings.theme == .default_)
-	out << settings_choice('${settings_action_theme}1', 'macOS', settings_padding + half + settings_row_gap, y, half, settings.theme == .macos)
-	y += 28 + 10
 
-	if settings.theme == .macos {
-		out << settings_note('Light grey windows with the title centred, three', y, width)
-		y += 16
-		out << settings_note('coloured discs at the leading edge, and a dock.', y, width)
-	} else {
-		out << settings_note('Rounded windows with shadows and flat colour,', y, width)
-		y += 16
-		out << settings_note('and a taskbar across the bottom.', y, width)
+	// Registry-driven picker: one choice per registered preset, laid out two to
+	// a row. Adding a preset makes it appear here with no change to this code.
+	for i, lnf in lookandfeel_registry {
+		col := i % 2
+		x := if col == 0 { settings_padding } else { settings_padding + half + settings_row_gap }
+		out << settings_choice('${settings_action_theme}${i}', lnf.name, x, y, half,
+			settings.preset_id == lnf.id)
+		if col == 1 {
+			y += 28 + 10
+		}
 	}
+	if lookandfeel_registry.len % 2 == 1 {
+		y += 28 + 10
+	}
+
+	// The selected preset's own description, from the registry.
+	selected := lookandfeel_by_id(settings.preset_id)
+	out << settings_note(selected.description, y, width)
 
 	return out
 }
@@ -385,11 +391,8 @@ fn (mut a SettingsApp) handle(event_id string) ! {
 		return
 	}
 	if event_id.starts_with(settings_action_theme) {
-		a.desktop.settings.theme = if event_id.ends_with('1') {
-			ThemeKind.macos
-		} else {
-			ThemeKind.default_
-		}
+		index := event_id[settings_action_theme.len..].int()
+		a.desktop.settings.preset_id = registry_id_at(index)
 		return
 	}
 	if event_id.starts_with(settings_action_color) {
