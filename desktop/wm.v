@@ -878,26 +878,25 @@ fn (d &Desktop) taskbar_element() ui2.Element {
 	defer {
 		unsafe { entries.free() }
 	}
-	mut x := edge_padding + start_button_width + 8
-	// Reserve this space before sizing entries. The clock is therefore visible
-	// at the physical lower-right corner after 2x M1 presentation as well as
-	// on an unscaled framebuffer.
+	// Reserve the clock area before sizing entries, then delegate the entry
+	// space-sharing and placement to the panel layout engine (Blue spec E1) so
+	// the arithmetic is unit-tested and shared across panel arrangements. The
+	// geometry is identical to the previous inline computation.
 	clock_width := taskbar_clock_width
-	entry_right := width - edge_padding - clock_width - taskbar_item_gap
-
-	// Entries share whatever room is left rather than each taking a fixed
-	// slot: with a fixed one the last window opened simply had no entry, which
-	// is the opposite of what a list of open windows is for.
-	mut item_width := if dock { dock_item_width } else { taskbar_item_width }
-	if entries.len > 0 {
-		share := (entry_right - x + taskbar_item_gap) / entries.len - taskbar_item_gap
-		if share < item_width {
-			item_width = share
-		}
-		if item_width < taskbar_item_min_width {
-			item_width = taskbar_item_min_width
-		}
-	}
+	slots := compute_panel_slots(PanelLayoutInput{
+		panel_width:   width
+		edge_padding:  edge_padding
+		start_width:   start_button_width
+		start_gap:     8
+		clock_width:   clock_width
+		item_gap:      taskbar_item_gap
+		entry_count:   entries.len
+		default_width: if dock { dock_item_width } else { taskbar_item_width }
+		min_width:     taskbar_item_min_width
+	})
+	item_width := slots.item_width
+	entry_right := slots.entry_right
+	mut x := slots.first_x
 
 	for entry in entries {
 		if x + item_width > entry_right {
