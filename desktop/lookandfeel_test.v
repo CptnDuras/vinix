@@ -123,6 +123,45 @@ fn test_blue_preset_character() {
 	assert eff.behavior.menu_placement == .in_window
 }
 
+// ── H1: wallpaper as a resolvable axis ─────────────────────────────
+
+// Default (no override, all-none preset) reproduces today's wallpaper values,
+// which are exactly what the app IPC transmits (color index, image index).
+fn test_wallpaper_defaults_match_ipc_values() {
+	eff := resolve_settings(BlueSettings{ preset_id: 'default' })
+	assert eff.surface.wallpaper_color == 0
+	assert eff.surface.wallpaper_image == -1
+}
+
+// A preset may ship a backdrop; a user override beats it.
+fn test_wallpaper_override_beats_preset() {
+	preset := LookAndFeel{
+		id:      'wp'
+		name:    'WP'
+		surface: DesktopSurfaceConfig{
+			wallpaper_image: 3 // preset ships image 3
+		}
+	}
+	// No override -> preset's image.
+	e1 := resolve_config(preset, BlueSettings{ preset_id: 'wp' })
+	assert e1.surface.wallpaper_image == 3
+	// Override -> override wins.
+	e2 := resolve_config(preset, BlueSettings{
+		preset_id: 'wp'
+		surface:   DesktopSurfaceConfig{
+			wallpaper_image: 7
+		}
+	})
+	assert e2.surface.wallpaper_image == 7
+}
+
+// Icon source axis resolves (shortcuts by default).
+fn test_icon_source_default_shortcuts() {
+	eff := resolve_settings(BlueSettings{ preset_id: 'default' })
+	assert eff.surface.icon_source == .shortcuts
+	assert eff.surface.icons_visible == true
+}
+
 // ── G2: no-regression for migrated presets ─────────────────────────
 
 // Default preset must reproduce today's built-in appearance exactly (it is the
