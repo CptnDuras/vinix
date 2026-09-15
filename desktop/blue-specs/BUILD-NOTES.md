@@ -34,28 +34,24 @@ resolver, gray ramp, panel layout, bevel primitive, window-shade, maximize
 policy, focus model, menu model) — 8 test files. It passes under the pinned V
 d622f33.
 
-## Known blocker: full desktop `$vml` harness
+## Full desktop `$vml` harness (RESOLVED)
 
-`desktop/tools/test-utilities.sh` (and the other `$vml`-based harnesses) do not
-currently compile with the pinned V d622f33 + pinned ui2 d13259f in this
-environment. Root cause, reproduced with a minimal probe:
+`desktop/tools/test-utilities.sh` and the other `$vml`-based harnesses now
+compile and run under the pinned V d622f33 + pinned ui2 d13259f, after fixing
+the headless `bounds()` shim (`desktop/tools/ui2_headless_bounds.v`).
 
-- The Linux/Vinix headless build supplies `ui2.bounds()` (the `$vml` root bound
-  function) through `desktop/tools/ui2_headless_bounds.v`, guarded by
-  `$if linux && ui2_headless ? { ... }`.
-- Under the pinned V, that guarded block is **not compiled in** even when
-  `-d ui2_headless` is passed: `ui2.bounds()` resolves to a void/absent
-  function, so `calculator_app.v`'s `$vml` expansion fails
-  (`unknown function ui2.bounds` / `bounds() returns 0 values`).
-- Removing the `?` makes V reject `ui2_headless` as an unknown ident, and
-  nesting the guards does not help — the custom compile-time flag block is not
-  activating.
+**Root cause (was blocking):** the shim supplied `ui2.bounds()` (the `$vml`
+root bound function) via `$if linux && ui2_headless ? { ... }`. Under the pinned
+V, a `$if` that combines a built-in target (`linux`) with a user-defined `?`
+flag does not compile its block in even with `-d ui2_headless`; nor does a
+nested built-in/custom pair. Only a single custom `?` flag activates. Isolated
+with minimal probes.
 
-This is a change in how this V evaluates user-defined `$if <flag> ?` blocks
-versus the version the Vinix headless shim was written for. Resolving it needs
-a rework of the headless `bounds()` shim mechanism (out of scope for Blue), or
-a V commit whose `$if custom_flag ?` semantics match the shim.
+**Fix:** guard the shim with `$if ui2_headless ? { ... }` alone. The headless
+desktop is Linux-only, so gating on the flag is correct.
 
-Consequently, the ui2-coupled Blue glue (beveled chrome drawing, panel tree
-assembly, menu popups, input wiring) cannot be integration-tested here; its
-underlying decisions are all covered by the pure-logic suite above.
+**Result:** `test-utilities.sh` reports 43/44 passing, including every test that
+exercises Blue's changes (theme picker, taskbar, app-process protocol). The one
+failure, `test_terminal_renders_pty_echo_and_carriage_return_updates`, is a
+pre-existing environment-dependent PTY-echo test that fails identically at the
+pre-Blue commit and is unrelated to this work.
