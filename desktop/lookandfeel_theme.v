@@ -20,6 +20,7 @@ module main
 // fall back to the default look, matching lookandfeel_by_id's contract.
 fn preset_theme(id string) Theme {
 	return match id {
+		'blue' { theme_blue }
 		'macos' { theme_macos }
 		else { theme_default }
 	}

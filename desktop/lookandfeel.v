@@ -303,16 +303,31 @@ const default_preset_id = 'default'
 // default, so it inherits every field.
 const lookandfeel_registry = [
 	LookAndFeel{
+		id:          'blue'
+		name:        'Blue'
+		description: 'A calm, cool-neutral look with structural depth: subtle bevels, one reserved accent, and modern anti-aliased type.'
+		order:       0
+		decor:       DecorConfig{
+			window_radius: 3
+			accent:        0x3b74d6
+			title_align:   .left
+		}
+		behavior:    BehaviorConfig{
+			shade_enabled:  true
+			menu_placement: .in_window
+		}
+	},
+	LookAndFeel{
 		id:          'default'
 		name:        'Default'
 		description: 'Rounded windows with shadows and flat colour, and a taskbar across the bottom.'
-		order:       0
+		order:       1
 	},
 	LookAndFeel{
 		id:          'macos'
 		name:        'macOS'
 		description: 'Light grey windows with the title centred, three coloured discs at the leading edge, and a dock.'
-		order:       1
+		order:       2
 		decor:       DecorConfig{
 			window_body:   0xffffff
 			window_edge:   0x9a9a9a

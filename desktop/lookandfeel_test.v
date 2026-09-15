@@ -113,6 +113,16 @@ fn test_registry_is_iterable_and_ordered() {
 	assert 'macos' in ids
 }
 
+// Blue preset resolves to its documented character.
+fn test_blue_preset_character() {
+	eff := resolve_settings(BlueSettings{ preset_id: 'blue' })
+	assert eff.decor.window_radius == 3
+	assert eff.decor.accent == 0x3b74d6
+	assert eff.decor.title_align == .left
+	assert eff.behavior.shade_enabled == true
+	assert eff.behavior.menu_placement == .in_window
+}
+
 // ── G2: no-regression for migrated presets ─────────────────────────
 
 // Default preset must reproduce today's built-in appearance exactly (it is the
