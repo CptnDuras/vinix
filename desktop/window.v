@@ -49,6 +49,10 @@ mut:
 	restore_height int
 	maximized      bool
 	minimized      bool
+	// Window-shade (roll-up): when shaded, the window collapses to its title
+	// bar; restore_height_shade holds the height to return to (Blue spec D1).
+	shaded               bool
+	restore_height_shade int
 	// Index into Desktop.apps for a `.app` window, or -1 for a built-in page.
 	app_index int = -1
 }

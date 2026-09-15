@@ -46,3 +46,12 @@ fn registry_id_at(index int) string {
 	}
 	return lookandfeel_registry[index].id
 }
+
+// behavior resolves the current preset's window-handling policy (Blue spec D).
+// Until per-axis user overrides are threaded into Settings, this resolves the
+// selected preset against empty overrides. The WM reads this for shade,
+// focus, maximize policy, etc.
+fn (d &Desktop) behavior() EffectiveBehavior {
+	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	return eff.behavior
+}

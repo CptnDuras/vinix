@@ -238,8 +238,28 @@ fn (mut d Desktop) toggle_maximize(id int) {
 	d.raise(id)
 }
 
-fn (mut d Desktop) minimize(id int) {
+// toggle_shade rolls a window up to its title bar, or restores it. It applies
+// the pure shade_toggle transition (Blue spec D1) to the real window, gated on
+// the resolved Behavior. A shaded window keeps its title bar; its body is not
+// drawn or hit-tested (shaded_body_visible).
+fn (mut d Desktop) toggle_shade(id int) {
 	index := d.window_index(id) or { return }
+	title_height := d.theme().title_height
+	enabled := d.behavior().shade_enabled
+	state := ShadeState{
+		height:               d.windows[index].height
+		shaded:               d.windows[index].shaded
+		restore_height_shade: d.windows[index].restore_height_shade
+	}
+	next := shade_toggle(state, title_height, enabled)
+	d.windows[index].height = next.height
+	d.windows[index].shaded = next.shaded
+	d.windows[index].restore_height_shade = next.restore_height_shade
+	d.dirty = true
+	d.raise(id)
+}
+
+fn (mut d Desktop) minimize(id int) {	index := d.window_index(id) or { return }
 	d.windows[index].minimized = true
 	d.dirty = true
 	if d.focus == id {
