@@ -339,6 +339,63 @@ const lookandfeel_registry = [
 			title_align:   .center
 		}
 	},
+	LookAndFeel{
+		id:          'win2k'
+		name:        'Windows 2000'
+		description: 'Warm-neutral grey with raised/sunken bevels, a blue gradient title, square corners, and one bottom taskbar.'
+		order:       3
+		decor:       DecorConfig{
+			window_radius: 0
+			accent:        0x0a246a
+			title_align:   .left
+		}
+		behavior:    BehaviorConfig{
+			title_double_click: .maximize
+			menu_placement:     .in_window
+		}
+		shell:       ShellConfig{
+			has_top_bar:    false
+			has_bottom_bar: true
+		}
+	},
+	LookAndFeel{
+		id:          'platinum'
+		name:        'Platinum'
+		description: 'Cool grey Mac OS Platinum: a quiet centred title, grooved dividers, and a global menu bar across the top.'
+		order:       4
+		decor:       DecorConfig{
+			window_radius: 2
+			title_align:   .center
+		}
+		behavior:    BehaviorConfig{
+			title_double_click: .shade
+			menu_placement:     .global_
+		}
+		shell:       ShellConfig{
+			has_top_bar:    true
+			has_bottom_bar: false
+		}
+	},
+	LookAndFeel{
+		id:          'beos'
+		name:        'BeOS'
+		description: 'Restrained light grey with a yellow title accent and tight spacing; the Deskbar folds system menu and window list into one corner.'
+		order:       5
+		decor:       DecorConfig{
+			window_radius: 0
+			accent:        0xffce00
+			title_align:   .left
+		}
+		behavior:    BehaviorConfig{
+			shade_enabled:      true
+			title_double_click: .shade
+			menu_placement:     .in_window
+		}
+		shell:       ShellConfig{
+			has_top_bar:    true
+			has_bottom_bar: false
+		}
+	},
 ]
 
 // lookandfeel_by_id returns the preset with the given id, or the default preset

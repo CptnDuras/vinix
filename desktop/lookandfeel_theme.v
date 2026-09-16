@@ -22,6 +22,9 @@ fn preset_theme(id string) Theme {
 	return match id {
 		'blue' { theme_blue }
 		'macos' { theme_macos }
+		'win2k' { theme_win2k }
+		'platinum' { theme_platinum }
+		'beos' { theme_beos }
 		else { theme_default }
 	}
 }

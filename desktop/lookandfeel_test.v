@@ -162,6 +162,35 @@ fn test_icon_source_default_shortcuts() {
 	assert eff.surface.icons_visible == true
 }
 
+// Era presets resolve to their documented character (spec G2).
+fn test_era_presets_character() {
+	win2k := resolve_settings(BlueSettings{ preset_id: 'win2k' })
+	assert win2k.decor.window_radius == 0
+	assert win2k.behavior.menu_placement == .in_window
+	assert win2k.shell.has_bottom_bar && !win2k.shell.has_top_bar
+
+	platinum := resolve_settings(BlueSettings{ preset_id: 'platinum' })
+	assert platinum.decor.title_align == .center
+	assert platinum.behavior.menu_placement == .global_
+	assert platinum.shell.has_top_bar && !platinum.shell.has_bottom_bar
+
+	beos := resolve_settings(BlueSettings{ preset_id: 'beos' })
+	assert beos.behavior.shade_enabled
+	assert beos.decor.accent == 0xffce00
+	assert beos.shell.has_top_bar
+}
+
+// The registry now offers the full preset set.
+fn test_registry_has_all_presets() {
+	mut ids := []string{}
+	for lnf in lookandfeel_registry {
+		ids << lnf.id
+	}
+	for want in ['blue', 'default', 'macos', 'win2k', 'platinum', 'beos'] {
+		assert want in ids
+	}
+}
+
 // ── G2: no-regression for migrated presets ─────────────────────────
 
 // Default preset must reproduce today's built-in appearance exactly (it is the
