@@ -1245,3 +1245,33 @@ fn test_blue_titlebar_draws_a_raised_bevel() {
 	assert top_edge2 != light
 	free_tree(root2)
 }
+
+fn test_blue_shows_a_top_bar_with_system_menu_and_clock() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	desktop.update_taskbar_clock_at(0)
+
+	// Blue: a top bar hosting the leading system menu and a trailing clock,
+	// plus the bottom taskbar.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().has_top_bar
+	root := desktop.build_tree()
+	topbar := utility_element_named(root, 'topbar') or { panic('missing top bar') }
+	assert utility_element_named(topbar, top_bar_action_system) != none
+	assert utility_element_named(topbar, 'topbar.clock') != none
+	// The bottom taskbar is still present.
+	assert utility_element_named(root, 'taskbar') != none
+	free_tree(root)
+
+	// Default: no top bar, bottom taskbar only.
+	desktop.settings.preset_id = 'default'
+	assert !desktop.shell().has_top_bar
+	root2 := desktop.build_tree()
+	assert utility_element_named(root2, 'topbar') == none
+	assert utility_element_named(root2, 'taskbar') != none
+	free_tree(root2)
+}

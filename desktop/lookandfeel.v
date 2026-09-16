@@ -316,6 +316,10 @@ const lookandfeel_registry = [
 			shade_enabled:  true
 			menu_placement: .in_window
 		}
+		shell:       ShellConfig{
+			has_top_bar:    true
+			has_bottom_bar: true
+		}
 	},
 	LookAndFeel{
 		id:          'default'

@@ -55,3 +55,10 @@ fn (d &Desktop) behavior() EffectiveBehavior {
 	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
 	return eff.behavior
 }
+
+// shell resolves the current preset's shell arrangement (Blue spec E): whether
+// a top bar and/or bottom bar are present.
+fn (d &Desktop) shell() EffectiveShell {
+	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	return eff.shell
+}

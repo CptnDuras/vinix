@@ -310,7 +310,13 @@ fn (mut d Desktop) build_tree() ui2.Element {
 		}
 		children << d.window_element(window_index)
 	}
-	children << d.taskbar_element()
+	shell := d.shell()
+	if shell.has_bottom_bar {
+		children << d.taskbar_element()
+	}
+	if shell.has_top_bar {
+		children << d.top_bar_element()
+	}
 	// The Start menu paints over windows and the taskbar, and its panel consumes
 	// clicks in otherwise empty areas so they do not reach the window below.
 	if d.start_menu_open {
@@ -1198,7 +1204,7 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 		d.switcher_close()
 	}
 
-	if action == action_start_toggle {
+	if action == action_start_toggle || action == top_bar_action_system {
 		d.start_menu_pointer = true
 		d.toggle_start_menu()
 		return
