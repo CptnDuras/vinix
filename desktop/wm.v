@@ -44,6 +44,12 @@ mut:
 	focus   int
 	drag    Drag
 	hover   string
+	// Double-click tracking on a window title bar, for the configurable
+	// title_double_click action (Blue spec D3). Records the last title-bar
+	// press so a second press on the same title within the threshold fires the
+	// action rather than starting another drag.
+	last_title_click_ms     u64
+	last_title_click_window int
 
 	pointer_x       int
 	pointer_y       int
@@ -324,7 +330,10 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 	window := &d.windows[window_index]
 	theme := d.theme()
 	active := window.id == d.focus
-	body_height := window.height - theme.title_height
+	// A shaded window (Blue spec D1/D3) shows only its title bar: the frame is
+	// the title height, and the divider and body are omitted.
+	shaded := window.shaded
+	body_height := if shaded { 0 } else { window.height - theme.title_height }
 
 	title_text_color := if active { theme.title_text_active } else { theme.title_text_inactive }
 	title_bg := if active { theme.title_active_bg } else { theme.title_inactive_bg }
@@ -417,9 +426,13 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 
 	mut window_children := frame_elements(3)
 	window_children << title_bar
-	window_children << divider
-	window_children << body
-	return ui2.view(window.id_frame, window.frame_rect(), ui2.BoxStyle{
+	if !shaded {
+		window_children << divider
+		window_children << body
+	}
+	frame_height := if shaded { theme.title_height } else { window.height }
+	return ui2.view(window.id_frame, ui2.rect(f64(window.x), f64(window.y), f64(window.width),
+		f64(frame_height)), ui2.BoxStyle{
 		bg: background
 		radius: theme.window_radius
 	}, window_children)
@@ -1226,6 +1239,26 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 		part := rest[dot + 1..]
 		match part {
 			'titlebar' {
+				// A second press on the same title bar within the threshold is
+				// a double-click: run the configured title action (Blue D3)
+				// instead of starting a drag.
+				now := desktop_monotonic_ms()
+				is_double := d.last_title_click_window == id
+					&& now >= d.last_title_click_ms
+					&& now - d.last_title_click_ms <= title_double_click_ms
+				d.last_title_click_ms = now
+				d.last_title_click_window = id
+				if is_double {
+					d.last_title_click_ms = 0
+					d.last_title_click_window = 0
+					match d.behavior().title_double_click {
+						.shade { d.toggle_shade(id) }
+						.hide { d.minimize(id) }
+						.maximize { d.toggle_maximize(id) }
+						.none_ { d.raise(id) }
+					}
+					return
+				}
 				d.raise(id)
 				index := d.window_index(id) or { return }
 				d.drag = Drag{

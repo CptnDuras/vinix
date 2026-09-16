@@ -10,6 +10,10 @@ module main
 // theme is known — an AppFactory declares a height in the abstract.
 const default_title_height = 34
 
+// How close two title-bar presses must be (ms) to count as a double-click for
+// the configurable title action (Blue spec D3).
+const title_double_click_ms = u64(400)
+
 // ── Windows ────────────────────────────────────────────────────────
 
 // ── Window contents ────────────────────────────────────────────────

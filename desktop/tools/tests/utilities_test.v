@@ -1143,3 +1143,46 @@ fn test_vspace_identity_set_answers_each_device_and_inode_once() {
 		assert !seen.add(vspace_identity_key(9, inode))
 	}
 }
+
+fn test_shaded_window_shows_only_its_title_bar() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	// Blue enables window-shade.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.behavior().shade_enabled
+
+	id := desktop.spawn('Shade Me', .welcome, 40, 40, 320, 260)
+	desktop.update_taskbar_clock_at(0)
+	title_h := desktop.theme().title_height
+
+	// Unshaded: the frame carries a divider and a body.
+	root := desktop.build_tree()
+	frame := utility_element_named(root, 'win.${id}') or { panic('missing frame') }
+	assert int(frame.frame.height) == 260
+	assert utility_element_named(frame, 'win.${id}.body') != none
+	assert utility_element_named(frame, 'win.${id}.divider') != none
+	free_tree(root)
+
+	// Shade it: the frame shrinks to the title bar; body and divider are gone.
+	desktop.toggle_shade(id)
+	assert desktop.windows.last().shaded
+	shaded := desktop.build_tree()
+	sframe := utility_element_named(shaded, 'win.${id}') or { panic('missing shaded frame') }
+	assert int(sframe.frame.height) == title_h
+	assert utility_element_named(sframe, 'win.${id}.body') == none
+	assert utility_element_named(sframe, 'win.${id}.titlebar') != none
+	free_tree(shaded)
+
+	// Unshade restores the original height and the body.
+	desktop.toggle_shade(id)
+	assert !desktop.windows.last().shaded
+	restored := desktop.build_tree()
+	rframe := utility_element_named(restored, 'win.${id}') or { panic('missing restored frame') }
+	assert int(rframe.frame.height) == 260
+	assert utility_element_named(rframe, 'win.${id}.body') != none
+	free_tree(restored)
+}
