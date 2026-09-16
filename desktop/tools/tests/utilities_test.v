@@ -1275,3 +1275,36 @@ fn test_blue_shows_a_top_bar_with_system_menu_and_clock() {
 	assert utility_element_named(root2, 'taskbar') != none
 	free_tree(root2)
 }
+
+fn test_system_window_menu_popup_and_actions() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	desktop.settings.preset_id = 'blue' // shade enabled
+	desktop.update_taskbar_clock_at(0)
+	id := desktop.spawn('Menu Win', .welcome, 60, 60, 320, 240)
+
+	// Open the system window menu; the popup carries the five action rows.
+	desktop.open_window_menu(id, 60, 90)
+	assert desktop.window_menu_open()
+	root := desktop.build_tree()
+	menu := utility_element_named(root, 'menu.window') or { panic('missing window menu') }
+	assert utility_element_named(menu, menu_action_close) != none
+	assert utility_element_named(menu, menu_action_shade) != none // enabled under Blue
+	assert utility_element_named(menu, menu_action_minimize) != none
+	assert utility_element_named(menu, menu_action_zoom) != none
+	free_tree(root)
+
+	// Shade via the menu.
+	desktop.route_window_menu_action(menu_action_shade)
+	assert !desktop.window_menu_open() // menu dismissed
+	assert desktop.windows.last().shaded
+
+	// Reopen and close the window via the menu.
+	desktop.open_window_menu(id, 60, 90)
+	desktop.route_window_menu_action(menu_action_close)
+	assert desktop.window_index(id) == none
+}

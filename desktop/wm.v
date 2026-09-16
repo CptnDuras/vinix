@@ -17,7 +17,7 @@ const action_shortcut_prefix = 'shortcut.'
 // not is an application's, and is routed to whichever window it was clicked
 // in — which is what lets a native application name its events whatever it
 // likes, ui2's `__qml_...` or the file browser's `files.row.3` alike.
-const desktop_action_prefixes = ['taskbar.', 'task.', 'win.', 'shortcut.', 'start.',
+const desktop_action_prefixes = ['taskbar.', 'task.', 'win.', 'shortcut.', 'start.', 'window.menu.',
 	action_switch_prefix]
 
 enum DragKind {
@@ -50,6 +50,11 @@ mut:
 	// action rather than starting another drag.
 	last_title_click_ms     u64
 	last_title_click_window int
+	// The system window menu (Blue spec F3), when open: the window it belongs
+	// to (0 = none) and the screen position it is anchored at.
+	window_menu_id int
+	window_menu_x  int
+	window_menu_y  int
 
 	pointer_x       int
 	pointer_y       int
@@ -316,6 +321,10 @@ fn (mut d Desktop) build_tree() ui2.Element {
 	}
 	if shell.has_top_bar {
 		children << d.top_bar_element()
+	}
+	// The system window menu paints over the chrome when open (Blue spec F3).
+	if d.window_menu_open() {
+		children << d.window_menu_element()
 	}
 	// The Start menu paints over windows and the taskbar, and its panel consumes
 	// clicks in otherwise empty areas so they do not reach the window below.
@@ -1207,6 +1216,13 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 	if action == action_start_toggle || action == top_bar_action_system {
 		d.start_menu_pointer = true
 		d.toggle_start_menu()
+		return
+	}
+
+	// System window menu actions (Blue spec F3): invoke the corresponding D
+	// handler on the menu's target window, then dismiss the menu.
+	if action.starts_with('window.menu.') {
+		d.route_window_menu_action(action)
 		return
 	}
 
