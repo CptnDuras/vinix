@@ -41,6 +41,10 @@ const settings_action_taskbar = 'settings.taskbar.'
 const settings_action_theme = 'settings.theme.'
 const settings_action_color = 'settings.color.'
 const settings_action_image = 'settings.image.'
+// G3: reset the user's wallpaper override back to the preset/default (the
+// inherited value). The only axis with a live user-override path today is the
+// desktop surface's wallpaper (H1); this is the per-setting reset for it.
+const settings_action_reset_wallpaper = 'settings.reset.wallpaper'
 
 const settings_sidebar_width = 132
 const settings_padding = 16
@@ -247,7 +251,7 @@ fn (a &SettingsApp) theme_pane(width int) []ui2.Element {
 	inner := width - 2 * settings_padding
 	half := (inner - settings_row_gap) / 2
 
-	mut out := frame_elements(4 + 2 * lookandfeel_registry.len)
+	mut out := frame_elements(7 + 2 * lookandfeel_registry.len)
 	mut y := settings_padding
 
 	out << settings_heading('Theme', y, width)
@@ -260,8 +264,7 @@ fn (a &SettingsApp) theme_pane(width int) []ui2.Element {
 	for i, lnf in lookandfeel_registry {
 		col := i % 2
 		x := if col == 0 { settings_padding } else { settings_padding + half + settings_row_gap }
-		out << settings_choice('${settings_action_theme}${i}', lnf.name, x, y, half,
-			settings.preset_id == lnf.id)
+		out << settings_choice('${settings_action_theme}${i}', lnf.name, x, y, half, settings.preset_id == lnf.id)
 		if col == 1 {
 			y += 28 + 10
 		}
@@ -273,8 +276,33 @@ fn (a &SettingsApp) theme_pane(width int) []ui2.Element {
 	// The selected preset's own description, from the registry.
 	selected := lookandfeel_by_id(settings.preset_id)
 	out << settings_note(selected.description, y, width)
+	y += 22
+
+	// G3: inherited-vs-overridden display with a per-setting reset. The
+	// wallpaper is the axis with a live user-override path (H1): show whether
+	// the current wallpaper is inherited from the preset/default or overridden
+	// by the user, and offer a reset that clears the override so it re-inherits.
+	overridden := wallpaper_is_overridden(settings)
+	status := if overridden {
+		'Wallpaper: overridden by you'
+	} else {
+		'Wallpaper: inherited from the preset'
+	}
+	out << settings_note(status, y, width)
+	if overridden {
+		// A reset control, right-aligned, enabled only while overridden.
+		reset_w := 132
+		out << settings_choice(settings_action_reset_wallpaper, 'Reset wallpaper', width - settings_padding - reset_w, y - 4, reset_w, false)
+	}
 
 	return out
+}
+
+// wallpaper_is_overridden reports whether the user has an explicit wallpaper
+// selection (an image, or a non-default colour) that overrides the preset —
+// the same test surface() uses to decide the override (Blue spec H1/G3).
+fn wallpaper_is_overridden(settings Settings) bool {
+	return settings.wallpaper_image >= 0 || settings.wallpaper_color != 0
 }
 
 fn (a &SettingsApp) wallpaper_pane(width int) []ui2.Element {
@@ -393,6 +421,13 @@ fn (mut a SettingsApp) handle(event_id string) ! {
 	if event_id.starts_with(settings_action_theme) {
 		index := event_id[settings_action_theme.len..].int()
 		a.desktop.settings.preset_id = registry_id_at(index)
+		return
+	}
+	// G3: reset the wallpaper override so it re-inherits from the preset/default.
+	if event_id == settings_action_reset_wallpaper {
+		a.desktop.settings.wallpaper_image = -1
+		a.desktop.settings.wallpaper_color = 0
+		a.desktop.invalidate_wallpaper()
 		return
 	}
 	if event_id.starts_with(settings_action_color) {

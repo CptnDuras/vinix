@@ -310,3 +310,59 @@ fn test_settings_wifi_failures_stale_targets_and_narrow_layout() {
 		assert false, 'offscreen Wi-Fi controls must not become hit targets'
 	}
 }
+
+// G3: the theme picker lists the registered presets in display order, selecting
+// one re-resolves live, and the wallpaper override shows inherited-vs-overridden
+// with a working per-setting reset that returns it to inherited.
+fn test_theme_picker_override_and_reset() {
+	mut desktop := &Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 800
+		}
+	}
+	mut app := &SettingsApp{
+		desktop: desktop
+		category: .theme
+	}
+	root := app.build(ui2.rect(0, 0, 620, 376)) or { panic(err) }
+
+	// (a) the picker lists exactly the registered presets, in order.
+	for i, lnf in lookandfeel_registry {
+		choice := element_named(root, '${settings_action_theme}${i}') or {
+			panic('missing preset choice ${i}')
+		}
+		assert choice.text == lnf.name
+	}
+
+	// (b) selecting a preset updates preset_id and re-resolves live.
+	mut blue_index := -1
+	for i, lnf in lookandfeel_registry {
+		if lnf.id == 'blue' {
+			blue_index = i
+		}
+	}
+	assert blue_index >= 0
+	app.handle('${settings_action_theme}${blue_index}') or { panic(err) }
+	assert desktop.settings.preset_id == 'blue'
+	assert desktop.behavior().shade_enabled // Blue enables shade — live re-resolve
+
+	// (c) with no wallpaper override the status reads "inherited" and no reset
+	// control is shown.
+	assert !wallpaper_is_overridden(desktop.settings)
+	inherited := app.build(ui2.rect(0, 0, 620, 376)) or { panic(err) }
+	assert element_named(inherited, settings_action_reset_wallpaper) == none
+
+	// Choosing a wallpaper colour is an override; the reset control appears.
+	app.handle('${settings_action_color}3') or { panic(err) }
+	assert desktop.settings.wallpaper_color == 3
+	assert wallpaper_is_overridden(desktop.settings)
+	over := app.build(ui2.rect(0, 0, 620, 376)) or { panic(err) }
+	assert element_named(over, settings_action_reset_wallpaper) != none
+
+	// The reset clears the override so the field re-inherits.
+	app.handle(settings_action_reset_wallpaper) or { panic(err) }
+	assert desktop.settings.wallpaper_image == -1
+	assert desktop.settings.wallpaper_color == 0
+	assert !wallpaper_is_overridden(desktop.settings)
+}
