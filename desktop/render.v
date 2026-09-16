@@ -231,8 +231,7 @@ fn (mut d Desktop) render_element(el ui2.Element, off_x int, off_y int, depth in
 		}
 		.image {
 			if el.image_path.starts_with(vinix_surface_image_prefix) {
-				d.canvas.draw_vinix_surface(el.image_path[vinix_surface_image_prefix.len..], x,
-					y, w, h)
+				d.canvas.draw_vinix_surface(el.image_path[vinix_surface_image_prefix.len..], x, y, w, h)
 			} else if el.image_path.starts_with(office_xwd_image_prefix) {
 				drawn, has_ribbon := d.canvas.draw_office_xwd_surface(el.image_path[office_xwd_image_prefix.len..], x, y, w, h)
 				if drawn && has_ribbon {
@@ -374,8 +373,7 @@ fn (mut d Desktop) draw_surface(el ui2.Element, x int, y int, w int, h int, dept
 		// A raised bevel gives the title bar structural depth (Blue spec B3):
 		// light on top/left, dark on bottom/right. Flat looks skip this.
 		if theme.bevel_enabled {
-			d.canvas.bevel_rect(x, y, w, h, .raised, theme.bevel_width, theme.bevel_light,
-				theme.bevel_dark, 0)
+			d.canvas.bevel_rect(x, y, w, h, .raised, theme.bevel_width, theme.bevel_light, theme.bevel_dark, 0)
 		}
 	}
 }
@@ -807,6 +805,12 @@ const cursor_mask = [
 ]
 
 fn (mut d Desktop) draw_cursor() {
+	// B4: the cursor colours come from the resolved Decor axis so a preset can
+	// retheme the pointer. Defaults resolve to today's cursor_fill/cursor_edge,
+	// so an all-none preset is pixel-identical.
+	decor := d.decor()
+	fill := decor.cursor_fill
+	edge := decor.cursor_edge
 	// Keep a visible cursor even while /dev/pointer is between reports (or is
 	// temporarily unavailable). The desktop has a useful initial position at
 	// its centre, and hiding that position makes a working QEMU tablet appear
@@ -832,8 +836,8 @@ fn (mut d Desktop) draw_cursor() {
 	for row, line in cursor_mask {
 		for col := 0; col < line.len; col++ {
 			match line[col] {
-				`#` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, cursor_edge, 255) }
-				`.` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, cursor_fill, 255) }
+				`#` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, edge, 255) }
+				`.` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, fill, 255) }
 				else {}
 			}
 		}

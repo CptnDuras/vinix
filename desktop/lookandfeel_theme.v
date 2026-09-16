@@ -92,7 +92,7 @@ fn (d &Desktop) surface() EffectiveSurface {
 	}
 	eff := resolve_settings(BlueSettings{
 		preset_id: d.settings.preset_id
-		surface:   over
+		surface: over
 	})
 	return eff.surface
 }
@@ -104,4 +104,12 @@ fn (d &Desktop) surface() EffectiveSurface {
 fn (d &Desktop) typography() EffectiveTypography {
 	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
 	return eff.typography
+}
+
+// decor resolves the current preset's Decorations axis (Blue spec B). The
+// renderer reads this for the cursor colours (B4); the full chrome migration
+// still flows through preset_theme() until every Theme field lands in Decor.
+fn (d &Desktop) decor() EffectiveDecor {
+	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	return eff.decor
 }

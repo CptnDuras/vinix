@@ -1216,7 +1216,7 @@ fn test_title_alignment_three_way() {
 fn test_blue_titlebar_draws_a_raised_bevel() {
 	mut desktop := Desktop{
 		canvas: new_canvas(600, 400)
-		fonts:  load_fonts()
+		fonts: load_fonts()
 	}
 	defer {
 		unsafe { free(desktop.canvas.pixels) }
@@ -1315,7 +1315,7 @@ fn test_system_window_menu_popup_and_actions() {
 fn test_maximize_respects_panels() {
 	mut desktop := Desktop{
 		canvas: Canvas{
-			width:  1280
+			width: 1280
 			height: 800
 		}
 	}
@@ -1358,7 +1358,7 @@ fn test_maximize_respects_panels() {
 fn test_title_size_comes_from_typography() {
 	mut desktop := Desktop{
 		canvas: Canvas{
-			width:  1000
+			width: 1000
 			height: 700
 		}
 	}
@@ -1381,7 +1381,7 @@ fn test_title_size_comes_from_typography() {
 fn test_menu_placement_hosts() {
 	mut desktop := Desktop{
 		canvas: Canvas{
-			width:  1280
+			width: 1280
 			height: 720
 		}
 	}
@@ -1423,7 +1423,7 @@ fn test_menu_placement_hosts() {
 	// (which needs a real canvas + fonts).
 	mut click := Desktop{
 		canvas: new_canvas(1280, 720)
-		fonts:  load_fonts()
+		fonts: load_fonts()
 	}
 	defer {
 		unsafe { free(click.canvas.pixels) }
@@ -1448,7 +1448,7 @@ fn test_menu_placement_hosts() {
 fn test_focus_follows_mouse_without_raise() {
 	mut desktop := Desktop{
 		canvas: Canvas{
-			width:  1280
+			width: 1280
 			height: 720
 		}
 	}
@@ -1482,7 +1482,7 @@ fn test_focus_new_windows_gate() {
 	// A preset that does not focus new windows leaves the prior focus intact.
 	no_steal := resolve_settings(BlueSettings{
 		preset_id: 'default'
-		behavior:  BehaviorConfig{
+		behavior: BehaviorConfig{
 			focus_new_windows: false
 		}
 	})
@@ -1498,7 +1498,7 @@ fn test_focus_new_windows_gate() {
 fn test_wallpaper_resolves_through_surface_axis() {
 	mut desktop := Desktop{
 		canvas: Canvas{
-			width:  800
+			width: 800
 			height: 600
 		}
 	}
@@ -1524,7 +1524,7 @@ fn test_wallpaper_resolves_through_surface_axis() {
 fn test_drag_snaps_to_edge_under_blue() {
 	mut desktop := Desktop{
 		canvas: Canvas{
-			width:  1280
+			width: 1280
 			height: 800
 		}
 	}
@@ -1537,10 +1537,10 @@ fn test_drag_snaps_to_edge_under_blue() {
 	// left work-area edge (0) — within the 12px snap threshold.
 	desktop.buttons = button_left
 	desktop.drag = Drag{
-		kind:      .move
+		kind: .move
 		window_id: id
-		offset_x:  10
-		offset_y:  8
+		offset_x: 10
+		offset_y: 8
 	}
 	// pointer x=15 -> proposed left = 15 - 10 = 5, snaps to 0.
 	desktop.on_pointer_move(15, 400)
@@ -1549,7 +1549,7 @@ fn test_drag_snaps_to_edge_under_blue() {
 	// Under Default (no snapping) the same drag lands at the raw position.
 	mut plain := Desktop{
 		canvas: Canvas{
-			width:  1280
+			width: 1280
 			height: 800
 		}
 	}
@@ -1559,11 +1559,56 @@ fn test_drag_snaps_to_edge_under_blue() {
 	pindex := plain.window_index(pid) or { panic('missing window') }
 	plain.buttons = button_left
 	plain.drag = Drag{
-		kind:      .move
+		kind: .move
 		window_id: pid
-		offset_x:  10
-		offset_y:  8
+		offset_x: 10
+		offset_y: 8
 	}
 	plain.on_pointer_move(15, 400)
 	assert plain.windows[pindex].x == 5 // free movement, no snap
+}
+
+// B4: the compositor cursor is drawn from the resolved Decor axis. The default
+// preset reproduces today's cursor exactly; a preset that sets cursor colours
+// retheme the pointer with no renderer change. In cursor_mask, (0,0) is an edge
+// pixel ('#') and row 3 is '#..#', so (1,3) is a fill pixel ('.').
+fn test_cursor_draws_from_resolved_decor() {
+	mut desktop := Desktop{
+		canvas: new_canvas(64, 64)
+		pointer_x: 8
+		pointer_y: 8
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	// Default preset: the drawn edge/fill match the resolved Decor, which is
+	// today's cursor (white fill, near-black edge) — no regression.
+	desktop.settings.preset_id = 'default'
+	dec := desktop.decor()
+	assert dec.cursor_fill == 0xffffff
+	assert dec.cursor_edge == 0x0d1220
+	desktop.canvas.clear(0x808080)
+	desktop.draw_cursor()
+	stride := desktop.canvas.stride
+	// (0,0) is an edge pixel; (1,3) is a fill pixel — both opaque (alpha 255).
+	assert unsafe { desktop.canvas.pixels[8 * stride + 8] } == dec.cursor_edge
+	assert unsafe { desktop.canvas.pixels[(8 + 3) * stride + (8 + 1)] } == dec.cursor_fill
+
+	// The cursor tracks whatever the resolver returns: assert the drawn pixels
+	// equal decor() for every registered preset (proves no literals remain).
+	for lnf in lookandfeel_registry {
+		mut d := Desktop{
+			canvas: new_canvas(64, 64)
+			pointer_x: 8
+			pointer_y: 8
+		}
+		d.settings.preset_id = lnf.id
+		want := d.decor()
+		d.canvas.clear(0x808080)
+		d.draw_cursor()
+		s := d.canvas.stride
+		assert unsafe { d.canvas.pixels[8 * s + 8] } == want.cursor_edge
+		assert unsafe { d.canvas.pixels[(8 + 3) * s + (8 + 1)] } == want.cursor_fill
+		unsafe { free(d.canvas.pixels) }
+	}
 }

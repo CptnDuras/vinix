@@ -32,12 +32,12 @@ fn test_behavior_extended_fields_resolve() {
 	// A preset can turn snapping on and switch the maximize policy; a user
 	// override still beats it field-by-field.
 	preset := LookAndFeel{
-		id:       'p'
-		name:     'P'
+		id: 'p'
+		name: 'P'
 		behavior: BehaviorConfig{
 			maximize_policy: .fill_screen
-			snap_to_edges:   true
-			snap_distance:   20
+			snap_to_edges: true
+			snap_distance: 20
 		}
 	}
 	e1 := resolve_config(preset, BlueSettings{ preset_id: 'p' })
@@ -47,7 +47,7 @@ fn test_behavior_extended_fields_resolve() {
 
 	e2 := resolve_config(preset, BlueSettings{
 		preset_id: 'p'
-		behavior:  BehaviorConfig{
+		behavior: BehaviorConfig{
 			snap_distance: 4
 		}
 	})
@@ -55,11 +55,47 @@ fn test_behavior_extended_fields_resolve() {
 	assert e2.behavior.snap_to_edges == true // preset (no override)
 }
 
+// B4: cursor colours fold into the Decor axis. Defaults reproduce today's
+// compositor cursor; a preset (or override) can retheme fill/edge.
+fn test_cursor_folds_into_decor() {
+	// Default: today's cursor (white fill, near-black edge).
+	def := resolve_config(LookAndFeel{ id: 'x', name: 'X' }, BlueSettings{ preset_id: 'x' })
+	assert def.decor.cursor_fill == 0xffffff
+	assert def.decor.cursor_edge == 0x0d1220
+	assert def.decor.cursor_fill == builtin_decor.cursor_fill
+	assert def.decor.cursor_edge == builtin_decor.cursor_edge
+
+	// A preset retheme the cursor without touching any other field.
+	preset := LookAndFeel{
+		id: 'p'
+		name: 'P'
+		decor: DecorConfig{
+			cursor_fill: 0x112233
+			cursor_edge: 0xffcc00
+		}
+	}
+	e1 := resolve_config(preset, BlueSettings{ preset_id: 'p' })
+	assert e1.decor.cursor_fill == 0x112233
+	assert e1.decor.cursor_edge == 0xffcc00
+	// Siblings still inherit their built-in defaults.
+	assert e1.decor.window_body == builtin_decor.window_body
+
+	// A user override beats the preset.
+	e2 := resolve_config(preset, BlueSettings{
+		preset_id: 'p'
+		decor: DecorConfig{
+			cursor_fill: 0x000000
+		}
+	})
+	assert e2.decor.cursor_fill == 0x000000 // override wins
+	assert e2.decor.cursor_edge == 0xffcc00 // preset (no override)
+}
+
 // An override that sets a single field leaves siblings inheriting.
 fn test_partial_override_within_axis() {
 	over := BlueSettings{
 		preset_id: 'default'
-		decor:     DecorConfig{
+		decor: DecorConfig{
 			accent: 0x112233
 		}
 	}
@@ -75,17 +111,17 @@ fn test_partial_override_within_axis() {
 
 fn test_precedence_override_beats_preset_beats_default() {
 	preset := LookAndFeel{
-		id:    'p'
-		name:  'P'
+		id: 'p'
+		name: 'P'
 		decor: DecorConfig{
 			window_radius: 6 // preset sets radius
-			accent:        0xaaaaaa // preset sets accent
+			accent: 0xaaaaaa // preset sets accent
 		}
 	}
 	// Case 1: override present → override wins.
 	e1 := resolve_config(preset, BlueSettings{
 		preset_id: 'p'
-		decor:     DecorConfig{
+		decor: DecorConfig{
 			window_radius: 2
 		}
 	})
@@ -102,7 +138,7 @@ fn test_precedence_override_beats_preset_beats_default() {
 fn test_resolution_is_deterministic() {
 	bs := BlueSettings{
 		preset_id: 'macos'
-		behavior:  BehaviorConfig{
+		behavior: BehaviorConfig{
 			focus_policy: .focus_follows_mouse
 		}
 	}
@@ -172,8 +208,8 @@ fn test_wallpaper_defaults_match_ipc_values() {
 // A preset may ship a backdrop; a user override beats it.
 fn test_wallpaper_override_beats_preset() {
 	preset := LookAndFeel{
-		id:      'wp'
-		name:    'WP'
+		id: 'wp'
+		name: 'WP'
 		surface: DesktopSurfaceConfig{
 			wallpaper_image: 3 // preset ships image 3
 		}
@@ -184,7 +220,7 @@ fn test_wallpaper_override_beats_preset() {
 	// Override -> override wins.
 	e2 := resolve_config(preset, BlueSettings{
 		preset_id: 'wp'
-		surface:   DesktopSurfaceConfig{
+		surface: DesktopSurfaceConfig{
 			wallpaper_image: 7
 		}
 	})
