@@ -1761,3 +1761,60 @@ fn test_desktop_icon_source_shortcuts_and_files() {
 	assert files[1].children[1].text == 'notes.txt'
 	assert files[2].children[1].text == 'todo.md'
 }
+
+// A3: settings persistence & migration. The sparse blob writes only non-default
+// fields, round-trips exactly, and a missing/garbage blob loads the built-in
+// defaults rather than crashing. "Reset" is the absence of a key on disk.
+fn test_settings_persistence_roundtrip_and_resilience() {
+	// All-default settings encode to the empty string (nothing overridden).
+	def := Settings{}
+	assert encode_settings(def) == ''
+	// Decoding the empty blob yields the built-in defaults.
+	back := decode_settings('')
+	assert back.preset_id == default_preset_id
+	assert back.wallpaper_color == settings_default_wallpaper_color
+	assert back.wallpaper_image == settings_default_wallpaper_image
+	assert back.button_side == .right
+	assert back.taskbar_mode == .standard
+
+	// A sparse override set round-trips exactly, and only the set fields appear.
+	chosen := Settings{
+		preset_id: 'blue'
+		wallpaper_color: 0
+		wallpaper_image: 4
+		button_side: .left
+		taskbar_mode: .combined
+	}
+	blob := encode_settings(chosen)
+	// wallpaper_color is at its default (0) so it is NOT written; the rest are.
+	assert blob.contains('preset blue')
+	assert blob.contains('wallpaper_image 4')
+	assert !blob.contains('wallpaper_color')
+	assert blob.contains('button_side left')
+	assert blob.contains('taskbar_mode combined')
+	round := decode_settings(blob)
+	assert round.preset_id == 'blue'
+	assert round.wallpaper_image == 4
+	assert round.wallpaper_color == 0
+	assert round.button_side == .left
+	assert round.taskbar_mode == .combined
+
+	// Reset semantics: dropping the wallpaper keys re-inherits the defaults.
+	reset := decode_settings('preset blue')
+	assert reset.preset_id == 'blue'
+	assert reset.wallpaper_image == settings_default_wallpaper_image
+	assert reset.wallpaper_color == settings_default_wallpaper_color
+
+	// Garbage/truncated input never crashes: unknown keys, malformed lines and
+	// non-numeric values all leave the field at its default.
+	garbage := decode_settings('this is not valid\n\x00\x01\nwallpaper_image notanint\nunknown_key 5\npreset ')
+	assert garbage.preset_id == default_preset_id
+	assert garbage.wallpaper_image == settings_default_wallpaper_image
+
+	// Migration: an unknown preset id is kept verbatim and normalised only when
+	// resolved — lookandfeel_by_id falls back to the default preset (no crash).
+	stale := decode_settings('preset no_such_preset')
+	assert lookandfeel_by_id(stale.preset_id).id == default_preset_id
+	eff := resolve_settings(BlueSettings{ preset_id: stale.preset_id })
+	assert eff.decor.window_body == builtin_decor.window_body // resolves to defaults
+}

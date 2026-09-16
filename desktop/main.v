@@ -132,6 +132,9 @@ fn main() {
 		fonts: load_fonts()
 		tz_offset_seconds: options.tz_offset
 	}
+	// A3: restore the user's saved look-and-feel selection and overrides. A
+	// missing/garbage file loads the built-in defaults (see load_settings).
+	desktop.settings = load_settings()
 
 	mut pointer := open_pointer(options.pointer)
 	defer {

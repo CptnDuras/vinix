@@ -427,8 +427,15 @@ fn app_current_state(desktop &Desktop) AppWireState {
 fn apply_app_state(mut desktop Desktop, state AppWireState) {
 	wallpaper_changed := desktop.settings.wallpaper_color != state.settings.wallpaper_color
 		|| desktop.settings.wallpaper_image != state.settings.wallpaper_image
+	// A3: persist the settings whenever the incoming state changes them, so a
+	// preset choice or override survives a restart. Compared before the
+	// assignment; the write is best-effort and only happens on an actual change.
+	settings_changed := desktop.settings != state.settings
 	desktop.settings = state.settings
 	desktop.accept_capture_request(state.capture_request)
+	if settings_changed {
+		desktop.save_settings()
+	}
 	if wallpaper_changed {
 		desktop.invalidate_wallpaper()
 	}
