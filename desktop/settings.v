@@ -67,6 +67,10 @@ struct Theme {
 	title_text_active   u32
 	title_text_inactive u32
 	title_centered      bool
+	// 3-way title alignment (Blue spec B3 / GAP-9). When unset (left) the
+	// legacy title_centered bool still centres; title_align takes precedence
+	// when not .left.
+	title_align         TitleAlign
 	title_bold          bool
 	title_size          int
 	// A second colour for the title bar, blended down its height. A theme that

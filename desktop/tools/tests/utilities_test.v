@@ -1186,3 +1186,29 @@ fn test_shaded_window_shows_only_its_title_bar() {
 	assert utility_element_named(rframe, 'win.${id}.body') != none
 	free_tree(restored)
 }
+
+fn test_title_alignment_three_way() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1000
+			height: 700
+		}
+	}
+	id := desktop.spawn('Aligned', .welcome, 30, 30, 400, 260)
+	desktop.update_taskbar_clock_at(0)
+
+	// Default preset: left-aligned title (title starts inset from the edge).
+	root := desktop.build_tree()
+	title := utility_element_named(root, 'win.${id}.title') or { panic('missing title') }
+	assert title.frame.x > 0 // left-aligned: inset, not spanning from 0
+	assert int(title.frame.width) < 400 // limited run, not the whole bar
+	free_tree(root)
+
+	// macOS preset: centred title (spans the whole bar from x=0).
+	desktop.settings.preset_id = 'macos'
+	centred := desktop.build_tree()
+	ctitle := utility_element_named(centred, 'win.${id}.title') or { panic('missing centred title') }
+	assert int(ctitle.frame.x) == 0
+	assert int(ctitle.frame.width) == 400 // spans the full window width
+	free_tree(centred)
+}

@@ -388,19 +388,33 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 	maximize := d.title_button(middle, middle_glyph, middle_x, active, set_hovered)
 	minimize := d.title_button(inner, inner_glyph, inner_x, active, set_hovered)
 
-	// The title takes what the buttons leave. Centred themes centre it over the
-	// whole bar and simply accept a shorter run.
+	// Effective 3-way alignment: title_align wins when set; otherwise the
+	// legacy title_centered bool maps to center/left (Blue spec B3).
+	align := if theme.title_align != .left {
+		theme.title_align
+	} else if theme.title_centered {
+		TitleAlign.center
+	} else {
+		TitleAlign.left
+	}
+	centered := align == .center
 	text_inset_left := if buttons_left { theme.button_inset + span + 10 } else { 14 }
 	title_limit := window.width - span - theme.button_inset - text_inset_left - 10
-	title := ui2.label(window.id_title, window.title, ui2.rect(f64(if theme.title_centered {
-		0
-	} else {
-		text_inset_left
-	}), 0, f64(if theme.title_centered { window.width } else { title_limit }), f64(theme.title_height)), ui2.TextStyle{
+	title_x := match align {
+		.center { 0 }
+		.right { text_inset_left }
+		.left { text_inset_left }
+	}
+	title_w := if centered { window.width } else { title_limit }
+	title := ui2.label(window.id_title, window.title, ui2.rect(f64(title_x), 0, f64(title_w), f64(theme.title_height)), ui2.TextStyle{
 		color: title_text_color
 		size: theme.title_size
 		bold: theme.title_bold
-		align: if theme.title_centered { .center } else { .left }
+		align: match align {
+			.center { .center }
+			.right { .right }
+			.left { .left }
+		}
 		lines: 1
 	})
 
