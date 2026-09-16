@@ -62,3 +62,10 @@ fn (d &Desktop) shell() EffectiveShell {
 	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
 	return eff.shell
 }
+
+// surface resolves the current preset's desktop-surface axis (Blue spec H):
+// wallpaper selection, desktop-icon source, and icon visibility.
+fn (d &Desktop) surface() EffectiveSurface {
+	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	return eff.surface
+}

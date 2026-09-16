@@ -809,6 +809,10 @@ fn (mut d Desktop) forward_pointer_to_app(x int, y int, phase AppPointerPhase, b
 // transparent view that only shows a panel while the pointer is on it, so an
 // idle desktop is just the wallpaper and its icons.
 fn (d &Desktop) shortcut_elements() []ui2.Element {
+	// Desktop icons can be hidden entirely (Blue spec H3).
+	if !d.surface().icons_visible {
+		return []ui2.Element{}
+	}
 	mut out := frame_elements(available_apps.len)
 	rows := shortcut_rows_for_height(d.canvas.height)
 	for index in 0 .. available_apps.len {
