@@ -147,6 +147,27 @@ fn test_launcher_pins_resolve() {
 	assert beos.shell.launcher_pins.len == 3
 }
 
+// E5: the tray's status items resolve like any axis field. Unset means an
+// empty tray (today's shells); a preset can register status items in order.
+fn test_tray_items_resolve() {
+	def := resolve_config(LookAndFeel{ id: 'x', name: 'X' }, BlueSettings{ preset_id: 'x' })
+	assert def.shell.tray_items.len == 0 // empty tray by default
+
+	preset := LookAndFeel{
+		id: 'p'
+		name: 'P'
+		shell: ShellConfig{
+			tray_items: [TrayStatus.wifi, TrayStatus.battery]
+		}
+	}
+	e := resolve_config(preset, BlueSettings{ preset_id: 'p' })
+	assert e.shell.tray_items == [TrayStatus.wifi, TrayStatus.battery]
+
+	// The Blue preset ships a wifi + battery tray.
+	blue := resolve_settings(BlueSettings{ preset_id: 'blue' })
+	assert blue.shell.tray_items.len == 2
+}
+
 // ── A2: resolver precedence — override → preset → default ───────────
 
 fn test_precedence_override_beats_preset_beats_default() {

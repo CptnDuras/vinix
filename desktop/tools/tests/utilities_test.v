@@ -1660,3 +1660,47 @@ fn test_launcher_renders_pinned_tiles_in_order() {
 	assert utility_element_named(ptree, top_bar_launcher_id) == none
 	free_tree(ptree)
 }
+
+// E5: the tray hosts status items in the trailing slot. An empty tray occupies
+// no space (no element); a registered set renders in order and does not overlap
+// the clock. Blue ships a wifi + battery tray.
+fn test_tray_renders_status_without_overlapping_clock() {
+	mut desktop := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().tray_items.len == 2
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	topbar := utility_element_named(root, 'topbar') or { panic('missing top bar') }
+	tray := utility_element_named(topbar, top_bar_tray_id) or { panic('missing tray') }
+	// One cell per registered item, in order (wifi then battery).
+	assert tray.children.len == 2
+	assert tray.children[0].id == 'tray.wifi'
+	assert tray.children[1].id == 'tray.battery'
+	// The tray sits entirely to the left of the clock (no overlap).
+	clock := utility_element_named(topbar, 'topbar.clock') or { panic('missing clock') }
+	assert tray.frame.x + tray.frame.width <= clock.frame.x
+	free_tree(root)
+
+	// A shell with an empty tray renders no tray element at all (no space).
+	mut plain := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(plain.canvas.pixels) }
+	}
+	// Platinum has a top bar but no tray items.
+	plain.settings.preset_id = 'platinum'
+	assert plain.shell().tray_items.len == 0
+	plain.update_taskbar_clock_at(0)
+	ptree := plain.build_tree()
+	assert utility_element_named(ptree, top_bar_tray_id) == none
+	free_tree(ptree)
+}

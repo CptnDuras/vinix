@@ -83,6 +83,11 @@ struct ShellConfig {
 	// not reuse it. Empty/unset means no launcher strip (today's shells have
 	// none), so the default is unchanged.
 	launcher_pins ?[]int
+	// E5: the tray's status items, in trailing order. The first cut is status
+	// icons only (battery/wifi); notifications are a deferred extension of the
+	// tray (ISSUES.md GAP-13), not a separate axis. Empty/unset means no tray
+	// (today's shells have none), so it occupies no space by default.
+	tray_items ?[]TrayStatus
 }
 
 // DesktopSurfaceConfig — sparse Desktop-surface axis (spec H).
@@ -128,6 +133,13 @@ enum MenuPlacement {
 enum IconSource {
 	shortcuts
 	files
+}
+
+// TrayStatus is one status item the tray can host (Blue spec E5). The first cut
+// is status icons only; notifications are a deferred extension (GAP-13).
+enum TrayStatus {
+	battery
+	wifi
 }
 
 // ── LookAndFeel: one preset in the registry ────────────────────────
@@ -202,6 +214,7 @@ struct EffectiveShell {
 	has_bottom_bar  bool
 	has_window_list bool
 	launcher_pins   []int
+	tray_items      []TrayStatus
 }
 
 struct EffectiveSurface {
@@ -268,6 +281,7 @@ const builtin_shell = EffectiveShell{
 	has_bottom_bar: true
 	has_window_list: true
 	launcher_pins: []int{}
+	tray_items: []TrayStatus{}
 }
 
 const builtin_surface = EffectiveSurface{
@@ -344,6 +358,7 @@ fn resolve_shell(preset ?ShellConfig, over ?ShellConfig) EffectiveShell {
 		has_bottom_bar: o.has_bottom_bar or { p.has_bottom_bar or { builtin_shell.has_bottom_bar } }
 		has_window_list: o.has_window_list or { p.has_window_list or { builtin_shell.has_window_list } }
 		launcher_pins: o.launcher_pins or { p.launcher_pins or { builtin_shell.launcher_pins } }
+		tray_items: o.tray_items or { p.tray_items or { builtin_shell.tray_items } }
 	}
 }
 
@@ -393,6 +408,9 @@ const lookandfeel_registry = [
 		shell: ShellConfig{
 			has_top_bar: true
 			has_bottom_bar: true
+			// The top bar carries a small status tray (wifi + battery) at the
+			// trailing edge, left of the clock.
+			tray_items: [.wifi, .battery]
 		}
 	},
 	LookAndFeel{

@@ -15,6 +15,10 @@ const top_bar_height = 26
 const top_bar_action_system = 'taskbar.system'
 const top_bar_app_menu_id = 'topbar.app_menu'
 const top_bar_launcher_id = 'topbar.launcher'
+const top_bar_tray_id = 'topbar.tray'
+const tray_icon_size = 18
+const tray_gap = 4
+const tray_pad = 10
 
 // top_bar_element builds the top panel. Item ids are stable so hit routing and
 // tests can find them:
@@ -28,7 +32,7 @@ fn (d &Desktop) top_bar_element() ui2.Element {
 	theme := d.theme()
 	width := d.canvas.width
 
-	mut children := frame_elements(6)
+	mut children := frame_elements(7)
 
 	// Leading: the system menu (the Blue leaf / Apple-style menu). Reuses the
 	// start-toggle action so clicking it opens the system menu host.
@@ -73,6 +77,17 @@ fn (d &Desktop) top_bar_element() ui2.Element {
 		bold: true
 		align: .right
 	})
+
+	// Tray (Blue spec E5): status icons in the trailing slot, left of the
+	// clock. Rendered only when the resolved shell registers items, so an empty
+	// tray occupies no space and does not overlap the clock. Notifications are a
+	// deferred tray extension (GAP-13).
+	tray := d.shell().tray_items
+	if tray.len > 0 {
+		tray_w := tray.len * (tray_icon_size + tray_gap) - tray_gap
+		tray_x := width - taskbar_padding - clock_w - tray_pad - tray_w
+		children << d.tray_element(tray, tray_x)
+	}
 
 	// A hairline along the bottom edge separates the bar from the desktop.
 	children << ui2.view('topbar.edge', ui2.rect(0, f64(top_bar_height - 1), f64(width), 1), ui2.BoxStyle{
@@ -135,6 +150,34 @@ fn (d &Desktop) launcher_element(pins []int, x int) ui2.Element {
 	}
 	width := if tx > 0 { tx - gap } else { 0 }
 	return ui2.view(top_bar_launcher_id, ui2.rect(f64(x), 0, f64(width), f64(top_bar_height)), ui2.BoxStyle{
+		transparent: true
+	}, children)
+}
+
+// tray_element renders the status tray (Blue spec E5): a run of status items in
+// the trailing slot starting at `x`, left of the clock. Each item is a small
+// labelled cell with a stable id ('tray.<kind>'); the first cut shows status
+// text (a battery/wifi glyph set is later). Notifications are a deferred tray
+// extension (GAP-13). An empty tray is never rendered (the caller gates on len),
+// so the tray occupies no space by default.
+fn (d &Desktop) tray_element(items []TrayStatus, x int) ui2.Element {
+	theme := d.theme()
+	mut children := frame_elements(items.len)
+	mut tx := 0
+	for item in items {
+		id, glyph := match item {
+			.battery { 'tray.battery', 'BAT' }
+			.wifi { 'tray.wifi', 'WiFi' }
+		}
+		children << ui2.label(id, glyph, ui2.rect(f64(tx), 5, f64(tray_icon_size), f64(top_bar_height - 8)), ui2.TextStyle{
+			color: theme.taskbar_text_active
+			size: 10
+			align: .center
+		})
+		tx += tray_icon_size + tray_gap
+	}
+	width := if tx > 0 { tx - tray_gap } else { 0 }
+	return ui2.view(top_bar_tray_id, ui2.rect(f64(x), 0, f64(width), f64(top_bar_height)), ui2.BoxStyle{
 		transparent: true
 	}, children)
 }
