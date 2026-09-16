@@ -29,6 +29,7 @@ for f in \
     panel_layout.v panel_layout_test.v \
     window_shade.v window_shade_test.v \
     maximize_policy.v maximize_policy_test.v \
+    window_snap.v window_snap_test.v \
     focus_model.v focus_model_test.v \
     menu.v menu_test.v \
     canvas.v canvas_bevel.v canvas_bevel_test.v
