@@ -851,33 +851,22 @@ fn (d &Desktop) shortcut_elements() []ui2.Element {
 	}
 	mut out := frame_elements(available_apps.len)
 	rows := shortcut_rows_for_height(d.canvas.height)
+	theme := d.theme()
+	style := IconTileStyle{
+		label: theme.shortcut_label
+		hover: theme.shortcut_hover
+		panel: theme.shortcut_panel
+	}
 	for index in 0 .. available_apps.len {
 		factory := &available_apps[index]
 		id := app_shortcut_actions[index]
-		theme := d.theme()
-		hovered := d.hover == id
 		column := index / rows
 		row := index % rows
 		x := shortcut_left + column * (shortcut_width + shortcut_gap)
 		y := shortcut_top + row * (shortcut_height + shortcut_gap)
-		icon_x := (shortcut_width - shortcut_icon) / 2
-		mut shortcut_children := frame_elements(2)
-		shortcut_children << ui2.button_with_image('', '', factory.icon, ui2.rect(f64(icon_x), 10, f64(shortcut_icon), f64(shortcut_icon)), ui2.BoxStyle{
-			transparent: true
-		}, ui2.TextStyle{
-			color: if hovered { theme.shortcut_hover } else { theme.shortcut_label }
-		})
-		shortcut_children << ui2.label('', factory.title, ui2.rect(0, f64(shortcut_icon + 16), f64(shortcut_width), 18), ui2.TextStyle{
-			color: if hovered { theme.shortcut_hover } else { theme.shortcut_label }
-			shadow: true
-			size: 12
-			align: .center
-		})
-		out << ui2.clickable_view(id, ui2.rect(f64(x), f64(y), f64(shortcut_width), f64(shortcut_height)), ui2.BoxStyle{
-			bg: theme.shortcut_panel
-			radius: 8
-			transparent: !hovered
-		}, shortcut_children)
+		// H2/H3 desktop shortcuts share B's icon_tile renderer (ISSUES.md
+		// ISSUE-3). The wallpaper sits behind them, so the label wears a shadow.
+		out << icon_tile(id, factory.icon, factory.title, ui2.rect(f64(x), f64(y), f64(shortcut_width), f64(shortcut_height)), d.hover == id, style, true)
 	}
 	return out
 }

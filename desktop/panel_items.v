@@ -14,6 +14,7 @@ import ui2
 const top_bar_height = 26
 const top_bar_action_system = 'taskbar.system'
 const top_bar_app_menu_id = 'topbar.app_menu'
+const top_bar_launcher_id = 'topbar.launcher'
 
 // top_bar_element builds the top panel. Item ids are stable so hit routing and
 // tests can find them:
@@ -27,13 +28,11 @@ fn (d &Desktop) top_bar_element() ui2.Element {
 	theme := d.theme()
 	width := d.canvas.width
 
-	mut children := frame_elements(4)
+	mut children := frame_elements(6)
 
 	// Leading: the system menu (the Blue leaf / Apple-style menu). Reuses the
 	// start-toggle action so clicking it opens the system menu host.
-	children << ui2.button_with_image(top_bar_action_system, '', 'builtin:vinix',
-		ui2.rect(f64(taskbar_padding), 2, f64(start_button_width), f64(top_bar_height - 4)),
-		ui2.BoxStyle{
+	children << ui2.button_with_image(top_bar_action_system, '', 'builtin:vinix', ui2.rect(f64(taskbar_padding), 2, f64(start_button_width), f64(top_bar_height - 4)), ui2.BoxStyle{
 		bg: if d.start_menu_open || d.hover == top_bar_action_system {
 			theme.accent
 		} else {
@@ -57,10 +56,18 @@ fn (d &Desktop) top_bar_element() ui2.Element {
 		}
 	}
 
+	// Launcher strip (Blue spec E4): a pinned-app strip of icon_tiles placed
+	// after the system menu (the BeOS Deskbar arrangement). Rendered only when
+	// the resolved shell pins apps, so shells without a launcher are unchanged.
+	pins := d.shell().launcher_pins
+	if pins.len > 0 {
+		launch_x := taskbar_padding + start_button_width + 10
+		children << d.launcher_element(pins, launch_x)
+	}
+
 	// Trailing: the clock, right-aligned in a reserved area.
 	clock_w := taskbar_clock_width
-	children << ui2.label('topbar.clock', d.taskbar_clock_time, ui2.rect(f64(width - taskbar_padding - clock_w),
-		4, f64(clock_w), f64(top_bar_height - 6)), ui2.TextStyle{
+	children << ui2.label('topbar.clock', d.taskbar_clock_time, ui2.rect(f64(width - taskbar_padding - clock_w), 4, f64(clock_w), f64(top_bar_height - 6)), ui2.TextStyle{
 		color: theme.taskbar_text_active
 		size: 14
 		bold: true
@@ -68,8 +75,7 @@ fn (d &Desktop) top_bar_element() ui2.Element {
 	})
 
 	// A hairline along the bottom edge separates the bar from the desktop.
-	children << ui2.view('topbar.edge', ui2.rect(0, f64(top_bar_height - 1), f64(width), 1),
-		ui2.BoxStyle{
+	children << ui2.view('topbar.edge', ui2.rect(0, f64(top_bar_height - 1), f64(width), 1), ui2.BoxStyle{
 		bg: theme.taskbar_edge
 	}, [])
 
@@ -88,17 +94,47 @@ fn (d &Desktop) app_menu_slot(menu Menu, x int) ui2.Element {
 	// A single leading title (the window/app name). Per-app submenus (F4) are
 	// deferred; the first cut surfaces the window menu behind one title.
 	label_w := 160
-	children << ui2.label('', menu.title, ui2.rect(6, 4, f64(label_w), f64(top_bar_height - 6)),
-		ui2.TextStyle{
+	children << ui2.label('', menu.title, ui2.rect(6, 4, f64(label_w), f64(top_bar_height - 6)), ui2.TextStyle{
 		color: theme.taskbar_text_active
-		size:  13
-		bold:  true
+		size: 13
+		bold: true
 		align: .left
 	})
-	return ui2.clickable_view(top_bar_app_menu_id, ui2.rect(f64(x), 0, f64(label_w + 12),
-		f64(top_bar_height)), ui2.BoxStyle{
-		bg:          if d.hover == top_bar_app_menu_id { theme.accent_dim } else { u32(0) }
+	return ui2.clickable_view(top_bar_app_menu_id, ui2.rect(f64(x), 0, f64(label_w + 12), f64(top_bar_height)), ui2.BoxStyle{
+		bg: if d.hover == top_bar_app_menu_id { theme.accent_dim } else { u32(0) }
 		transparent: d.hover != top_bar_app_menu_id
-		radius:      4
+		radius: 4
+	}, children)
+}
+
+// launcher_element renders the pinned-app launcher strip (Blue spec E4) as a
+// horizontal run of compact icon_tiles starting at `x`. Each tile is one pin
+// (an index into available_apps) and carries that app's shortcut action id, so
+// clicking it launches the app exactly as the wallpaper shortcut does. The
+// strip's own view id is stable (top_bar_launcher_id) so hit routing and tests
+// can find it. Tiles use B's shared icon_tile renderer (no private renderer).
+fn (d &Desktop) launcher_element(pins []int, x int) ui2.Element {
+	theme := d.theme()
+	style := IconTileStyle{
+		label: theme.taskbar_text_active
+		hover: theme.taskbar_text_active
+		panel: theme.accent_dim
+	}
+	tile := top_bar_height - 4
+	gap := 4
+	mut children := frame_elements(pins.len)
+	mut tx := 0
+	for pin in pins {
+		if pin < 0 || pin >= available_apps.len {
+			continue
+		}
+		factory := &available_apps[pin]
+		action := app_shortcut_actions[pin]
+		children << icon_tile_ex(action, factory.icon, factory.title, ui2.rect(f64(tx), 2, f64(tile), f64(tile)), d.hover == action, style, false, true)
+		tx += tile + gap
+	}
+	width := if tx > 0 { tx - gap } else { 0 }
+	return ui2.view(top_bar_launcher_id, ui2.rect(f64(x), 0, f64(width), f64(top_bar_height)), ui2.BoxStyle{
+		transparent: true
 	}, children)
 }

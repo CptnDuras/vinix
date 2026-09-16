@@ -77,6 +77,12 @@ struct ShellConfig {
 	// preset can omit it (classic Mac places no window list), leaving just the
 	// system menu / clock. Defaults true so today's taskbar is unchanged.
 	has_window_list ?bool
+	// E4: the launcher's pinned-app set, as indices into available_apps. The
+	// launcher (a Deskbar / WindowMaker-style strip) renders one icon_tile per
+	// pin. E4 owns this pinned-set model; the desktop `shortcuts` mode (H2) does
+	// not reuse it. Empty/unset means no launcher strip (today's shells have
+	// none), so the default is unchanged.
+	launcher_pins ?[]int
 }
 
 // DesktopSurfaceConfig — sparse Desktop-surface axis (spec H).
@@ -195,6 +201,7 @@ struct EffectiveShell {
 	has_top_bar     bool
 	has_bottom_bar  bool
 	has_window_list bool
+	launcher_pins   []int
 }
 
 struct EffectiveSurface {
@@ -260,6 +267,7 @@ const builtin_shell = EffectiveShell{
 	has_top_bar: false
 	has_bottom_bar: true
 	has_window_list: true
+	launcher_pins: []int{}
 }
 
 const builtin_surface = EffectiveSurface{
@@ -335,6 +343,7 @@ fn resolve_shell(preset ?ShellConfig, over ?ShellConfig) EffectiveShell {
 		has_top_bar: o.has_top_bar or { p.has_top_bar or { builtin_shell.has_top_bar } }
 		has_bottom_bar: o.has_bottom_bar or { p.has_bottom_bar or { builtin_shell.has_bottom_bar } }
 		has_window_list: o.has_window_list or { p.has_window_list or { builtin_shell.has_window_list } }
+		launcher_pins: o.launcher_pins or { p.launcher_pins or { builtin_shell.launcher_pins } }
 	}
 }
 
@@ -463,6 +472,9 @@ const lookandfeel_registry = [
 		shell: ShellConfig{
 			has_top_bar: true
 			has_bottom_bar: false
+			// The Deskbar hosts a small launcher strip. Pins are indices into
+			// available_apps: Files, Terminal, Settings.
+			launcher_pins: [0, 3, 4]
 		}
 	},
 ]

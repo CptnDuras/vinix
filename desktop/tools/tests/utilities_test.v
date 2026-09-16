@@ -1612,3 +1612,51 @@ fn test_cursor_draws_from_resolved_decor() {
 		unsafe { free(d.canvas.pixels) }
 	}
 }
+
+// E4: the launcher strip renders one icon_tile per pinned app, in order, each
+// carrying that app's shortcut action id so it launches exactly as the
+// wallpaper shortcut does. BeOS ships a Deskbar launcher (pins 0,3,4).
+fn test_launcher_renders_pinned_tiles_in_order() {
+	mut desktop := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'beos'
+	pins := desktop.shell().launcher_pins
+	assert pins == [0, 3, 4]
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	launcher := utility_element_named(root, top_bar_launcher_id) or { panic('missing launcher') }
+	// One tile per pin, in order.
+	assert launcher.children.len == pins.len
+	mut last_x := f64(-1)
+	for i, pin in pins {
+		tile := launcher.children[i]
+		// The tile's id is the app's shortcut action id — the same launch path
+		// the wallpaper shortcut uses (clickable_view's event id falls back to
+		// its id).
+		assert tile.id == app_shortcut_actions[pin]
+		// Tiles are laid out left to right.
+		assert tile.frame.x > last_x
+		last_x = tile.frame.x
+	}
+	free_tree(root)
+
+	// A shell with no pins (default) renders no launcher strip at all.
+	mut plain := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(plain.canvas.pixels) }
+	}
+	plain.settings.preset_id = 'default'
+	plain.update_taskbar_clock_at(0)
+	ptree := plain.build_tree()
+	assert utility_element_named(ptree, top_bar_launcher_id) == none
+	free_tree(ptree)
+}

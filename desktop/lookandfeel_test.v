@@ -126,6 +126,27 @@ fn test_window_list_toggle_resolves() {
 	assert e.shell.has_window_list == false
 }
 
+// E4: the launcher's pinned set resolves like any axis field. Unset means no
+// launcher (today's shells); a preset can pin app indices.
+fn test_launcher_pins_resolve() {
+	def := resolve_config(LookAndFeel{ id: 'x', name: 'X' }, BlueSettings{ preset_id: 'x' })
+	assert def.shell.launcher_pins.len == 0 // no launcher by default
+
+	preset := LookAndFeel{
+		id: 'p'
+		name: 'P'
+		shell: ShellConfig{
+			launcher_pins: [0, 3, 4]
+		}
+	}
+	e := resolve_config(preset, BlueSettings{ preset_id: 'p' })
+	assert e.shell.launcher_pins == [0, 3, 4]
+
+	// The BeOS preset ships a Deskbar launcher.
+	beos := resolve_settings(BlueSettings{ preset_id: 'beos' })
+	assert beos.shell.launcher_pins.len == 3
+}
+
 // ── A2: resolver precedence — override → preset → default ───────────
 
 fn test_precedence_override_beats_preset_beats_default() {
