@@ -371,6 +371,12 @@ fn (mut d Desktop) draw_surface(el ui2.Element, x int, y int, w int, h int, dept
 		if bottom != el.box.bg {
 			d.canvas.vertical_gradient(x, y, w, h, el.box.bg, bottom)
 		}
+		// A raised bevel gives the title bar structural depth (Blue spec B3):
+		// light on top/left, dark on bottom/right. Flat looks skip this.
+		if theme.bevel_enabled {
+			d.canvas.bevel_rect(x, y, w, h, .raised, theme.bevel_width, theme.bevel_light,
+				theme.bevel_dark, 0)
+		}
 	}
 }
 

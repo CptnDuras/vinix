@@ -1212,3 +1212,36 @@ fn test_title_alignment_three_way() {
 	assert int(ctitle.frame.width) == 400 // spans the full window width
 	free_tree(centred)
 }
+
+fn test_blue_titlebar_draws_a_raised_bevel() {
+	mut desktop := Desktop{
+		canvas: new_canvas(600, 400)
+		fonts:  load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.theme().bevel_enabled
+	desktop.spawn('Beveled', .welcome, 50, 60, 320, 240)
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	desktop.render(root)
+	// The title bar's top edge (a few px in, past the radius-3 corner) should
+	// carry the raised bevel's light color; sample the top row of the bar.
+	light := desktop.theme().bevel_light
+	sample_x := 50 + 8
+	top_edge := unsafe { desktop.canvas.pixels[60 * desktop.canvas.stride + sample_x] }
+	assert top_edge == light
+	free_tree(root)
+
+	// Default preset has no bevel: the same pixel is not the Blue light color.
+	desktop.settings.preset_id = 'default'
+	assert !desktop.theme().bevel_enabled
+	root2 := desktop.build_tree()
+	desktop.render(root2)
+	top_edge2 := unsafe { desktop.canvas.pixels[60 * desktop.canvas.stride + sample_x] }
+	assert top_edge2 != light
+	free_tree(root2)
+}

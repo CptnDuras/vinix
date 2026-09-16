@@ -43,6 +43,12 @@ const theme_blue = Theme{
 	title_size:          13
 	// Buttons: flat glyphs with a ramp-derived hover; close goes accent-warm.
 	button_look:        .flat
+	// A subtle raised bevel on the chrome, from the ramp (structural depth
+	// without loudness — Blue spec B3).
+	bevel_enabled:      true
+	bevel_light:        blue_ramp.steps[2]
+	bevel_dark:         blue_ramp.steps[5]
+	bevel_width:        1
 	button_size:        22
 	button_gap:         4
 	button_inset:       8
