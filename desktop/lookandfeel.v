@@ -73,6 +73,10 @@ struct BehaviorConfig {
 struct ShellConfig {
 	has_top_bar    ?bool
 	has_bottom_bar ?bool
+	// E3: whether the bottom bar hosts the window list (taskbar buttons). A
+	// preset can omit it (classic Mac places no window list), leaving just the
+	// system menu / clock. Defaults true so today's taskbar is unchanged.
+	has_window_list ?bool
 }
 
 // DesktopSurfaceConfig — sparse Desktop-surface axis (spec H).
@@ -188,8 +192,9 @@ struct EffectiveBehavior {
 }
 
 struct EffectiveShell {
-	has_top_bar    bool
-	has_bottom_bar bool
+	has_top_bar     bool
+	has_bottom_bar  bool
+	has_window_list bool
 }
 
 struct EffectiveSurface {
@@ -254,6 +259,7 @@ const builtin_behavior = EffectiveBehavior{
 const builtin_shell = EffectiveShell{
 	has_top_bar: false
 	has_bottom_bar: true
+	has_window_list: true
 }
 
 const builtin_surface = EffectiveSurface{
@@ -328,6 +334,7 @@ fn resolve_shell(preset ?ShellConfig, over ?ShellConfig) EffectiveShell {
 	return EffectiveShell{
 		has_top_bar: o.has_top_bar or { p.has_top_bar or { builtin_shell.has_top_bar } }
 		has_bottom_bar: o.has_bottom_bar or { p.has_bottom_bar or { builtin_shell.has_bottom_bar } }
+		has_window_list: o.has_window_list or { p.has_window_list or { builtin_shell.has_window_list } }
 	}
 }
 

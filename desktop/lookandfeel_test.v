@@ -107,6 +107,25 @@ fn test_partial_override_within_axis() {
 	assert eff.decor.window_radius == builtin_decor.window_radius
 }
 
+// E3: the window list is a placeable item the shell can omit. It defaults to
+// present (today's taskbar), and a preset can turn it off.
+fn test_window_list_toggle_resolves() {
+	def := resolve_config(LookAndFeel{ id: 'x', name: 'X' }, BlueSettings{ preset_id: 'x' })
+	assert def.shell.has_window_list == true // today's taskbar shows the list
+
+	preset := LookAndFeel{
+		id: 'p'
+		name: 'P'
+		shell: ShellConfig{
+			has_bottom_bar: true
+			has_window_list: false
+		}
+	}
+	e := resolve_config(preset, BlueSettings{ preset_id: 'p' })
+	assert e.shell.has_bottom_bar == true
+	assert e.shell.has_window_list == false
+}
+
 // ── A2: resolver precedence — override → preset → default ───────────
 
 fn test_precedence_override_beats_preset_beats_default() {

@@ -237,7 +237,7 @@ fn (mut d Desktop) close_window(id int) {
 fn (d &Desktop) panel_insets() PanelInsets {
 	shell := d.shell()
 	return PanelInsets{
-		top:    if shell.has_top_bar { top_bar_height } else { 0 }
+		top: if shell.has_top_bar { top_bar_height } else { 0 }
 		bottom: if shell.has_bottom_bar { taskbar_height } else { 0 }
 	}
 }
@@ -259,8 +259,7 @@ fn (mut d Desktop) toggle_maximize(id int) {
 		// policy. respect_panels subtracts every reserving panel edge (a top
 		// bar and/or the bottom taskbar) so a maximized window never sits under
 		// the chrome; fill_screen ignores panels.
-		rect := maximize_rect(d.canvas.width, d.canvas.height, d.panel_insets(),
-			d.behavior().maximize_policy)
+		rect := maximize_rect(d.canvas.width, d.canvas.height, d.panel_insets(), d.behavior().maximize_policy)
 		d.windows[index].x = rect.x
 		d.windows[index].y = rect.y
 		d.windows[index].width = rect.w
@@ -279,8 +278,8 @@ fn (mut d Desktop) toggle_shade(id int) {
 	title_height := d.theme().title_height
 	enabled := d.behavior().shade_enabled
 	state := ShadeState{
-		height:               d.windows[index].height
-		shaded:               d.windows[index].shaded
+		height: d.windows[index].height
+		shaded: d.windows[index].shaded
 		restore_height_shade: d.windows[index].restore_height_shade
 	}
 	next := shade_toggle(state, title_height, enabled)
@@ -291,7 +290,8 @@ fn (mut d Desktop) toggle_shade(id int) {
 	d.raise(id)
 }
 
-fn (mut d Desktop) minimize(id int) {	index := d.window_index(id) or { return }
+fn (mut d Desktop) minimize(id int) {
+	index := d.window_index(id) or { return }
 	d.windows[index].minimized = true
 	d.dirty = true
 	if d.focus == id {
@@ -469,11 +469,10 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 	// tests can find it. It opens the same F3 system window menu.
 	if active && d.behavior().menu_placement == .in_window {
 		appmenu_id := 'win.${window.id}.appmenu'
-		title_children << ui2.clickable_view(appmenu_id, ui2.rect(2, f64((theme.title_height - 14) / 2),
-			14, 14), ui2.BoxStyle{
-			bg:          if d.hover == appmenu_id { theme.accent_dim } else { u32(0) }
+		title_children << ui2.clickable_view(appmenu_id, ui2.rect(2, f64((theme.title_height - 14) / 2), 14, 14), ui2.BoxStyle{
+			bg: if d.hover == appmenu_id { theme.accent_dim } else { u32(0) }
 			transparent: d.hover != appmenu_id
-			radius:      3
+			radius: 3
 		}, [])
 	}
 	title_bar := ui2.draggable_view(window.id_titlebar, ui2.rect(0, 0, f64(window.width), f64(theme.title_height)), ui2.BoxStyle{
@@ -498,8 +497,7 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 		window_children << body
 	}
 	frame_height := if shaded { theme.title_height } else { window.height }
-	return ui2.view(window.id_frame, ui2.rect(f64(window.x), f64(window.y), f64(window.width),
-		f64(frame_height)), ui2.BoxStyle{
+	return ui2.view(window.id_frame, ui2.rect(f64(window.x), f64(window.y), f64(window.width), f64(frame_height)), ui2.BoxStyle{
 		bg: background
 		radius: theme.window_radius
 	}, window_children)
@@ -975,10 +973,16 @@ fn (d &Desktop) taskbar_element() ui2.Element {
 		color: theme.taskbar_text_active
 	})
 
-	// After Start, show only what is open. `standard` gives every window an entry, the way
-	// Windows XP did; `combined` gives each application one entry however many
-	// windows it has, the way Windows 7 did.
-	entries := d.taskbar_entries()
+	// After Start, show the window list (Blue spec E3) — but only when the
+	// resolved shell hosts it. A preset can omit the window list (classic Mac
+	// places none), leaving just the start orb and clock with no gap. Defaults
+	// to present, so today's taskbar is unchanged.
+	has_window_list := d.shell().has_window_list
+	entries := if has_window_list {
+		d.taskbar_entries()
+	} else {
+		[]TaskbarEntry{}
+	}
 	defer {
 		unsafe { entries.free() }
 	}
@@ -988,15 +992,15 @@ fn (d &Desktop) taskbar_element() ui2.Element {
 	// geometry is identical to the previous inline computation.
 	clock_width := taskbar_clock_width
 	slots := compute_panel_slots(PanelLayoutInput{
-		panel_width:   width
-		edge_padding:  edge_padding
-		start_width:   start_button_width
-		start_gap:     8
-		clock_width:   clock_width
-		item_gap:      taskbar_item_gap
-		entry_count:   entries.len
+		panel_width: width
+		edge_padding: edge_padding
+		start_width: start_button_width
+		start_gap: 8
+		clock_width: clock_width
+		item_gap: taskbar_item_gap
+		entry_count: entries.len
 		default_width: if dock { dock_item_width } else { taskbar_item_width }
-		min_width:     taskbar_item_min_width
+		min_width: taskbar_item_min_width
 	})
 	item_width := slots.item_width
 	entry_right := slots.entry_right
@@ -1205,12 +1209,11 @@ fn (mut d Desktop) on_pointer_move(x int, y int) {
 				}
 			}
 			cfg := SnapConfig{
-				to_edges:   beh.snap_to_edges
+				to_edges: beh.snap_to_edges
 				to_windows: beh.snap_to_windows
-				distance:   beh.snap_distance
+				distance: beh.snap_distance
 			}
-			nx, ny = snap_position(nx, ny, d.windows[moved].width, d.windows[moved].height,
-				d.canvas.width, d.canvas.height, d.panel_insets(), others, cfg)
+			nx, ny = snap_position(nx, ny, d.windows[moved].width, d.windows[moved].height, d.canvas.width, d.canvas.height, d.panel_insets(), others, cfg)
 		}
 		d.windows[moved].x = nx
 		d.windows[moved].y = ny
@@ -1232,9 +1235,9 @@ fn (mut d Desktop) on_pointer_move(x int, y int) {
 	if behavior.focus_policy == .focus_follows_mouse {
 		over := d.window_at(x, y)
 		decision := decide_focus(FocusInputs{
-			is_click:       false
+			is_click: false
 			over_window_id: over
-			current_focus:  d.focus
+			current_focus: d.focus
 			frame_body_hit: false
 		}, behavior.focus_policy, behavior.raise_on_focus, behavior.raise_on_click)
 		if decision.raise && decision.new_focus != 0 {
@@ -1338,8 +1341,7 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 	// drops the focused window's system menu just below the top bar.
 	if action == top_bar_app_menu_id {
 		if d.focus != 0 {
-			d.open_window_menu(d.focus, taskbar_padding + start_button_width + 10,
-				top_bar_height)
+			d.open_window_menu(d.focus, taskbar_padding + start_button_width + 10, top_bar_height)
 		}
 		return
 	}
