@@ -13,12 +13,18 @@ import ui2
 // its taskbar entry.
 // Wallpaper shortcuts carry the index of the application they open.
 const action_shortcut_prefix = 'shortcut.'
+// H2 (files mode): a desktop file/folder tile carries this prefix; its numeric
+// suffix indexes the desktop directory listing rebuilt on click.
+const desktop_file_prefix = 'deskfile.'
+// The directory whose entries the desktop shows in `files` icon mode. A missing
+// directory simply yields no tiles.
+const desktop_icons_dir = '/root/Desktop'
 // The desktop's own actions all begin with one of these. An action that does
 // not is an application's, and is routed to whichever window it was clicked
 // in — which is what lets a native application name its events whatever it
 // likes, ui2's `__qml_...` or the file browser's `files.row.3` alike.
 const desktop_action_prefixes = ['taskbar.', 'task.', 'win.', 'shortcut.', 'start.', 'window.menu.',
-	action_switch_prefix]
+	desktop_file_prefix, action_switch_prefix]
 
 enum DragKind {
 	none_
@@ -44,6 +50,9 @@ mut:
 	focus   int
 	drag    Drag
 	hover   string
+	// H2 (files icon mode): the directory whose entries the desktop shows when
+	// icon_source is `files`. Overridable (tests point it at a temp dir).
+	icons_dir string = desktop_icons_dir
 	// Double-click tracking on a window title bar, for the configurable
 	// title_double_click action (Blue spec D3). Records the last title-bar
 	// press so a second press on the same title within the threshold fires the
@@ -849,6 +858,18 @@ fn (d &Desktop) shortcut_elements() []ui2.Element {
 	if !d.surface().icons_visible {
 		return []ui2.Element{}
 	}
+	// H2: the desktop-icon content follows the resolved icon_source. `shortcuts`
+	// (the default) lists the app launchers exactly as today; `files` lists a
+	// desktop directory's entries (folders first). Both share B's icon_tile.
+	return match d.surface().icon_source {
+		.shortcuts { d.shortcut_tiles() }
+		.files { d.file_tiles() }
+	}
+}
+
+// shortcut_tiles renders one tile per app in available_apps down the left edge
+// — today's desktop shortcuts (H2 `shortcuts` mode).
+fn (d &Desktop) shortcut_tiles() []ui2.Element {
 	mut out := frame_elements(available_apps.len)
 	rows := shortcut_rows_for_height(d.canvas.height)
 	theme := d.theme()
@@ -867,6 +888,37 @@ fn (d &Desktop) shortcut_elements() []ui2.Element {
 		// H2/H3 desktop shortcuts share B's icon_tile renderer (ISSUES.md
 		// ISSUE-3). The wallpaper sits behind them, so the label wears a shadow.
 		out << icon_tile(id, factory.icon, factory.title, ui2.rect(f64(x), f64(y), f64(shortcut_width), f64(shortcut_height)), d.hover == id, style, true)
+	}
+	return out
+}
+
+// file_tiles renders the desktop directory's entries as tiles (H2 `files`
+// mode), folders first, using the same left-edge layout and B's icon_tile. A
+// missing/unreadable directory yields no tiles. Tile ids are 'deskfile.<index>'
+// so hit routing opens the entry; folder vs file picks the glyph, mirroring
+// files.v.
+fn (d &Desktop) file_tiles() []ui2.Element {
+	mut browser := FileBrowser{}
+	browser.read(d.icons_dir)
+	defer {
+		browser.free_entries()
+	}
+	rows := shortcut_rows_for_height(d.canvas.height)
+	theme := d.theme()
+	style := IconTileStyle{
+		label: theme.shortcut_label
+		hover: theme.shortcut_hover
+		panel: theme.shortcut_panel
+	}
+	mut out := frame_elements(browser.entries.len)
+	for index, entry in browser.entries {
+		id := '${desktop_file_prefix}${index}'
+		glyph := if entry.is_dir { 'builtin:folder' } else { 'builtin:file' }
+		column := index / rows
+		row := index % rows
+		x := shortcut_left + column * (shortcut_width + shortcut_gap)
+		y := shortcut_top + row * (shortcut_height + shortcut_gap)
+		out << icon_tile(id, glyph, entry.name, ui2.rect(f64(x), f64(y), f64(shortcut_width), f64(shortcut_height)), d.hover == id, style, true)
 	}
 	return out
 }
@@ -1378,6 +1430,14 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 
 	if action.starts_with(action_shortcut_prefix) {
 		d.launch_index(action[action_shortcut_prefix.len..].int())
+		return
+	}
+
+	// H2 (files mode): clicking a desktop file/folder tile opens the Files app
+	// (at the desktop directory). Opening the exact entry/folder is a later
+	// refinement; the first cut surfaces the desktop directory in the browser.
+	if action.starts_with(desktop_file_prefix) {
+		d.launch_titled('Files')
 		return
 	}
 

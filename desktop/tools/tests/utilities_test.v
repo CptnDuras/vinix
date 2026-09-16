@@ -1704,3 +1704,60 @@ fn test_tray_renders_status_without_overlapping_clock() {
 	assert utility_element_named(ptree, top_bar_tray_id) == none
 	free_tree(ptree)
 }
+
+// H2: desktop-icon content follows the resolved icon_source. `shortcuts` (the
+// default) renders one tile per app with today's shortcut ids; `files` lists a
+// desktop directory's entries as tiles, folders first, sharing B's icon_tile.
+fn test_desktop_icon_source_shortcuts_and_files() {
+	// shortcuts mode (default): one tile per available app, today's ids.
+	mut desktop := Desktop{
+		canvas: new_canvas(1024, 768)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'default'
+	assert desktop.surface().icon_source == .shortcuts
+	shortcuts := desktop.shortcut_elements()
+	assert shortcuts.len == available_apps.len
+	assert shortcuts[0].id == app_shortcut_actions[0]
+	assert shortcuts.last().id == app_shortcut_actions[available_apps.len - 1]
+
+	// files mode: build a temp desktop directory with a folder and two files.
+	dir := os.join_path(os.temp_dir(), 'vinix-desktop-icons-test')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.mkdir(os.join_path(dir, 'Projects')) or { assert false }
+	os.write_file(os.join_path(dir, 'notes.txt'), 'hi') or { assert false }
+	os.write_file(os.join_path(dir, 'todo.md'), 'x') or { assert false }
+
+	mut mac := Desktop{
+		canvas: new_canvas(1024, 768)
+		fonts: load_fonts()
+		icons_dir: dir
+	}
+	defer {
+		unsafe { free(mac.canvas.pixels) }
+	}
+	// Platinum (a classic Mac desktop) resolves to files mode.
+	mac.settings.preset_id = 'platinum'
+	assert mac.surface().icon_source == .files
+	files := mac.shortcut_elements()
+	// One tile per entry (folder + two files).
+	assert files.len == 3
+	// Folders first (files.v ordering): the first tile is the directory, and it
+	// carries the folder glyph; the rest are files.
+	folder := files[0]
+	assert folder.id == '${desktop_file_prefix}0'
+	assert folder.children[0].image_path == 'builtin:folder'
+	assert files[1].children[0].image_path == 'builtin:file'
+	assert files[2].children[0].image_path == 'builtin:file'
+	// The tile label is the entry name; folders sort before files by name.
+	assert folder.children[1].text == 'Projects'
+	assert files[1].children[1].text == 'notes.txt'
+	assert files[2].children[1].text == 'todo.md'
+}

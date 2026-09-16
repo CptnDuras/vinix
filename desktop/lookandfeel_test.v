@@ -168,6 +168,27 @@ fn test_tray_items_resolve() {
 	assert blue.shell.tray_items.len == 2
 }
 
+// H2: the desktop-icon content source resolves like any axis field. Default is
+// `shortcuts` (today's app launchers); a preset can select `files`.
+fn test_icon_source_resolves() {
+	def := resolve_config(LookAndFeel{ id: 'x', name: 'X' }, BlueSettings{ preset_id: 'x' })
+	assert def.surface.icon_source == .shortcuts
+
+	preset := LookAndFeel{
+		id: 'p'
+		name: 'P'
+		surface: DesktopSurfaceConfig{
+			icon_source: .files
+		}
+	}
+	e := resolve_config(preset, BlueSettings{ preset_id: 'p' })
+	assert e.surface.icon_source == .files
+
+	// Platinum (a classic Mac desktop) ships files mode.
+	platinum := resolve_settings(BlueSettings{ preset_id: 'platinum' })
+	assert platinum.surface.icon_source == .files
+}
+
 // ── A2: resolver precedence — override → preset → default ───────────
 
 fn test_precedence_override_beats_preset_beats_default() {

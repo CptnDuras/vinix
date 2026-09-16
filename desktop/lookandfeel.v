@@ -467,6 +467,10 @@ const lookandfeel_registry = [
 			has_top_bar: true
 			has_bottom_bar: false
 		}
+		// A classic Mac desktop shows files/folders, not app launchers.
+		surface: DesktopSurfaceConfig{
+			icon_source: .files
+		}
 	},
 	LookAndFeel{
 		id: 'beos'
