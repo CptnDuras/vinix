@@ -19,6 +19,42 @@ fn test_all_none_resolves_to_builtin_defaults() {
 	assert eff.surface.icon_source == builtin_surface.icon_source
 }
 
+// D2/D4/D5: the newer Behavior fields resolve through override → preset →
+// default like every other axis field.
+fn test_behavior_extended_fields_resolve() {
+	// Defaults reproduce today's behaviour: respect_panels + no snapping.
+	def := resolve_config(LookAndFeel{ id: 'x', name: 'X' }, BlueSettings{ preset_id: 'x' })
+	assert def.behavior.maximize_policy == .respect_panels
+	assert def.behavior.snap_to_edges == false
+	assert def.behavior.snap_distance == builtin_behavior.snap_distance
+	assert def.behavior.focus_new_windows == true
+
+	// A preset can turn snapping on and switch the maximize policy; a user
+	// override still beats it field-by-field.
+	preset := LookAndFeel{
+		id:       'p'
+		name:     'P'
+		behavior: BehaviorConfig{
+			maximize_policy: .fill_screen
+			snap_to_edges:   true
+			snap_distance:   20
+		}
+	}
+	e1 := resolve_config(preset, BlueSettings{ preset_id: 'p' })
+	assert e1.behavior.maximize_policy == .fill_screen
+	assert e1.behavior.snap_to_edges == true
+	assert e1.behavior.snap_distance == 20
+
+	e2 := resolve_config(preset, BlueSettings{
+		preset_id: 'p'
+		behavior:  BehaviorConfig{
+			snap_distance: 4
+		}
+	})
+	assert e2.behavior.snap_distance == 4 // override wins
+	assert e2.behavior.snap_to_edges == true // preset (no override)
+}
+
 // An override that sets a single field leaves siblings inheriting.
 fn test_partial_override_within_axis() {
 	over := BlueSettings{

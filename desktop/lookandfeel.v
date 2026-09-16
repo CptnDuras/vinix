@@ -49,6 +49,18 @@ struct BehaviorConfig {
 	title_double_click ?TitleAction
 	focus_policy       ?FocusPolicy
 	menu_placement     ?MenuPlacement
+	// D2: maximize / restore policy — whether a maximized window respects
+	// occupied panel edges (a top bar and/or bottom taskbar).
+	maximize_policy    ?MaxPolicy
+	// D4: focus model completeness (ISSUES.md GAP-7).
+	focus_new_windows  ?bool
+	raise_on_focus     ?bool
+	raise_on_click     ?bool
+	// D5: window snapping & move/resize (ISSUES.md GAP-5).
+	snap_to_edges      ?bool
+	snap_to_windows    ?bool
+	snap_distance      ?int
+	opaque_move_resize ?bool
 }
 
 // ShellConfig — sparse Shell axis (spec E). Phase 1 carries only the coarse
@@ -158,6 +170,14 @@ struct EffectiveBehavior {
 	title_double_click TitleAction
 	focus_policy       FocusPolicy
 	menu_placement     MenuPlacement
+	maximize_policy    MaxPolicy
+	focus_new_windows  bool
+	raise_on_focus     bool
+	raise_on_click     bool
+	snap_to_edges      bool
+	snap_to_windows    bool
+	snap_distance      int
+	opaque_move_resize bool
 }
 
 struct EffectiveShell {
@@ -205,6 +225,18 @@ const builtin_behavior = EffectiveBehavior{
 	title_double_click: .maximize
 	focus_policy:       .click_to_focus
 	menu_placement:     .none_
+	// Default respects reserving panels. With the default shell (bottom taskbar
+	// only) this subtracts exactly taskbar_height — reproducing today's
+	// maximize — while a preset that adds a top bar has it respected too.
+	maximize_policy:    .respect_panels
+	focus_new_windows:  true
+	raise_on_focus:     true
+	raise_on_click:     true
+	// Snapping off by default so behaviour is unchanged unless a preset opts in.
+	snap_to_edges:      false
+	snap_to_windows:    false
+	snap_distance:      12
+	opaque_move_resize: true
 }
 
 const builtin_shell = EffectiveShell{
@@ -265,6 +297,14 @@ fn resolve_behavior(preset ?BehaviorConfig, over ?BehaviorConfig) EffectiveBehav
 		title_double_click: o.title_double_click or { p.title_double_click or { builtin_behavior.title_double_click } }
 		focus_policy:       o.focus_policy or { p.focus_policy or { builtin_behavior.focus_policy } }
 		menu_placement:     o.menu_placement or { p.menu_placement or { builtin_behavior.menu_placement } }
+		maximize_policy:    o.maximize_policy or { p.maximize_policy or { builtin_behavior.maximize_policy } }
+		focus_new_windows:  o.focus_new_windows or { p.focus_new_windows or { builtin_behavior.focus_new_windows } }
+		raise_on_focus:     o.raise_on_focus or { p.raise_on_focus or { builtin_behavior.raise_on_focus } }
+		raise_on_click:     o.raise_on_click or { p.raise_on_click or { builtin_behavior.raise_on_click } }
+		snap_to_edges:      o.snap_to_edges or { p.snap_to_edges or { builtin_behavior.snap_to_edges } }
+		snap_to_windows:    o.snap_to_windows or { p.snap_to_windows or { builtin_behavior.snap_to_windows } }
+		snap_distance:      o.snap_distance or { p.snap_distance or { builtin_behavior.snap_distance } }
+		opaque_move_resize: o.opaque_move_resize or { p.opaque_move_resize or { builtin_behavior.opaque_move_resize } }
 	}
 }
 
@@ -315,6 +355,10 @@ const lookandfeel_registry = [
 		behavior:    BehaviorConfig{
 			shade_enabled:  true
 			menu_placement: .in_window
+			// Blue enables edge/window snapping with a modest threshold.
+			snap_to_edges:   true
+			snap_to_windows: true
+			snap_distance:   12
 		}
 		shell:       ShellConfig{
 			has_top_bar:    true
@@ -390,6 +434,10 @@ const lookandfeel_registry = [
 			shade_enabled:      true
 			title_double_click: .shade
 			menu_placement:     .in_window
+			// BeOS classically offered focus-follows-mouse; the pointer focuses
+			// the window under it without raising it.
+			focus_policy:       .focus_follows_mouse
+			raise_on_focus:     false
 		}
 		shell:       ShellConfig{
 			has_top_bar:    true

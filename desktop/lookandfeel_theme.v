@@ -68,7 +68,40 @@ fn (d &Desktop) shell() EffectiveShell {
 
 // surface resolves the current preset's desktop-surface axis (Blue spec H):
 // wallpaper selection, desktop-icon source, and icon visibility.
+//
+// The user's live wallpaper selection (held in the existing `Settings` fields
+// the picker writes) is fed in as the override so it still wins over a
+// preset-supplied backdrop (H1 acceptance (c)); when the user has made no
+// explicit choice, a preset backdrop shows through (H1 acceptance (b)).
 fn (d &Desktop) surface() EffectiveSurface {
-	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	// A chosen image (>= 0) or a non-default colour index is an explicit user
+	// override. The image sentinel is -1 (no image); colour index 0 is the
+	// built-in default, so only a non-zero colour counts as an override when no
+	// image is set.
+	over := if d.settings.wallpaper_image >= 0 {
+		DesktopSurfaceConfig{
+			wallpaper_image: d.settings.wallpaper_image
+		}
+	} else if d.settings.wallpaper_color != 0 {
+		DesktopSurfaceConfig{
+			wallpaper_color: d.settings.wallpaper_color
+			wallpaper_image: -1
+		}
+	} else {
+		DesktopSurfaceConfig{}
+	}
+	eff := resolve_settings(BlueSettings{
+		preset_id: d.settings.preset_id
+		surface:   over
+	})
 	return eff.surface
+}
+
+// typography resolves the current preset's Typography axis (Blue spec C1):
+// UI/title point sizes and smoothing. render.v and the title chrome read this
+// for text sizing so a preset (or, later, a user override) can retune type
+// without touching the renderer.
+fn (d &Desktop) typography() EffectiveTypography {
+	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	return eff.typography
 }
