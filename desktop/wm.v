@@ -148,7 +148,11 @@ fn (mut d Desktop) spawn(title string, page Page, x int, y int, width int, heigh
 		id_body: '${prefix}.body'
 		id_task: 'task.${id}'
 	}
-	d.focus = id
+	// D4 (focus model): a newly opened window takes focus only when the
+	// resolved Behavior opts in. Default is true, reproducing today's behaviour.
+	if d.behavior().focus_new_windows {
+		d.focus = id
+	}
 	d.dirty = true
 	return id
 }
@@ -227,6 +231,17 @@ fn (mut d Desktop) close_window(id int) {
 	d.dirty = true
 }
 
+// panel_insets returns the screen-edge space reserved by the resolved shell's
+// panels (Blue spec D2/E1). The bottom taskbar and, when present, the top bar
+// each reserve their height; side panels are not part of the pragmatic cut.
+fn (d &Desktop) panel_insets() PanelInsets {
+	shell := d.shell()
+	return PanelInsets{
+		top:    if shell.has_top_bar { top_bar_height } else { 0 }
+		bottom: if shell.has_bottom_bar { taskbar_height } else { 0 }
+	}
+}
+
 fn (mut d Desktop) toggle_maximize(id int) {
 	index := d.window_index(id) or { return }
 	if d.windows[index].maximized {
@@ -240,10 +255,16 @@ fn (mut d Desktop) toggle_maximize(id int) {
 		d.windows[index].restore_y = d.windows[index].y
 		d.windows[index].restore_width = d.windows[index].width
 		d.windows[index].restore_height = d.windows[index].height
-		d.windows[index].x = 0
-		d.windows[index].y = 0
-		d.windows[index].width = d.canvas.width
-		d.windows[index].height = d.canvas.height - taskbar_height
+		// Blue spec D2: the target rectangle follows the resolved maximize
+		// policy. respect_panels subtracts every reserving panel edge (a top
+		// bar and/or the bottom taskbar) so a maximized window never sits under
+		// the chrome; fill_screen ignores panels.
+		rect := maximize_rect(d.canvas.width, d.canvas.height, d.panel_insets(),
+			d.behavior().maximize_policy)
+		d.windows[index].x = rect.x
+		d.windows[index].y = rect.y
+		d.windows[index].width = rect.w
+		d.windows[index].height = rect.h
 		d.windows[index].maximized = true
 	}
 	d.raise(id)
@@ -421,9 +442,13 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 		.left { text_inset_left }
 	}
 	title_w := if centered { window.width } else { title_limit }
+	// Blue spec C1: the title point size comes from the resolved Typography
+	// axis. It defaults to the built-in size (matching theme.title_size), so an
+	// all-none preset is unchanged; a preset that sets title_size retunes it.
+	title_size := d.typography().title_size
 	title := ui2.label(window.id_title, window.title, ui2.rect(f64(title_x), 0, f64(title_w), f64(theme.title_height)), ui2.TextStyle{
 		color: title_text_color
-		size: theme.title_size
+		size: title_size
 		bold: theme.title_bold
 		align: match align {
 			.center { .center }
@@ -433,11 +458,24 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 		lines: 1
 	})
 
-	mut title_children := frame_elements(4)
+	mut title_children := frame_elements(5)
 	title_children << title
 	title_children << minimize
 	title_children << maximize
 	title_children << close
+	// In-window menu placement (Blue spec F2): the focused window hosts its own
+	// menu in the title area rather than a global top bar. The affordance is a
+	// small marker at the leading edge; its id is stable so hit routing and
+	// tests can find it. It opens the same F3 system window menu.
+	if active && d.behavior().menu_placement == .in_window {
+		appmenu_id := 'win.${window.id}.appmenu'
+		title_children << ui2.clickable_view(appmenu_id, ui2.rect(2, f64((theme.title_height - 14) / 2),
+			14, 14), ui2.BoxStyle{
+			bg:          if d.hover == appmenu_id { theme.accent_dim } else { u32(0) }
+			transparent: d.hover != appmenu_id
+			radius:      3
+		}, [])
+	}
 	title_bar := ui2.draggable_view(window.id_titlebar, ui2.rect(0, 0, f64(window.width), f64(theme.title_height)), ui2.BoxStyle{
 		bg: title_bg
 	}, title_children)
@@ -1147,8 +1185,35 @@ fn (mut d Desktop) on_pointer_move(x int, y int) {
 		moved := d.window_index(d.drag.window_id) or { return }
 		old_x := d.windows[moved].x
 		old_y := d.windows[moved].y
-		d.windows[moved].x = x - d.drag.offset_x
-		d.windows[moved].y = y - d.drag.offset_y
+		mut nx := x - d.drag.offset_x
+		mut ny := y - d.drag.offset_y
+		// D5 (window snapping): while dragging, snap the window's edges to the
+		// work area and to other windows once within snap_distance. Disabled by
+		// default, so movement is free unless a preset/override opts in.
+		beh := d.behavior()
+		if beh.snap_to_edges || beh.snap_to_windows {
+			mut others := []Rect2{}
+			for i, w in d.windows {
+				if i == moved || w.minimized {
+					continue
+				}
+				others << Rect2{
+					x: w.x
+					y: w.y
+					w: w.width
+					h: w.height
+				}
+			}
+			cfg := SnapConfig{
+				to_edges:   beh.snap_to_edges
+				to_windows: beh.snap_to_windows
+				distance:   beh.snap_distance
+			}
+			nx, ny = snap_position(nx, ny, d.windows[moved].width, d.windows[moved].height,
+				d.canvas.width, d.canvas.height, d.panel_insets(), others, cfg)
+		}
+		d.windows[moved].x = nx
+		d.windows[moved].y = ny
 		d.clamp_to_screen(moved)
 		if d.windows[moved].x != old_x || d.windows[moved].y != old_y {
 			d.dirty = true
@@ -1159,11 +1224,50 @@ fn (mut d Desktop) on_pointer_move(x int, y int) {
 		d.forward_pointer_to_app(x, y, .move, .no_button, 0)
 	}
 
+	// D4 (focus model): under focus_follows_mouse, the window under the pointer
+	// takes focus on a bare move; raising is gated on raise_on_focus. Under the
+	// default click_to_focus this is a no-op (decide_focus returns the current
+	// focus for a non-click), so today's behaviour is unchanged.
+	behavior := d.behavior()
+	if behavior.focus_policy == .focus_follows_mouse {
+		over := d.window_at(x, y)
+		decision := decide_focus(FocusInputs{
+			is_click:       false
+			over_window_id: over
+			current_focus:  d.focus
+			frame_body_hit: false
+		}, behavior.focus_policy, behavior.raise_on_focus, behavior.raise_on_click)
+		if decision.raise && decision.new_focus != 0 {
+			d.raise(decision.new_focus)
+		} else if decision.new_focus != d.focus {
+			d.focus = decision.new_focus
+			d.dirty = true
+		}
+	}
+
 	hover := d.hit_action(x, y)
 	if hover != d.hover {
 		d.hover = hover
 		d.dirty = true
 	}
+}
+
+// window_at returns the id of the topmost non-minimized window whose frame
+// contains the point, or 0 if none. Windows later in the list paint on top, so
+// the search runs from the end. A shaded window is only its title bar.
+fn (d &Desktop) window_at(x int, y int) int {
+	title_h := d.theme().title_height
+	for i := d.windows.len - 1; i >= 0; i-- {
+		w := &d.windows[i]
+		if w.minimized {
+			continue
+		}
+		h := if w.shaded { title_h } else { w.height }
+		if x >= w.x && y >= w.y && x < w.x + w.width && y < w.y + h {
+			return w.id
+		}
+	}
+	return 0
 }
 
 // clamp_to_screen keeps a window wholly visible when it fits. Oversized
@@ -1227,6 +1331,26 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 	// handler on the menu's target window, then dismiss the menu.
 	if action.starts_with('window.menu.') {
 		d.route_window_menu_action(action)
+		return
+	}
+
+	// The global app-menu slot (Blue spec F2, global placement): clicking it
+	// drops the focused window's system menu just below the top bar.
+	if action == top_bar_app_menu_id {
+		if d.focus != 0 {
+			d.open_window_menu(d.focus, taskbar_padding + start_button_width + 10,
+				top_bar_height)
+		}
+		return
+	}
+
+	// The in-window app-menu affordance (Blue spec F2, in_window placement):
+	// 'win.<id>.appmenu' opens that window's system menu at the title area.
+	if action.starts_with('win.') && action.ends_with('.appmenu') {
+		id := action['win.'.len..action.len - '.appmenu'.len].int()
+		if idx := d.window_index(id) {
+			d.open_window_menu(id, d.windows[idx].x, d.windows[idx].y + d.theme().title_height)
+		}
 		return
 	}
 

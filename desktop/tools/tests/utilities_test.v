@@ -1308,3 +1308,262 @@ fn test_system_window_menu_popup_and_actions() {
 	desktop.route_window_menu_action(menu_action_close)
 	assert desktop.window_index(id) == none
 }
+
+// D2: a maximized window respects the resolved shell's reserved panel edges.
+// Under Default (bottom taskbar only) this reproduces today's rect; under Blue
+// (top bar + bottom taskbar) the window sits below the top bar.
+fn test_maximize_respects_panels() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width:  1280
+			height: 800
+		}
+	}
+
+	// Default: no top bar. Maximize fills full width and height minus the
+	// bottom taskbar, starting at the top-left — exactly today's behaviour.
+	desktop.settings.preset_id = 'default'
+	id := desktop.spawn('Max Me', .welcome, 100, 120, 400, 300)
+	desktop.toggle_maximize(id)
+	w1 := desktop.windows.last()
+	assert w1.maximized
+	assert w1.x == 0
+	assert w1.y == 0
+	assert w1.width == 1280
+	assert w1.height == 800 - taskbar_height
+
+	// Restore returns the pre-maximize geometry exactly.
+	desktop.toggle_maximize(id)
+	w1r := desktop.windows.last()
+	assert !w1r.maximized
+	assert w1r.x == 100 && w1r.y == 120
+	assert w1r.width == 400 && w1r.height == 300
+
+	// Blue: a top bar is present, so the maximized window starts below it and
+	// its height is reduced by both bars — it never sits under the chrome.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().has_top_bar
+	desktop.toggle_maximize(id)
+	w2 := desktop.windows.last()
+	assert w2.maximized
+	assert w2.y == top_bar_height // starts below the top bar
+	assert w2.x == 0
+	assert w2.width == 1280
+	assert w2.height == 800 - top_bar_height - taskbar_height
+}
+
+// C1: the window title's point size comes from the resolved Typography axis,
+// not a hardcoded literal. The default resolves to the built-in size, so there
+// is no visual regression; the assertion guards that the plumbing is in place.
+fn test_title_size_comes_from_typography() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width:  1000
+			height: 700
+		}
+	}
+	id := desktop.spawn('Typed', .welcome, 40, 40, 360, 240)
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	title := utility_element_named(root, 'win.${id}.title') or { panic('missing title') }
+	// The rendered title style tracks the resolved typography, which defaults
+	// to the built-in title size.
+	assert int(title.text_style.size) == desktop.typography().title_size
+	assert int(title.text_style.size) == builtin_typography.title_size
+	free_tree(root)
+}
+
+// F2: menu_placement routes the focused window's menu to the right host.
+//   global   -> the top bar's app_menu slot carries it; the title area does not
+//   in_window-> the window's title area carries it; the top bar slot is absent
+//   none     -> no menu bar anywhere
+fn test_menu_placement_hosts() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width:  1280
+			height: 720
+		}
+	}
+	desktop.update_taskbar_clock_at(0)
+	id := desktop.spawn('Placed', .welcome, 60, 60, 360, 240)
+
+	// global (Platinum): the app_menu slot is in the top bar; the window title
+	// area has no in-window affordance.
+	desktop.settings.preset_id = 'platinum'
+	assert desktop.behavior().menu_placement == .global_
+	gtree := desktop.build_tree()
+	topbar := utility_element_named(gtree, 'topbar') or { panic('missing top bar (global)') }
+	assert utility_element_named(topbar, top_bar_app_menu_id) != none
+	assert utility_element_named(gtree, 'win.${id}.appmenu') == none
+	free_tree(gtree)
+
+	// in_window (Blue): the window title area carries the affordance; the top
+	// bar app_menu slot is absent.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.behavior().menu_placement == .in_window
+	itree := desktop.build_tree()
+	assert utility_element_named(itree, 'win.${id}.appmenu') != none
+	if tb := utility_element_named(itree, 'topbar') {
+		assert utility_element_named(tb, top_bar_app_menu_id) == none
+	}
+	free_tree(itree)
+
+	// none (Default): no menu host anywhere.
+	desktop.settings.preset_id = 'default'
+	assert desktop.behavior().menu_placement == .none_
+	ntree := desktop.build_tree()
+	assert utility_element_named(ntree, top_bar_app_menu_id) == none
+	assert utility_element_named(ntree, 'win.${id}.appmenu') == none
+	free_tree(ntree)
+
+	// Clicking the global slot opens the focused window's system menu. Drive it
+	// through the real hit-routing path at the slot's on-screen position. Hit
+	// targets are recorded during the render pass, so render the tree first
+	// (which needs a real canvas + fonts).
+	mut click := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts:  load_fonts()
+	}
+	defer {
+		unsafe { free(click.canvas.pixels) }
+	}
+	click.settings.preset_id = 'platinum'
+	cid := click.spawn('Clicky', .welcome, 60, 60, 360, 240)
+	click.update_taskbar_clock_at(0)
+	ctree := click.build_tree()
+	slot := utility_element_named(ctree, top_bar_app_menu_id) or { panic('missing app_menu slot') }
+	click_x := int(slot.frame.x) + 4
+	click_y := int(slot.frame.y) + int(slot.frame.height) / 2
+	click.render(ctree)
+	free_tree(ctree)
+	click.on_pointer_down(click_x, click_y)
+	assert click.window_menu_open()
+	assert click.window_menu_id == cid
+}
+
+// D4: under focus_follows_mouse (BeOS), moving the pointer over a window
+// focuses it; with raise_on_focus=false the stack order is not changed. Under
+// the default click_to_focus, a bare move does not change focus.
+fn test_focus_follows_mouse_without_raise() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width:  1280
+			height: 720
+		}
+	}
+	// Two non-overlapping windows so window_at is unambiguous.
+	a := desktop.spawn('A', .welcome, 50, 60, 300, 200)
+	b := desktop.spawn('B', .welcome, 700, 60, 300, 200)
+	// focus_new_windows defaults true, so B (spawned last) is focused and on top.
+	assert desktop.focus == b
+	assert desktop.windows.last().id == b
+
+	// Default preset is click_to_focus: a bare move over A does not steal focus.
+	desktop.settings.preset_id = 'default'
+	desktop.on_pointer_move(120, 120) // over A
+	assert desktop.focus == b
+
+	// BeOS is focus_follows_mouse with raise_on_focus=false.
+	desktop.settings.preset_id = 'beos'
+	assert desktop.behavior().focus_policy == .focus_follows_mouse
+	desktop.on_pointer_move(120, 120) // over A
+	assert desktop.focus == a // focus followed the pointer
+	// Stack order unchanged (no raise): B is still topmost.
+	assert desktop.windows.last().id == b
+
+	// Moving over empty desktop drops focus to none under follows-mouse.
+	desktop.on_pointer_move(500, 400) // between/below both windows
+	assert desktop.focus == 0
+}
+
+// D4: focus_new_windows gates whether a freshly spawned window steals focus.
+fn test_focus_new_windows_gate() {
+	// A preset that does not focus new windows leaves the prior focus intact.
+	no_steal := resolve_settings(BlueSettings{
+		preset_id: 'default'
+		behavior:  BehaviorConfig{
+			focus_new_windows: false
+		}
+	})
+	assert no_steal.behavior.focus_new_windows == false
+	// The default resolves to true (today's behaviour).
+	def := resolve_settings(BlueSettings{ preset_id: 'default' })
+	assert def.behavior.focus_new_windows == true
+}
+
+// H1: the wallpaper the compositor paints is resolved through the
+// DesktopSurface axis, with the user's live Settings selection carried in as
+// the override so it still wins, and defaults reproducing today's selection.
+fn test_wallpaper_resolves_through_surface_axis() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width:  800
+			height: 600
+		}
+	}
+	// Defaults: no image, colour index 0 — exactly today's selection.
+	desktop.settings.preset_id = 'default'
+	assert desktop.surface().wallpaper_image == -1
+	assert desktop.surface().wallpaper_color == 0
+
+	// A user-chosen image is honoured (override wins over any preset backdrop).
+	desktop.settings.wallpaper_image = 2
+	assert desktop.surface().wallpaper_image == 2
+
+	// Clearing the image and choosing a colour flows the colour through.
+	desktop.settings.wallpaper_image = -1
+	desktop.settings.wallpaper_color = 3
+	assert desktop.surface().wallpaper_image == -1
+	assert desktop.surface().wallpaper_color == 3
+}
+
+// D5: dragging a window near a screen edge under a snapping preset (Blue) snaps
+// it flush to the work area; under a non-snapping preset (Default) it moves
+// freely to the dragged position.
+fn test_drag_snaps_to_edge_under_blue() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width:  1280
+			height: 800
+		}
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.behavior().snap_to_edges
+	id := desktop.spawn('Snappy', .welcome, 300, 300, 400, 250)
+	index := desktop.window_index(id) or { panic('missing window') }
+
+	// Grab the title bar and drag so the window's left edge lands 5px from the
+	// left work-area edge (0) — within the 12px snap threshold.
+	desktop.buttons = button_left
+	desktop.drag = Drag{
+		kind:      .move
+		window_id: id
+		offset_x:  10
+		offset_y:  8
+	}
+	// pointer x=15 -> proposed left = 15 - 10 = 5, snaps to 0.
+	desktop.on_pointer_move(15, 400)
+	assert desktop.windows[index].x == 0
+
+	// Under Default (no snapping) the same drag lands at the raw position.
+	mut plain := Desktop{
+		canvas: Canvas{
+			width:  1280
+			height: 800
+		}
+	}
+	plain.settings.preset_id = 'default'
+	assert !plain.behavior().snap_to_edges
+	pid := plain.spawn('Free', .welcome, 300, 300, 400, 250)
+	pindex := plain.window_index(pid) or { panic('missing window') }
+	plain.buttons = button_left
+	plain.drag = Drag{
+		kind:      .move
+		window_id: pid
+		offset_x:  10
+		offset_y:  8
+	}
+	plain.on_pointer_move(15, 400)
+	assert plain.windows[pindex].x == 5 // free movement, no snap
+}

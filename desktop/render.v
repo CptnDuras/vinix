@@ -388,11 +388,16 @@ fn (mut d Desktop) paint_wallpaper() {
 	height := d.canvas.height
 	if !d.wallpaper_valid || d.wallpaper.len != width * height {
 		d.wallpaper = []u32{len: width * height}
+		// Blue spec H1: wallpaper is resolved through the DesktopSurface axis
+		// (preset backdrop, overridable by the user), not read from bare
+		// Settings. Defaults resolve to today's selection, so an all-none preset
+		// paints exactly as before.
+		surface := d.surface()
 		mut done := false
-		if d.settings.wallpaper_image >= 0 {
+		if surface.wallpaper_image >= 0 {
 			images := list_wallpapers()
-			if d.settings.wallpaper_image < images.len {
-				if image := load_raw_image(images[d.settings.wallpaper_image].file) {
+			if surface.wallpaper_image < images.len {
+				if image := load_raw_image(images[surface.wallpaper_image].file) {
 					image.scale_into(mut d.wallpaper, width, height)
 					done = true
 				}
@@ -400,8 +405,9 @@ fn (mut d Desktop) paint_wallpaper() {
 		}
 		if !done {
 			// A colour, or the fallback when an image will not load.
-			index := if d.settings.wallpaper_color < wallpaper_colors.len {
-				d.settings.wallpaper_color
+			index := if surface.wallpaper_color < wallpaper_colors.len
+				&& surface.wallpaper_color >= 0 {
+				surface.wallpaper_color
 			} else {
 				0
 			}
