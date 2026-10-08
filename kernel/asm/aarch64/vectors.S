@@ -247,6 +247,17 @@ handle_lower64_sync:
     // but for lower EL exceptions we need SP_EL0 (user stack).
     mrs x9, SP_EL0
     str x9, [sp, #248]
+
+    // This is the earliest production-visible checkpoint after the exec
+    // handoff's eret. It is deliberately ahead of both SVC decoding and the
+    // generic fault handler so a failure in either path cannot hide which
+    // exception brought us back from EL0.
+    mrs x0, esr_el1
+    mrs x1, far_el1
+    mov x2, sp
+    mov x3, #0                 // lower-EL synchronous exception
+    bl scheduler_gpu_lower_exception_trace
+
     mrs x9, esr_el1
     lsr x10, x9, #26          // EC field (bits [31:26])
     cmp x10, #0x15             // SVC from AArch64?
@@ -257,6 +268,8 @@ handle_lower64_sync:
     mov x2, sp                 // arg2: GPRState pointer
     bl exception__sync_handler
     HVF_SYNC_BARRIER
+    mov x0, sp
+    bl scheduler_gpu_sync_exit_trace
     RESTORE_REGS_TO_EL0
 
 handle_svc:
@@ -269,10 +282,12 @@ handle_svc:
     ldp x5, x6, [sp, #32]     // original x4 -> x5, original x5 -> x6
     mov x0, sp                 // first C arg = GPRState pointer
 
-    // Trace syscall entry
+    // Trace syscall entry. It answers the table slot to dispatch: the call
+    // itself, or the one a seccomp filter turned it into.
     stp x9, x30, [sp, #-16]!
     bl syscall_trace
     ldp x9, x30, [sp], #16
+    mov x9, x0
 
     // Reload args (trace clobbered them)
     ldp x1, x2, [sp, #0]
@@ -284,6 +299,7 @@ handle_svc:
     // modules/syscall/table/syscall_table_arm64.v.
     cmp x9, #512
     b.ge .svc_invalid
+
     // Dispatch via syscall_table[x9]
     adrp x10, syscall_table
     add x10, x10, :lo12:syscall_table
@@ -306,36 +322,78 @@ handle_svc:
     mov x0, sp
     bl syscall__leave
     HVF_SYNC_BARRIER
+    mov x0, sp
+    bl scheduler_gpu_sync_exit_trace
     RESTORE_REGS_TO_EL0
 
 .svc_invalid:
     movn x0, #37               // x0 = -38 = -ENOSYS
     str x0, [sp, #0]
     HVF_SYNC_BARRIER
+    mov x0, sp
+    bl scheduler_gpu_sync_exit_trace
     RESTORE_REGS_TO_EL0
 
 handle_lower64_irq:
     SAVE_REGS
     mrs x9, SP_EL0
     str x9, [sp, #248]
+    mov x0, #0
+    mov x1, #0
+    mov x2, sp
+    mov x3, #1                 // lower-EL IRQ
+    bl scheduler_gpu_lower_exception_trace
+    mov x0, sp
+    mov x1, #0
+    bl scheduler_gpu_interrupt_trace
     mov x0, sp
     bl exception__irq_handler
+    // A signal that came while the thread computed is taken now.
+    mov x0, sp
+    bl interrupt__leave
+    mov x0, sp
+    mov x1, #1
+    bl scheduler_gpu_interrupt_trace
     HVF_SYNC_BARRIER
+    mov x0, sp
+    mov x1, #2
+    bl scheduler_gpu_interrupt_trace
     RESTORE_REGS_TO_EL0
 
 handle_lower64_fiq:
     SAVE_REGS
     mrs x9, SP_EL0
     str x9, [sp, #248]
+    mov x0, #0
+    mov x1, #0
+    mov x2, sp
+    mov x3, #2                 // lower-EL FIQ
+    bl scheduler_gpu_lower_exception_trace
+    mov x0, sp
+    mov x1, #0
+    bl scheduler_gpu_interrupt_trace
     mov x0, sp
     bl exception__irq_handler
+    mov x0, sp
+    bl interrupt__leave
+    mov x0, sp
+    mov x1, #1
+    bl scheduler_gpu_interrupt_trace
     HVF_SYNC_BARRIER
+    mov x0, sp
+    mov x1, #2
+    bl scheduler_gpu_interrupt_trace
     RESTORE_REGS_TO_EL0
 
 handle_lower64_serror:
     SAVE_REGS
     mrs x9, SP_EL0
     str x9, [sp, #248]
+    mrs x0, esr_el1
+    mrs x1, far_el1
+    mov x2, sp
+    mov x3, #3                 // lower-EL SError
+    bl scheduler_gpu_lower_exception_trace
     mrs x0, esr_el1
     mrs x1, far_el1
     mov x2, sp

@@ -9,7 +9,7 @@ fi
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 mkdir -p "$tmp/modules/pagecache" "$tmp/modules/errno" "$tmp/modules/klock"
-cp "$root/kernel/modules/pagecache/pagecache.v" "$tmp/modules/pagecache/"
+cp "$root/kernel/pagecache/pagecache.v" "$tmp/modules/pagecache/"
 cp "$root/tests/pagecache/pagecache_test.v" "$tmp/modules/pagecache/"
 cat > "$tmp/v.mod" <<'MOD'
 Module { name: 'pagecache_host_tests' }
@@ -29,6 +29,7 @@ cat > "$tmp/modules/errno/errno.v" <<'VEOF'
 module errno
 pub const eio = 5
 pub const enomem = 12
+pub const ebusy = 16
 pub const einval = 22
 __global (last_error int)
 pub fn set(value int) { last_error = value }

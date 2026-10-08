@@ -36,6 +36,7 @@ GO_STAGING="${VINIX_GO_STAGING:-$SCRIPT_DIR/build-aarch64-go/staging}"
 JAVA_STAGING="${VINIX_JAVA_STAGING:-$SCRIPT_DIR/build-aarch64-java/staging}"
 NETWORK_TOOLS_STAGING="${VINIX_NETWORK_TOOLS_STAGING:-$SCRIPT_DIR/build-aarch64-network-tools/staging}"
 DEVELOPER_TOOLS_STAGING="${VINIX_DEVELOPER_TOOLS_STAGING:-$SCRIPT_DIR/build-aarch64-developer-tools/staging}"
+VLANG_STAGING="${VINIX_VLANG_STAGING:-$SCRIPT_DIR/build-aarch64-v/staging}"
 FIREFOX_STAGING="${VINIX_FIREFOX_STAGING:-$SCRIPT_DIR/build-aarch64-firefox/staging}"
 MINECRAFT_STAGING="${VINIX_MINECRAFT_STAGING:-$SCRIPT_DIR/build-aarch64-minecraft/staging}"
 CODEX_STAGING="${VINIX_CODEX_STAGING:-$SCRIPT_DIR/build-aarch64-codex/staging}"
@@ -500,10 +501,10 @@ else
     echo "==> Firefox staging not found, skipping (run build-firefox-aarch64.sh first)"
 fi
 
-# Minetest is a native C++/SDL/OpenGL client. Merge it before Asahi so the
-# hardware-specific Mesa userspace remains the final graphics implementation.
+# Minecraft renders with Mesa's software rasteriser. Merge it before Asahi so
+# the hardware-specific Mesa userspace remains the final graphics implementation.
 if [ -x "$MINECRAFT_STAGING/usr/bin/minecraft" ]; then
-    echo "==> Integrating C++ Minecraft runtime..."
+    echo "==> Integrating Minecraft runtime..."
     merge_staging_tree "$MINECRAFT_STAGING"
 else
     echo "==> Minecraft staging not found, skipping (run build-minecraft-aarch64.sh first)"
@@ -512,8 +513,18 @@ fi
 # The native Asahi build is produced in the Debian ARM64 VM. Once its staging
 # directory has been copied back beside this script, merge it last so its EGL,
 # GLES and Gallium libraries replace any software-only Mesa copies from X11.
+#
+# Only for a userland that is actually going to run on Apple hardware, which is
+# what VINIX_WITH_ASAHI_GPU says. That Mesa is built for a real GPU and carries
+# no llvmpipe at all, so its only software rasteriser is softpipe -- an OpenGL
+# 3.3 ceiling where the generic build reaches 4.5. Merging it into the shared
+# userland therefore downgrades software rendering for every image built from
+# it, and because that happens on the mere presence of a staging directory
+# rather than a commit, the day it lands nothing in git explains why an
+# application needing more than 3.3 stopped working. Native Blender, which asks
+# for a 4.3 core context, is how this was found.
 ASAHI_STAGING="$SCRIPT_DIR/build-aarch64-asahi/staging"
-if [ -x "$ASAHI_STAGING/usr/bin/gl-triangle-agx" ]; then
+if [ "${VINIX_WITH_ASAHI_GPU:-0}" = 1 ] && [ -x "$ASAHI_STAGING/usr/bin/gl-triangle-agx" ]; then
     echo "==> Integrating native Apple GPU userspace..."
     merge_staging_tree "$ASAHI_STAGING"
     install -m755 "$SCRIPT_DIR/gl-triangle/run-gl-triangle" \
@@ -581,6 +592,13 @@ if [ -x "$DEVELOPER_TOOLS_STAGING/usr/bin/cmake" ]; then
     merge_staging_tree "$DEVELOPER_TOOLS_STAGING"
 else
     echo "==> Developer tools staging not found, skipping (run build-developer-tools-aarch64.sh first)"
+fi
+
+if [ -x "$VLANG_STAGING/usr/lib/vlang/v" ]; then
+    echo "==> Integrating the native V compiler..."
+    merge_staging_tree "$VLANG_STAGING"
+else
+    echo "==> V staging not found, skipping (run build-v-aarch64.sh first)"
 fi
 
 if [ -x "$CODEX_STAGING/usr/bin/codex" ]; then

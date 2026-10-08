@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Alexander Medvednikov. All rights reserved.
+// Use of this source code is governed by a GPL v2 license
+// that can be found in the LICENSE file.
+
 #include "vinix_net.h"
 
 #include <lwip/dhcp.h>
@@ -16,17 +20,31 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Drivers are deliberately below the IP stack.  The weak VirtIO symbol keeps
- * the same stack buildable on x86, while Apple's C bridge is already built on
- * both architectures. */
+/* Drivers are deliberately below the IP stack.  Their transmit functions are
+ * weak so that the stack links whichever of them an architecture leaves out:
+ * VirtIO-MMIO and Apple Wi-Fi exist only on arm64, the e1000 driver on both. */
 extern int vinix_virtio_net_send(const void *, uint64_t) __attribute__((weak));
 extern int vinix_apple_wifi_send(const void *, uint64_t) __attribute__((weak));
+extern int vinix_e1000_send(const void *, uint64_t) __attribute__((weak));
 
 enum {
     DRIVER_NONE = 0,
     DRIVER_VIRTIO = 1,
     DRIVER_APPLE_WIFI = 2,
+    DRIVER_E1000 = 3,
 };
+
+typedef int (*driver_send_fn)(const void *, uint64_t);
+
+/* The transmit function of a driver, or NULL if it is not in this kernel. */
+static driver_send_fn driver_send(int driver) {
+    switch (driver) {
+        case DRIVER_VIRTIO:     return vinix_virtio_net_send;
+        case DRIVER_APPLE_WIFI: return vinix_apple_wifi_send;
+        case DRIVER_E1000:      return vinix_e1000_send;
+        default:                return NULL;
+    }
+}
 
 struct packet {
     struct packet *next;
@@ -49,8 +67,13 @@ struct vinix_socket {
     int reuseaddr;
     int broadcast;
     int keepalive;
+    /* TCP_NODELAY on a listening socket, for the connections it accepts. */
+    int nodelay;
     struct tcp_pcb *tcp;
     struct udp_pcb *udp;
+    /* tcp_err releases the PCB before user space can query this socket. */
+    uint32_t last_local_address;
+    uint16_t last_local_port;
     struct packet *rx_head;
     struct packet *rx_tail;
     struct vinix_socket *accept_head;
@@ -91,8 +114,37 @@ static int linux_error(err_t error) {
     }
 }
 
+#ifdef __AARCH64__
+void aarch64__uart__putc(uint8_t);
+
+static void assert_serial(const char *text) {
+    while (*text) {
+        aarch64__uart__putc((uint8_t)*text++);
+    }
+}
+#endif
+
+// A failed assertion stops this CPU for good, so say which one it was where it
+// can be read: ordinary printf is compiled out of PROD kernels, and the stack
+// was all that was left to find it by.
 void vinix_lwip_assert(const char *message, const char *file, int line) {
-    printf("lwip: assertion '%s' at %s:%d\n", message, file, line);
+    printf_panic("lwip: assertion '%s' at %s:%d\n", message, file, line);
+#ifdef __AARCH64__
+    char number[12];
+    int at = sizeof number - 1;
+    number[at] = 0;
+    do {
+        number[--at] = (char)('0' + line % 10);
+        line /= 10;
+    } while (line > 0 && at > 0);
+    assert_serial("lwip: assertion '");
+    assert_serial(message);
+    assert_serial("' at ");
+    assert_serial(file);
+    assert_serial(":");
+    assert_serial(&number[at]);
+    assert_serial("\n");
+#endif
     for (;;) { }
 }
 
@@ -243,6 +295,10 @@ static err_t accept_callback(void *argument, struct tcp_pcb *pcb, err_t error) {
     child->tcp = pcb;
     child->reuseaddr = ip_get_option(pcb, SOF_REUSEADDR) != 0;
     child->keepalive = ip_get_option(pcb, SOF_KEEPALIVE) != 0;
+    /* A connection takes TCP_NODELAY from the socket it was accepted on. */
+    if (listener->nodelay) {
+        tcp_nagle_disable(pcb);
+    }
     install_tcp_callbacks(child);
 
     if (listener->accept_tail) {
@@ -274,14 +330,8 @@ void vinix_net_init(void) {
 }
 
 static int driver_output(const void *frame, size_t length) {
-    if (active_driver == DRIVER_VIRTIO && vinix_virtio_net_send) {
-        return vinix_virtio_net_send(frame, (uint64_t)length);
-    }
-    if (active_driver == DRIVER_APPLE_WIFI) {
-        return vinix_apple_wifi_send ?
-            vinix_apple_wifi_send(frame, (uint64_t)length) : -1;
-    }
-    return -1;
+    driver_send_fn send = driver_send(active_driver);
+    return send ? send(frame, (uint64_t)length) : -1;
 }
 
 static err_t link_output(struct netif *netif, struct pbuf *p) {
@@ -315,7 +365,7 @@ int vinix_net_attach(const uint8_t mac[6], int driver) {
     if (!stack_initialised) {
         vinix_net_init();
     }
-    if (driver != DRIVER_VIRTIO && driver != DRIVER_APPLE_WIFI) {
+    if (!driver_send(driver)) {
         return -22;
     }
     if (link_attached) {
@@ -424,6 +474,15 @@ int vinix_net_config(uint32_t *address, uint32_t *netmask, uint32_t *gateway,
     return 1;
 }
 
+int vinix_net_link(uint8_t mac[6], uint32_t *mtu) {
+    if (!link_attached) {
+        return 0;
+    }
+    memcpy(mac, physical_netif.hwaddr, 6);
+    *mtu = physical_netif.mtu;
+    return 1;
+}
+
 struct vinix_socket *vinix_socket_new(int type, int protocol) {
     struct vinix_socket *socket;
     if (!stack_initialised) {
@@ -471,7 +530,15 @@ void vinix_socket_free(struct vinix_socket *socket) {
         child->accept_next = NULL;
         vinix_socket_free(child);
     }
-    if (socket->tcp) {
+    if (socket->tcp && socket->tcp->state == LISTEN) {
+        // A listening pcb is lwIP's smaller tcp_pcb_listen. It has no data
+        // callbacks, and lwIP asserts if asked to clear them. Closing one
+        // cannot fail.
+        tcp_arg(socket->tcp, NULL);
+        tcp_accept(socket->tcp, NULL);
+        tcp_close(socket->tcp);
+        socket->tcp = NULL;
+    } else if (socket->tcp) {
         tcp_arg(socket->tcp, NULL);
         tcp_recv(socket->tcp, NULL);
         tcp_sent(socket->tcp, NULL);
@@ -503,7 +570,8 @@ int vinix_socket_bind(struct vinix_socket *socket, uint32_t address, uint16_t po
         return 88;
     }
     ip = ipv4(address);
-    if (socket->tcp) {
+    if (socket->type == VINIX_NET_STREAM) {
+        if (!socket->tcp) return socket->error ? socket->error : 107;
         error = tcp_bind(socket->tcp, &ip, lwip_ntohs(port));
     } else {
         error = udp_bind(socket->udp, &ip, lwip_ntohs(port));
@@ -518,7 +586,8 @@ int vinix_socket_connect(struct vinix_socket *socket, uint32_t address, uint16_t
         return 88;
     }
     ip = ipv4(address);
-    if (socket->tcp) {
+    if (socket->type == VINIX_NET_STREAM) {
+        if (!socket->tcp) return socket->error ? socket->error : 107;
         if (socket->connected) {
             return 106;
         }
@@ -531,6 +600,8 @@ int vinix_socket_connect(struct vinix_socket *socket, uint32_t address, uint16_t
             socket->connecting = 0;
             return linux_error(error);
         }
+        socket->last_local_address = ip_2_ip4(&socket->tcp->local_ip)->addr;
+        socket->last_local_port = lwip_htons(socket->tcp->local_port);
         /* NO_SYS loopback queues packets until netif_poll_all().  A busy
          * nonblocking client may never let the scheduler reach its idle
          * poller, so complete the in-kernel handshake synchronously. */
@@ -597,8 +668,9 @@ int vinix_socket_send(struct vinix_socket *socket, const void *data, size_t leng
     if (socket->write_shutdown) {
         return -32;
     }
-    if (socket->tcp) {
+    if (socket->type == VINIX_NET_STREAM) {
         uint16_t amount;
+        if (!socket->tcp) return -(socket->error ? socket->error : 107);
         if (!socket->connected) {
             return -107;
         }
@@ -671,11 +743,11 @@ int vinix_socket_recv(struct vinix_socket *socket, void *data, size_t length,
     }
     packet = socket->rx_head;
     if (!packet) {
-        if (socket->tcp && socket->peer_closed) {
+        if (socket->type == VINIX_NET_STREAM && socket->peer_closed && !socket->error) {
             return 0;
         }
-        if (socket->tcp && !socket->connected) {
-            return -107;
+        if (socket->type == VINIX_NET_STREAM && !socket->connected) {
+            return -(socket->error ? socket->error : 107);
         }
         return -11;
     }
@@ -723,7 +795,8 @@ int vinix_socket_shutdown(struct vinix_socket *socket, int how) {
     if (how == 1 || how == 2) {
         socket->write_shutdown = 1;
     }
-    if (socket->tcp) {
+    if (socket->type == VINIX_NET_STREAM) {
+        if (!socket->tcp) return 107;
         error = tcp_shutdown(socket->tcp, how == 0 || how == 2,
                              how == 1 || how == 2);
         return linux_error(error);
@@ -739,9 +812,11 @@ int vinix_socket_local(struct vinix_socket *socket, uint32_t *address, uint16_t 
     if (!socket) {
         return 88;
     }
-    if (socket->tcp) {
-        if (address) *address = ip_2_ip4(&socket->tcp->local_ip)->addr;
-        if (port) *port = lwip_htons(socket->tcp->local_port);
+    if (socket->type == VINIX_NET_STREAM) {
+        if (address) *address = socket->tcp ?
+            ip_2_ip4(&socket->tcp->local_ip)->addr : socket->last_local_address;
+        if (port) *port = socket->tcp ?
+            lwip_htons(socket->tcp->local_port) : socket->last_local_port;
     } else {
         if (address) *address = ip_2_ip4(&socket->udp->local_ip)->addr;
         if (port) *port = lwip_htons(socket->udp->local_port);
@@ -832,24 +907,31 @@ int vinix_socket_set_option(struct vinix_socket *socket, int level, int option,
         case 2:  /* SO_REUSEADDR */
         case 15: /* SO_REUSEPORT: lwIP shares address-reuse semantics. */
             socket->reuseaddr = value;
-            if (value) ip_set_option(pcb, SOF_REUSEADDR);
-            else ip_reset_option(pcb, SOF_REUSEADDR);
+            if (pcb) {
+                if (value) ip_set_option(pcb, SOF_REUSEADDR);
+                else ip_reset_option(pcb, SOF_REUSEADDR);
+            }
             return 0;
         case 6: /* SO_BROADCAST */
             socket->broadcast = value;
-            if (value) ip_set_option(pcb, SOF_BROADCAST);
-            else ip_reset_option(pcb, SOF_BROADCAST);
+            if (pcb) {
+                if (value) ip_set_option(pcb, SOF_BROADCAST);
+                else ip_reset_option(pcb, SOF_BROADCAST);
+            }
             return 0;
         case 9: /* SO_KEEPALIVE */
             socket->keepalive = value;
-            if (value) ip_set_option(pcb, SOF_KEEPALIVE);
-            else ip_reset_option(pcb, SOF_KEEPALIVE);
+            if (pcb) {
+                if (value) ip_set_option(pcb, SOF_KEEPALIVE);
+                else ip_reset_option(pcb, SOF_KEEPALIVE);
+            }
             return 0;
         default:
             return 92;
         }
     }
     if (level == 0) { /* IPPROTO_IP */
+        if (!pcb) return 107;
         if (value < 0 || value > 255) {
             return 22;
         }
@@ -869,6 +951,15 @@ int vinix_socket_set_option(struct vinix_socket *socket, int level, int option,
         switch (option) {
         case 1: /* TCP_NODELAY */
             if (!socket->tcp) return 92;
+            /* A listening pcb is lwIP's smaller tcp_pcb_listen, which has no
+             * flags: its accept callback lies where they would be, and
+             * setting TF_NODELAY there turned the callback into a pointer
+             * to nowhere, which the next connection to finish its handshake
+             * called. Varnish sets it on its listening socket. */
+            if (socket->tcp->state == LISTEN) {
+                socket->nodelay = value != 0;
+                return 0;
+            }
             if (value) tcp_nagle_disable(socket->tcp);
             else tcp_nagle_enable(socket->tcp);
             return 0;
@@ -896,6 +987,7 @@ int vinix_socket_get_option(struct vinix_socket *socket, int level, int option,
         }
     }
     if (level == 0) { /* IPPROTO_IP */
+        if (!pcb) return 107;
         switch (option) {
         case 1: *value = pcb->tos; return 0;
         case 2: *value = pcb->ttl; return 0;
@@ -906,6 +998,10 @@ int vinix_socket_get_option(struct vinix_socket *socket, int level, int option,
         switch (option) {
         case 1:
             if (!socket->tcp) return 92;
+            if (socket->tcp->state == LISTEN) {
+                *value = socket->nodelay;
+                return 0;
+            }
             *value = tcp_nagle_disabled(socket->tcp) ? 1 : 0;
             return 0;
         default: return 92;

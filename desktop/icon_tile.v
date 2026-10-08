@@ -20,6 +20,9 @@ struct IconTileStyle {
 	label u32 // glyph + label colour at rest
 	hover u32 // glyph + label colour while hovered
 	panel u32 // tile background (shown while hovered; transparent otherwise)
+	// The title is a copy the frame owns and free_tree releases, for a title
+	// that does not outlive the frame (a directory entry's name).
+	own_title bool
 }
 
 // icon_tile builds one app tile: a centred glyph above a centred label, inside
@@ -61,7 +64,7 @@ fn icon_tile_ex(action string, icon string, title string, rect ui2.Rect, hovered
 	}, ui2.TextStyle{
 		color: color
 	})
-	children << ui2.label('', title, ui2.rect(0, f64(shortcut_icon + 16), rect.width, 18), ui2.TextStyle{
+	children << ui2.label(if style.own_title { frame_owned_text_id } else { '' }, title, ui2.rect(0, f64(shortcut_icon + 16), rect.width, 18), ui2.TextStyle{
 		color: color
 		shadow: label_shadow
 		size: 12

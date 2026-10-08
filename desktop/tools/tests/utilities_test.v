@@ -1,9 +1,21 @@
+// Copyright (c) 2026 Alexander Medvednikov. All rights reserved.
+// Use of this source code is governed by a GPL v2 license
+// that can be found in the LICENSE file.
+
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Copyright (c) 2026 Alexander Medvednikov
 module main
 
 import os
 import ui2
+
+fn test_terminal_rebuild_message_reports_elapsed_after_relaunch() {
+	assert terminal_rebuild_message('42 1000.00\n', 42, 1_001_890) ==
+		'vinix-desktop has been rebuilt in 1.89 seconds\r\n'
+	assert terminal_rebuild_message('42 1000.00\n', 43, 1_001_890) == ''
+	assert terminal_rebuild_message('42 1000.00\n', 42, 999_990) == ''
+	assert terminal_rebuild_message('42 1000.00\n', 42, 1_600_010) == ''
+	assert terminal_rebuild_message('42 invalid\n', 42, 1_001_890) == ''
+}
 
 fn utility_tree_has_text(element ui2.Element, text string) bool {
 	if element.text == text {
@@ -39,6 +51,35 @@ fn utility_button_with_text(element ui2.Element, text string) ?ui2.Element {
 	return none
 }
 
+fn test_qoi_icon_decoder_preserves_rgba_and_run_pixels() {
+	// A two-pixel QOI: one RGBA opcode followed by a one-pixel run. This keeps
+	// the tiny asset decoder's most important alpha and run-length paths covered
+	// without making the test depend on host-installed desktop artwork.
+	encoded := [u8(`q`), `o`, `i`, `f`, 0, 0, 0, 2, 0, 0, 0, 1, 4, 0, 0xff, 0x12, 0x34, 0x56, 0x78,
+		0xc0, 0, 0, 0, 0, 0, 0, 0, 1]
+	icon := decode_qoi(encoded) or {
+		assert false
+		return
+	}
+	assert icon.width == 2
+	assert icon.height == 1
+	assert icon.pixels == [u32(0x78123456), 0x78123456]
+}
+
+fn test_qoi_icon_decoder_uses_all_64_index_slots() {
+	// RGBA(3, 0, 0, 255) hashes to slot 62. Decode it once as a literal and
+	// once through QOI_OP_INDEX so a shortened colour index cannot regress.
+	encoded := [u8(`q`), `o`, `i`, `f`, 0, 0, 0, 2, 0, 0, 0, 1, 4, 0, 0xff, 3, 0, 0, 0xff, u8(62),
+		0, 0, 0, 0, 0, 0, 0, 1]
+	icon := decode_qoi(encoded) or {
+		assert false
+		return
+	}
+	assert icon.width == 2
+	assert icon.height == 1
+	assert icon.pixels == [u32(0xff030000), 0xff030000]
+}
+
 fn test_vinix_start_glyph_uses_the_wordmark_v_polygon() {
 	// These coordinates are inside the left arm, the open notch and the right
 	// arm of the V in vinix-logo.svg. Keeping this assertion on the shared
@@ -54,6 +95,27 @@ fn test_vinix_start_glyph_uses_the_wordmark_v_polygon() {
 	canvas.clear(0x000000)
 	canvas.draw_vinix_v(0, 0, 48, 48, 0xffffff)
 	assert unsafe { canvas.pixels[24 * canvas.stride + 24] } == 0xffffff
+}
+
+fn test_wallpaper_copy_respects_canvas_clip() {
+	mut canvas := new_canvas(4, 3)
+	defer {
+		unsafe { free(canvas.pixels) }
+	}
+	canvas.clear(0x010203)
+	wallpaper := [u32(0x100000), 0x100001, 0x100002, 0x100003, 0x100004, 0x100005,
+		0x100006, 0x100007, 0x100008, 0x100009, 0x10000a, 0x10000b]
+	canvas.clip = Clip{
+		x: 1
+		y: 1
+		w: 2
+		h: 1
+	}
+	canvas.copy_logical_pixels(wallpaper)
+	assert unsafe { canvas.pixels[0] } == 0x010203
+	assert unsafe { canvas.pixels[1 * canvas.stride + 1] } == 0x100005
+	assert unsafe { canvas.pixels[1 * canvas.stride + 2] } == 0x100006
+	assert unsafe { canvas.pixels[1 * canvas.stride + 3] } == 0x010203
 }
 
 fn surface_test_put_u32(mut bytes []u8, offset int, value u32) {
@@ -125,6 +187,24 @@ fn (mut app PointerFocusTestApp) pointer_input_enabled() bool {
 }
 
 fn (mut app PointerFocusTestApp) pointer_event(_ AppPointerPhase, _ AppPointerButton, _ int, _ int, _ int, _ int, _ int) {}
+
+struct SelectorRoutingTestApp {
+mut:
+	last_action string
+	call_count   int
+}
+
+fn (mut app SelectorRoutingTestApp) build(_ ui2.Rect) !ui2.Element {
+	return ui2.screen(0, [])
+}
+
+fn (mut app SelectorRoutingTestApp) handle(action string) ! {
+	if app.last_action.len > 0 {
+		unsafe { app.last_action.free() }
+	}
+	app.last_action = action.clone()
+	app.call_count++
+}
 
 fn test_text_editor_inserts_and_navigates() {
 	mut editor := TextEditorApp{
@@ -223,6 +303,14 @@ fn test_capture_png_encoder_writes_standard_truecolour_image() {
 	assert bytes[24] == 8
 	assert bytes[25] == 2
 	assert bytes[bytes.len - 8..bytes.len - 4].bytestr() == 'IEND'
+	icon := decode_png(bytes) or {
+		assert false
+		return
+	}
+	assert icon.width == 2
+	assert icon.height == 2
+	assert icon.pixels == [u32(0xffff0000), 0xff00ff00, 0xff0000ff, 0xffffffff]
+	assert png_paeth(10, 20, 15) == 15
 }
 
 fn test_capture_avi_writer_indexes_every_video_frame() {
@@ -369,7 +457,7 @@ fn test_terminal_renders_pty_echo_and_carriage_return_updates() {
 	terminal.set_geometry(4, 40)
 	terminal.ingest_output('progress 10%\rprogress 20%\r\n\$ '.bytes())
 	assert terminal.row_string(0) == 'progress 20%'
-	assert terminal.row_string(1) == '\$ '
+	assert terminal.row_string(1) == '\$'
 	assert terminal.rendered_row(1) == '\$ _'
 
 	// Canonical erase echo is backspace-space-backspace. Interpret it as cursor
@@ -513,47 +601,63 @@ fn test_terminal_can_edit_a_file_with_vim_over_its_real_pty() {
 }
 
 fn test_available_utility_applications_and_shortcut_layouts() {
-	assert available_apps.len == 19
+	assert available_apps.len == 25
 	assert available_apps[0].process_name == 'vinix-files'
+	assert available_apps[0].icon == 'asset:files'
 	assert available_apps[1].title == 'Firefox'
 	assert available_apps[1].exclusive_command == ''
 	assert available_apps[1].process_name == 'vinix-firefox'
+	assert available_apps[1].icon == 'asset:firefox'
 	assert available_apps[1].width == firefox_window_width
 	assert available_apps[1].height == firefox_window_height + default_title_height
 	assert available_apps[1].polling && available_apps[1].poll_interval_ms == 50
 	assert available_apps[1].keyboard && available_apps[1].pointer
+	assert available_apps[2].icon == 'asset:calculator'
 	assert available_apps[3].process_name == 'vinix-terminal'
+	assert available_apps[3].icon == 'asset:terminal'
 	assert available_apps[3].keyboard && available_apps[3].polling
+	assert available_apps[4].icon == 'asset:settings'
 	assert available_apps[5].title == 'Activity Monitor'
 	assert available_apps[5].process_name == 'vinix-activity'
-	assert available_apps[9].process_name == 'vinix-cocoa-calculator'
-	assert available_apps[10].title == 'Minecraft'
-	assert available_apps[10].process_name == 'vinix-minecraft'
-	assert available_apps[10].exclusive_command == ''
+	assert available_apps[5].icon == 'asset:activity'
+	assert available_apps[6].icon == 'asset:editor'
+	assert available_apps[7].icon == 'asset:calendar'
+	assert available_apps[8].icon == 'asset:clock'
+	assert available_apps[9].title == 'Minecraft'
+	assert available_apps[9].process_name == 'vinix-minecraft'
+	assert available_apps[9].icon == 'asset:minecraft'
+	assert available_apps[9].exclusive_command == ''
+	assert available_apps[9].width == 1976
+	assert available_apps[9].height == 1113 + default_title_height
+	assert available_apps[9].keyboard && available_apps[9].polling
+	assert available_apps[9].pointer
+	assert available_apps[10].title == 'Wine Calculator'
+	assert available_apps[10].process_name == 'vinix-wine-calculator'
 	assert available_apps[10].keyboard && available_apps[10].polling
 	assert available_apps[10].pointer
-	assert available_apps[11].title == 'Wine Calculator'
-	assert available_apps[11].process_name == 'vinix-wine-calculator'
+	assert available_apps[11].title == 'Wine Notepad'
+	assert available_apps[11].process_name == 'vinix-wine-notepad'
 	assert available_apps[11].keyboard && available_apps[11].polling
 	assert available_apps[11].pointer
-	assert available_apps[12].title == 'Wine Notepad'
-	assert available_apps[12].process_name == 'vinix-wine-notepad'
+	assert available_apps[12].title == 'Microsoft Word 2013'
+	assert available_apps[12].process_name == 'vinix-wine-word2013'
 	assert available_apps[12].keyboard && available_apps[12].polling
 	assert available_apps[12].pointer
-	assert available_apps[13].title == 'Microsoft Word 2013'
-	assert available_apps[13].process_name == 'vinix-wine-word2013'
+	assert available_apps[13].title == 'Blender'
+	assert available_apps[13].process_name == 'vinix-blender'
+	assert available_apps[13].icon == 'asset:blender'
+	assert available_apps[13].width == blender_window_width
+	assert available_apps[13].height == blender_window_height + default_title_height
+	assert available_apps[14].title == capture_app_title
+	assert available_apps[14].process_name == 'vinix-capture'
+	assert available_apps[14].icon == 'asset:capture'
+	assert available_apps[14].polling
 	assert available_apps[13].keyboard && available_apps[13].polling
 	assert available_apps[13].pointer
-	assert available_apps[14].title == 'Blender'
-	assert available_apps[14].process_name == 'vinix-blender'
-	assert available_apps[14].width == blender_window_width
-	assert available_apps[14].height == blender_window_height + default_title_height
-	assert available_apps[15].title == capture_app_title
-	assert available_apps[15].process_name == 'vinix-capture'
-	assert available_apps[15].icon == 'builtin:camera'
+	assert available_apps[15].title == 'OBS Studio'
+	assert available_apps[15].process_name == 'vinix-obs'
+	assert available_apps[15].keyboard && available_apps[15].pointer
 	assert available_apps[15].polling
-	assert available_apps[14].keyboard && available_apps[14].polling
-	assert available_apps[14].pointer
 	assert available_apps[16].title == 'GIMP'
 	assert available_apps[16].process_name == 'vinix-gimp'
 	assert available_apps[16].width == gimp_window_width
@@ -562,16 +666,38 @@ fn test_available_utility_applications_and_shortcut_layouts() {
 	assert available_apps[16].polling && available_apps[16].poll_interval_ms == 50
 	assert available_apps[17].title == 'VSpace'
 	assert available_apps[17].process_name == 'vinix-vspace'
-	assert available_apps[17].icon == 'builtin:disk'
+	assert available_apps[17].icon == 'asset:vspace'
 	assert available_apps[17].polling && available_apps[17].poll_interval_ms == 33
 	assert !available_apps[17].keyboard && !available_apps[17].pointer
-	assert available_apps[18].title == 'Chromium'
-	assert available_apps[18].process_name == 'vinix-chromium'
-	assert available_apps[18].icon == 'builtin:browser'
-	assert available_apps[18].width == chromium_window_width
-	assert available_apps[18].height == chromium_window_height + default_title_height
-	assert available_apps[18].keyboard && available_apps[18].pointer
-	assert available_apps[18].polling && available_apps[18].poll_interval_ms == 50
+	assert available_apps[18].title == 'VOffice Writer'
+	assert available_apps[18].process_name == 'voffice-writer'
+	assert available_apps[18].standalone && available_apps[18].keyboard
+	assert available_apps[18].pointer && available_apps[18].polling
+	assert available_apps[18].install_package == 'voffice'
+	assert available_apps[19].title == 'VOffice Calc'
+	assert available_apps[19].process_name == 'voffice-calc'
+	assert available_apps[19].standalone && available_apps[19].keyboard
+	assert available_apps[19].pointer && available_apps[19].polling
+	assert available_apps[19].install_package == 'voffice'
+	assert available_apps[21].title == 'Chromium'
+	assert available_apps[21].process_name == 'vinix-chromium'
+	assert available_apps[21].icon == 'asset:chromium'
+	assert available_apps[21].width == chromium_window_width
+	assert available_apps[21].height == chromium_window_height + default_title_height
+	assert available_apps[21].keyboard && available_apps[21].pointer
+	assert available_apps[21].polling && available_apps[21].poll_interval_ms == 50
+	assert available_apps[22].title == 'DOOM'
+	assert available_apps[22].process_name == 'vinix-doom'
+	assert available_apps[22].icon == 'asset:doom'
+	assert available_apps[22].keyboard && available_apps[22].pointer
+	assert available_apps[23].title == 'Vinix in QEMU'
+	assert available_apps[23].process_name == 'vinix-qemu-window'
+	assert available_apps[24].title == 'Steam'
+	assert available_apps[24].process_name == 'vinix-steam'
+	assert available_apps[24].icon == 'asset:steam'
+	assert available_apps[24].keyboard && available_apps[24].pointer
+	assert available_apps[24].polling
+	assert available_apps.len == 25
 	assert app_start_actions.len == available_apps.len
 	assert app_shortcut_actions.len == available_apps.len
 	assert shortcut_rows_for_height(720) == 8
@@ -585,6 +711,7 @@ fn test_pointer_wire_records_have_fixed_cross_compiler_layouts() {
 	assert sizeof(PointerPacket) == 32
 	assert sizeof(AppPointerPayload) == 28
 	assert sizeof(WineHostEvent) == 20
+	assert int(WineHostEventKind.wheel_down) == 10
 	assert sizeof(VinixInputEvent) == 24
 }
 
@@ -607,6 +734,29 @@ fn test_native_surface_input_preserves_buttons_and_scroll() {
 	assert records[0].x == 50 && records[0].y == 25
 	assert records[1].kind == u32(VinixInputEventKind.wheel)
 	assert records[1].value == -2
+
+	C.close(input_pipe[0])
+	C.close(input_pipe[1])
+}
+
+fn test_hosted_x11_input_forwards_context_menu_and_wheel() {
+	mut input_pipe := [2]i32{}
+	assert C.pipe(&input_pipe[0]) == 0
+	mut app := HostedX11App{
+		input_fd: int(input_pipe[1])
+		surface_width: 100
+		surface_height: 50
+		ready: true
+	}
+
+	app.pointer_event(.down, .right, 0, 100, 100, 200, 200)
+	app.pointer_event(.scroll, .no_button, -2, 100, 100, 200, 200)
+	mut records := [3]WineHostEvent{}
+	assert C.read(input_pipe[0], &records[0], sizeof(WineHostEvent) * 3) == sizeof(WineHostEvent) * 3
+	assert records[0].kind == u32(WineHostEventKind.right_down)
+	assert records[0].x == 50 && records[0].y == 25
+	assert records[1].kind == u32(WineHostEventKind.wheel_down)
+	assert records[2].kind == u32(WineHostEventKind.wheel_down)
 
 	C.close(input_pipe[0])
 	C.close(input_pipe[1])
@@ -756,25 +906,123 @@ fn test_taskbar_keeps_a_bottom_right_clock_and_open_windows() {
 
 	root := desktop.build_tree()
 	taskbar := utility_element_named(root, 'taskbar') or { panic('missing taskbar') }
-	assert taskbar.children.len == 6
+	// Start, two windows, the pager, the tray's overflow chevron and network
+	// icon, build date and clock, the top edge and Show Desktop.
+	assert taskbar.children.len == 11 + workspace_count
+	assert utility_element_named(taskbar, action_show_desktop) != none
+	assert utility_element_named(taskbar, 'tray.icon.network') != none
+	assert utility_element_named(taskbar, action_tray_overflow) != none
 	assert utility_element_named(taskbar, action_start_toggle) != none
 	assert utility_element_named(taskbar, 'task.1') != none
 	assert utility_element_named(taskbar, 'task.2') != none
 	clock_time := utility_element_named(taskbar, 'clock.time') or { panic('missing taskbar clock') }
 	clock_date := utility_element_named(taskbar, 'clock.date') or { panic('missing taskbar date') }
+	build_time := utility_element_named(taskbar, 'build.time') or { panic('missing desktop build time') }
+	build_date := utility_element_named(taskbar, 'build.date') or { panic('missing desktop build date') }
+	assert build_time.text.starts_with('Built ')
+	assert build_date.text.len > 0
+	assert int(build_time.frame.x + build_time.frame.width + taskbar_item_gap) == int(clock_time.frame.x)
 	assert clock_time.text == '00:00:00'
 	assert clock_date.text == 'Thu 1 Jan'
-	assert int(clock_time.frame.x + clock_time.frame.width) == 1280 - taskbar_padding
+	assert int(clock_time.frame.x + clock_time.frame.width) == 1280 - taskbar_show_desktop_width - taskbar_item_gap
 	free_tree(root)
 
 	desktop.close_window(2)
 	desktop.close_window(1)
 	empty := desktop.build_tree()
 	empty_taskbar := utility_element_named(empty, 'taskbar') or { panic('missing empty taskbar') }
-	assert empty_taskbar.children.len == 4
+	assert empty_taskbar.children.len == 9 + workspace_count
 	assert utility_element_named(empty_taskbar, action_start_toggle) != none
 	assert utility_element_named(empty_taskbar, 'clock.time') != none
 	free_tree(empty)
+}
+
+fn test_macos_taskbar_uses_large_icon_only_buttons_at_screen_edges() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+		settings: Settings{
+			preset_id: 'macos'
+		}
+	}
+	first := desktop.spawn('Files', .welcome, 10, 10, 300, 200)
+	desktop.windows[0].icon = 'builtin:folder'
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	taskbar := utility_element_named(root, 'taskbar') or { panic('missing macOS taskbar') }
+	start := utility_element_named(taskbar, action_start_toggle) or { panic('missing Start button') }
+	entry := utility_element_named(taskbar, 'task.${first}') or { panic('missing icon task button') }
+	clock := utility_element_named(taskbar, 'clock.time') or { panic('missing taskbar clock') }
+	assert int(taskbar.frame.x) == 0
+	assert int(taskbar.frame.width) == 1280
+	assert int(taskbar.frame.y + taskbar.frame.height) == 720
+	assert int(start.frame.x) == taskbar_padding
+	assert start.image_path == 'builtin:vinix'
+	assert entry.text == ''
+	assert entry.image_path == 'builtin:folder'
+	assert int(entry.frame.width) == taskbar_icon_item_width
+	assert int(entry.frame.height) == taskbar_icon_item_height
+	assert int(clock.frame.x + clock.frame.width) == 1280 - taskbar_show_desktop_width - taskbar_item_gap
+	free_tree(root)
+}
+
+fn test_open_calendar_task_button_shows_local_today() {
+	mut desktop := Desktop{
+		canvas:   Canvas{
+			width:  1280
+			height: 720
+		}
+		settings: Settings{
+			preset_id: 'macos'
+		}
+	}
+	id := desktop.spawn('Calendar', .welcome, 0, 0, 300, 200)
+	desktop.windows[0].icon = 'asset:calendar'
+	desktop.update_taskbar_clock_at(0)
+	root := desktop.build_tree()
+	entry := utility_element_named(root, 'task.${id}') or { panic('missing Calendar task button') }
+	assert entry.image_path == 'builtin:calendar_today'
+	free_tree(root)
+
+	mut icon_desktop := Desktop{
+		canvas:            new_scaled_canvas(48, 40, 48, 40, 1)
+		fonts:             load_fonts()
+		tz_offset_seconds: 3 * 3600
+	}
+	defer {
+		unsafe { free(icon_desktop.canvas.pixels) }
+	}
+	// 21:00 UTC is midnight in the desktop's +03:00 local time. The
+	// weekday and the number both need to change without reopening Calendar.
+	icon_desktop.update_taskbar_clock_at(0)
+	icon_desktop.canvas.clear(0x5d84ab)
+	icon_desktop.draw_calendar_today_icon(0, 0, 48, 40)
+	mut before := []u32{len: 48 * 40}
+	for pixel in 0 .. before.len {
+		before[pixel] = unsafe { icon_desktop.canvas.pixels[pixel] }
+	}
+	icon_desktop.update_taskbar_clock_at(21 * 3600)
+	icon_desktop.canvas.clear(0x5d84ab)
+	icon_desktop.draw_calendar_today_icon(0, 0, 48, 40)
+	mut weekday_changed := false
+	mut day_changed := false
+	for y in 4 .. 35 {
+		for x in 8 .. 40 {
+			at := y * 48 + x
+			if before[at] != unsafe { icon_desktop.canvas.pixels[at] } {
+				if y < 15 {
+					weekday_changed = true
+				} else if y >= 19 {
+					day_changed = true
+				}
+			}
+		}
+	}
+	assert weekday_changed
+	assert day_changed
 }
 
 fn test_clicking_a_taskbar_window_button_focuses_without_minimizing() {
@@ -807,6 +1055,148 @@ fn test_clicking_a_taskbar_window_button_focuses_without_minimizing() {
 	assert !desktop.windows.last().minimized
 }
 
+fn test_hover_owns_action_past_source_lifetime() {
+	mut desktop := Desktop{}
+	mut source := 'win.2.close'.clone()
+	source_pointer := source.str
+
+	desktop.set_hover(source)
+	assert desktop.hover == 'win.2.close'
+	assert desktop.hover.str != source_pointer
+
+	unsafe { source.free() }
+	assert desktop.hover == 'win.2.close'
+	desktop.set_hover('')
+	assert desktop.hover == ''
+}
+
+fn test_hit_target_owns_remote_action_past_tree_lifetime() {
+	mut desktop := Desktop{}
+	action := editor_action_document.clone()
+	source_pointer := action.str
+	element := ui2.Element{
+		kind:      .view
+		id:        action
+		key:       remote_owned_element_key
+		clickable: true
+		enabled:   true
+	}
+
+	desktop.record_target(&element, 10, 20, 100, 80)
+	assert desktop.targets.len == 1
+	assert desktop.targets[0].owns_action
+	assert desktop.targets[0].world == .application
+	assert desktop.targets[0].action_id.str != source_pointer
+	free_tree(element)
+
+	assert desktop.hit_action(50, 50) == editor_action_document
+	desktop.clear_hit_targets()
+	assert desktop.targets.len == 0
+}
+
+fn test_remote_selectors_cannot_become_desktop_commands() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 800
+			height: 600
+		}
+	}
+	mut app := &SelectorRoutingTestApp{}
+	desktop.apps << app
+	id := desktop.spawn('App', .app, 100, 80, 400, 260)
+	desktop.windows[0].app_index = 0
+	for spoofed in ['win.${id}.close', action_start_toggle, 'shortcut.0',
+		capture_action_take_screenshot] {
+		element := ui2.Element{
+			kind:      .button
+			action_id: spoofed.clone()
+			key:       remote_owned_element_key
+			enabled:   true
+		}
+		desktop.record_target(&element, 130, 130, 100, 40)
+		free_tree(element)
+		action, world := desktop.hit_action_world(150, 150)
+		assert action == spoofed
+		assert world == .application
+		before := app.call_count
+		desktop.on_pointer_down(150, 150)
+		assert app.call_count == before + 1
+		assert app.last_action == spoofed
+		assert desktop.windows.len == 1
+		assert !desktop.windows[0].minimized
+		assert desktop.capture.owner_window_id == 0
+		assert !desktop.start_menu_open
+		assert desktop.shortcut_press.app_index < 0
+		desktop.clear_hit_targets()
+	}
+
+	titlebar := ui2.Element{
+		kind:      .button
+		action_id: 'win.${id}.titlebar'
+		key:       remote_owned_element_key
+		enabled:   true
+	}
+	desktop.record_target(&titlebar, 130, 130, 100, 40)
+	free_tree(titlebar)
+	click := desktop.titlebar_pointer_down_at(TitlebarClick{}, 150, 150, 1_000)
+	assert click.window_id == 0
+	assert desktop.drag.kind == .none_
+	assert app.last_action == 'win.${id}.titlebar'
+	desktop.clear_hit_targets()
+	unsafe { app.last_action.free() }
+}
+
+fn test_capture_selector_bridge_belongs_to_capture_window() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 800
+			height: 600
+		}
+	}
+	mut app := &SelectorRoutingTestApp{}
+	desktop.apps << app
+	id := desktop.spawn(capture_app_title, .app, 100, 80, 400, 260)
+	desktop.windows[0].app_index = 0
+	element := ui2.Element{
+		kind:      .button
+		action_id: capture_action_take_screenshot.clone()
+		key:       remote_owned_element_key
+		enabled:   true
+	}
+	desktop.record_target(&element, 130, 130, 100, 40)
+	free_tree(element)
+	desktop.on_pointer_down(150, 150)
+	assert app.last_action == capture_action_take_screenshot
+	assert desktop.capture.owner_window_id == id
+	assert desktop.windows[0].minimized
+	desktop.clear_hit_targets()
+	unsafe { app.last_action.free() }
+}
+
+fn test_app_selector_cannot_execute_compositor_context_menu_action() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 800
+			height: 600
+		}
+	}
+	for spoofed in [file_context_delete, create_context_panel] {
+		desktop.set_create_context_menu(.files, -1, true, '', 100, 100)
+		element := ui2.Element{
+			kind:      .button
+			action_id: spoofed.clone()
+			key:       remote_owned_element_key
+			enabled:   true
+		}
+		desktop.record_target(&element, 130, 130, 100, 40)
+		free_tree(element)
+		assert !desktop.create_context_left_down(150, 150)
+		assert !create_context_menu.visible
+		assert !create_context_menu.swallow_left_release
+		desktop.clear_hit_targets()
+	}
+}
+
 fn test_taskbar_clock_stays_visible_at_m1_200_percent_scale() {
 	// The 3024×1964 M1 framebuffer becomes a 1512×982 logical desktop. The
 	// taskbar reserves a logical status area before allocating task buttons,
@@ -821,8 +1211,9 @@ fn test_taskbar_clock_stays_visible_at_m1_200_percent_scale() {
 	root := desktop.build_tree()
 	taskbar := utility_element_named(root, 'taskbar') or { panic('missing taskbar') }
 	clock := utility_element_named(taskbar, 'clock.time') or { panic('missing taskbar clock') }
-	assert int(clock.frame.x + clock.frame.width) == desktop.canvas.width - taskbar_padding
-	assert int(clock.frame.x + clock.frame.width) * desktop_scale_200 == 3024 - 2 * taskbar_padding
+	clock_inset := taskbar_show_desktop_width + taskbar_item_gap
+	assert int(clock.frame.x + clock.frame.width) == desktop.canvas.width - clock_inset
+	assert int(clock.frame.x + clock.frame.width) * desktop_scale_200 == 3024 - 2 * clock_inset
 	assert int(taskbar.frame.y) * desktop_scale_200 == 1964 - 2 * taskbar_height
 	free_tree(root)
 }
@@ -843,8 +1234,19 @@ fn test_gimp_uses_the_hosted_x11_window_path() {
 	assert factory.polling && factory.keyboard && factory.pointer
 }
 
+fn test_libreoffice_uses_the_hosted_x11_window_path() {
+	factory := available_apps[20]
+	assert factory.title == 'LibreOffice'
+	assert factory.process_name == 'vinix-libreoffice'
+	assert factory.exclusive_command == ''
+	assert factory.open != unsafe { nil }
+	assert factory.polling && factory.keyboard && factory.pointer
+	assert factory.width == libreoffice_window_width
+	assert factory.height == libreoffice_window_height + default_title_height
+}
+
 fn test_chromium_uses_the_hosted_x11_window_path() {
-	factory := available_apps[18]
+	factory := available_apps[21]
 	assert factory.process_name == 'vinix-chromium'
 	assert factory.exclusive_command == ''
 	assert factory.open != unsafe { nil }
@@ -901,6 +1303,88 @@ fn test_activity_monitor_uses_only_real_process_rows() {
 	app.monitor.free_rows()
 }
 
+fn utility_activity_record(pid int, name string, memory u64, cpu_ns u64) ActivitySample {
+	mut record := ActivitySample{
+		pid:          i32(pid)
+		memory_bytes: memory
+		cpu_time_ns:  cpu_ns
+	}
+	for index := 0; index < name.len && index < activity_name_len - 1; index++ {
+		record.name[index] = name[index]
+	}
+	return record
+}
+
+fn utility_activity_pids(app &ActivityApp) []int {
+	mut pids := []int{}
+	for row in app.monitor.rows {
+		pids << row.pid
+	}
+	return pids
+}
+
+fn test_activity_monitor_sorts_by_the_clicked_heading() {
+	mut app := ActivityApp{}
+	mut header := ActivityTable{
+		total:        3
+		total_memory: 256 * 1024 * 1024
+		free_memory:  192 * 1024 * 1024
+		sample_ns:    1_000_000_000
+	}
+	mut records := [
+		utility_activity_record(3, '/usr/bin/vinix-desktop[3]', 30_000_000, 0),
+		utility_activity_record(7, '/usr/bin/vinix-files[7]', 13_000_000, 0),
+		utility_activity_record(2, '/bin/sh[2]', 9_000_000, 0),
+	]
+	app.monitor.apply_snapshot(&header, unsafe { &records[0] }, records.len)
+	header.sample_ns += 1_000_000_000
+	records[0].cpu_time_ns += 100_000_000
+	records[2].cpu_time_ns += 500_000_000
+	app.monitor.apply_snapshot(&header, unsafe { &records[0] }, records.len)
+
+	// The busiest process first, until a heading says otherwise.
+	assert utility_activity_pids(&app) == [2, 3, 7]
+	tree := app.build(ui2.rect(0, 0, 520, 360))!
+	// The headings are the controls; the buttons that used to sort are gone.
+	assert !utility_tree_has_text(tree, 'CPU') && !utility_tree_has_text(tree, 'RAM')
+	for text in ['Name', 'PID', '% CPU', 'MB'] {
+		assert utility_tree_has_text(tree, text), text
+	}
+	cpu := utility_element_named(tree, activity_action_cpu) or { panic('missing CPU heading') }
+	assert cpu.tooltip == 'Sort by CPU'
+	assert cpu.accessibility_value == 'descending'
+	pid := utility_element_named(tree, activity_action_pid) or { panic('missing PID heading') }
+	assert pid.tooltip == 'Sort by PID'
+	assert pid.accessibility_value == ''
+	free_tree(tree)
+
+	// A second click on the heading in use turns the list round.
+	app.handle(activity_action_cpu)!
+	assert utility_activity_pids(&app) == [7, 3, 2]
+	// A new column sorts the way it is read: pids and names from the start,
+	// memory from the largest.
+	app.handle(activity_action_pid)!
+	assert utility_activity_pids(&app) == [2, 3, 7]
+	app.handle(activity_action_pid)!
+	assert utility_activity_pids(&app) == [7, 3, 2]
+	app.handle(activity_action_memory)!
+	assert utility_activity_pids(&app) == [3, 7, 2]
+	app.handle(activity_action_name)!
+	assert utility_activity_pids(&app) == [7, 2, 3]
+	app.handle(activity_action_name)!
+	assert utility_activity_pids(&app) == [3, 2, 7]
+	reversed := app.build(ui2.rect(0, 0, 520, 360))!
+	name := utility_element_named(reversed, activity_action_name) or { panic('missing Name heading') }
+	assert name.accessibility_value == 'descending'
+	free_tree(reversed)
+
+	// The next sample keeps the order that was chosen.
+	header.sample_ns += 1_000_000_000
+	app.monitor.apply_snapshot(&header, unsafe { &records[0] }, records.len)
+	assert utility_activity_pids(&app) == [3, 2, 7]
+	app.monitor.free_rows()
+}
+
 fn test_native_process_names_are_presented_as_app_names() {
 	mut sample := ActivitySample{}
 	name := '/usr/bin/vinix-activity[42]'
@@ -913,18 +1397,58 @@ fn test_native_process_names_are_presented_as_app_names() {
 }
 
 fn test_application_tree_protocol_round_trip() {
-	child := ui2.button_with_image('save', 'Save', 'builtin:editor', ui2.rect(7, 9, 80, 24), ui2.BoxStyle{
-		bg: 0x123456
-		radius: 6
-	}, ui2.TextStyle{
-		color: 0xfefefe
-		background_color: 0x010203
-		size: 13
-		font_family: 'mono'
-		bold: true
-		shadow: true
-		align: .center
-	})
+	child := ui2.Element{
+		...ui2.button_with_image('save', 'Save', 'builtin:editor', ui2.rect(7, 9, 80, 24), ui2.BoxStyle{
+			bg:            0x123456
+			radius:        6
+			border_color:  0x654321
+			border_left:   1
+			border_top:    2
+			border_right:  3
+			border_bottom: 4
+		}, ui2.TextStyle{
+			color:            0xfefefe
+			background_color: 0x010203
+			size:             13
+			font_family:      'mono'
+			bold:             true
+			italic:           true
+			underline:        true
+			shadow:           true
+			align:            .center
+		})
+		native_style: true
+		checked:      true
+		submit_id:    'save.submit'
+		placeholder:  'Filename'
+		tooltip:      'Write the document'
+		emit_change:  true
+		secure:       true
+		padding_left: 7
+		value:        42
+		min_value:    2
+		max_value:    82
+		step:         5
+		orientation:  .vertical
+		padding:      9
+		value_track:  true
+		toggle_group: 'format'
+		menu:         [ui2.MenuEntry{ id: 'one', title: 'One' }]
+		slider_style: ui2.SliderStyle{
+			track_color:       0x111111
+			value_track_color: 0x222222
+			thumb_color:       0x333333
+			track_width:       3
+			thumb_size:        17
+		}
+		switch_style: ui2.SwitchStyle{
+			inactive_track_color: 0x444444
+			active_track_color:   0x555555
+			thumb_color:          0x666666
+			disabled_track_color: 0x777777
+			disabled_thumb_color: 0x888888
+		}
+	}
 	root := ui2.screen(0xabcdef, [child])
 	mut encoded := []u8{}
 	encode_app_element(root, mut encoded)!
@@ -938,9 +1462,25 @@ fn test_application_tree_protocol_round_trip() {
 	assert button.image_path == 'builtin:editor'
 	assert button.frame.x == 7 && button.frame.y == 9
 	assert button.box.bg == 0x123456 && button.box.radius == 6
+	assert button.box.border_color == 0x654321 && button.box.border_bottom == 4
 	assert button.text_style.font_family == 'mono'
-	assert button.text_style.bold && button.text_style.shadow
+	assert button.text_style.bold && button.text_style.italic && button.text_style.underline
+	assert button.text_style.shadow
 	assert button.text_style.align == .center
+	assert button.native_style
+	assert button.checked
+	assert button.submit_id == 'save.submit'
+	assert button.placeholder == 'Filename'
+	assert button.tooltip == 'Write the document'
+	assert button.emit_change && button.secure
+	assert button.padding_left == 7
+	assert button.value == 42 && button.min_value == 2 && button.max_value == 82
+	assert button.step == 5 && button.orientation == .vertical && button.padding == 9
+	assert button.value_track && button.toggle_group == 'format'
+	assert button.menu.len == 1 && button.menu[0].title == 'One'
+	assert button.slider_style.track_color == 0x111111
+	assert button.slider_style.thumb_size == 17
+	assert button.switch_style.active_track_color == 0x555555
 	free_tree(root)
 	free_tree(decoded)
 	unsafe { encoded.free() }
@@ -1597,6 +2137,10 @@ fn test_cursor_draws_from_resolved_decor() {
 	// The cursor tracks whatever the resolver returns: assert the drawn pixels
 	// equal decor() for every registered preset (proves no literals remain).
 	for lnf in lookandfeel_registry {
+		if lnf.id == 'macos' {
+			// Catalina's pointer is its own bitmap, not the Decor colours.
+			continue
+		}
 		mut d := Desktop{
 			canvas: new_canvas(64, 64)
 			pointer_x: 8
@@ -1817,4 +2361,97 @@ fn test_settings_persistence_roundtrip_and_resilience() {
 	assert lookandfeel_by_id(stale.preset_id).id == default_preset_id
 	eff := resolve_settings(BlueSettings{ preset_id: stale.preset_id })
 	assert eff.decor.window_body == builtin_decor.window_body // resolves to defaults
+}
+
+fn test_shortcut_order_normalizes_without_changing_app_identity() {
+	input := [3, 3, -1, available_apps.len + 1, 1]
+	order := normalize_shortcut_order(input)
+	defer { unsafe { order.free() } }
+	assert order.len == available_apps.len
+	assert order[0] == 3
+	assert order[1] == 1
+	assert shortcut_order_contains(order, 0)
+}
+
+fn test_shortcut_click_commits_only_on_release_over_same_icon() {
+	mut desktop := Desktop{
+		shortcut_order: default_shortcut_order()
+	}
+	defer { unsafe { desktop.shortcut_order.free() } }
+	assert desktop.begin_shortcut_press(app_shortcut_actions[0], 10, 10)
+	assert desktop.shortcut_press.app_index == 0
+	launched := desktop.finish_shortcut_press_in(os.temp_dir(), app_shortcut_actions[0], 10,
+		10) or { -1 }
+	assert launched == 0
+	assert desktop.begin_shortcut_press(app_shortcut_actions[1], 10, 10)
+	if unexpected := desktop.finish_shortcut_press_in(os.temp_dir(), app_shortcut_actions[0],
+		10, 10) {
+		assert unexpected == -1
+	}
+}
+
+fn test_shortcut_release_processes_coalesced_final_drag_position() {
+	root := os.join_path(os.temp_dir(), 'vinix-shortcut-order-test')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer { os.rmdir_all(root) or {} }
+
+	mut desktop := Desktop{
+		shortcut_order: default_shortcut_order()
+		canvas:         new_canvas(1024, 768)
+	}
+	defer {
+		unsafe {
+			desktop.shortcut_order.free()
+			free(desktop.canvas.pixels)
+		}
+	}
+	app_index := desktop.shortcut_order[0]
+	assert desktop.begin_shortcut_press(app_shortcut_actions[app_index], shortcut_left + 2,
+		shortcut_top + 2)
+	// pump_pointer can deliver this final movement only after setting buttons to
+	// the released level. Completion must still reorder and must not treat the
+	// stale original-icon hit action as a click.
+	drop_x := shortcut_left + 2
+	drop_y := shortcut_top + 3 * (shortcut_height + shortcut_gap) + 2
+	if unexpected := desktop.finish_shortcut_press_in(root, app_shortcut_actions[app_index],
+		drop_x, drop_y) {
+		panic('coalesced shortcut release unexpectedly launched app ${unexpected}')
+	}
+	assert desktop.shortcut_slot_for_app(app_index) == 3
+	assert desktop.shortcut_press.app_index == -1
+
+	loaded := load_shortcut_order(root)
+	defer { unsafe { loaded.free() } }
+	assert loaded == desktop.shortcut_order
+}
+
+fn test_shortcut_release_outside_an_icon_restores_preview_without_persisting() {
+	root := os.join_path(os.temp_dir(), 'vinix-shortcut-invalid-drop-test')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer { os.rmdir_all(root) or {} }
+
+	mut desktop := Desktop{
+		shortcut_order: default_shortcut_order()
+		canvas:         new_canvas(1024, 768)
+	}
+	defer {
+		unsafe {
+			desktop.shortcut_order.free()
+			free(desktop.canvas.pixels)
+		}
+	}
+	app_index := desktop.shortcut_order[0]
+	assert desktop.begin_shortcut_press(app_shortcut_actions[app_index], shortcut_left + 2,
+		shortcut_top + 2)
+	desktop.update_shortcut_drag(shortcut_left + 2,
+		shortcut_top + 3 * (shortcut_height + shortcut_gap) + 2)
+	assert desktop.shortcut_slot_for_app(app_index) == 3
+
+	if unexpected := desktop.finish_shortcut_press_in(root, '', 600, 500) {
+		panic('invalid shortcut drop unexpectedly launched app ${unexpected}')
+	}
+	assert desktop.shortcut_slot_for_app(app_index) == 0
+	assert !os.exists(shortcut_order_path(root))
 }
