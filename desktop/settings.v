@@ -12,6 +12,39 @@
 // or reopened — the tree is composed from scratch each time anyway.
 module main
 
+// blue_overrides projects the Settings' per-axis override fields into the sparse
+// BlueSettings the resolver consumes. Each axis config carries only the fields
+// the user has explicitly set; unset fields stay none and inherit. Wallpaper is
+// threaded separately by surface() (it has dedicated Settings fields), so it is
+// not included here.
+fn (s Settings) blue_overrides() BlueSettings {
+	return BlueSettings{
+		preset_id: s.preset_id
+		decor:     DecorConfig{
+			window_radius: s.ov_window_radius
+			title_align:   s.ov_title_align
+		}
+		typography: TypographyConfig{
+			ui_size:    s.ov_ui_size
+			title_size: s.ov_title_size
+		}
+		behavior: BehaviorConfig{
+			shade_enabled:      s.ov_shade_enabled
+			menu_placement:     s.ov_menu_placement
+			title_double_click: s.ov_title_double_click
+		}
+		shell: ShellConfig{
+			has_top_bar:     s.ov_has_top_bar
+			has_bottom_bar:  s.ov_has_bottom_bar
+			has_window_list: s.ov_has_window_list
+		}
+		surface: DesktopSurfaceConfig{
+			icons_visible: s.ov_icons_visible
+			icon_source:   s.ov_icon_source
+		}
+	}
+}
+
 // ── Themes ─────────────────────────────────────────────────────────
 
 // ButtonLook says how the title bar buttons are drawn. `flat` is a glyph that

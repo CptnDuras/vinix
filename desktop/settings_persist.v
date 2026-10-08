@@ -28,6 +28,20 @@ const settings_key_wallpaper_color = 'wallpaper_color'
 const settings_key_wallpaper_image = 'wallpaper_image'
 const settings_key_button_side = 'button_side'
 const settings_key_taskbar_mode = 'taskbar_mode'
+// Per-axis override keys (Blue spec A3/G3). Each is written only when the user
+// has set that override; an absent key is "not set" and re-inherits on load.
+const settings_key_ov_window_radius = 'ov_window_radius'
+const settings_key_ov_title_align = 'ov_title_align'
+const settings_key_ov_ui_size = 'ov_ui_size'
+const settings_key_ov_title_size = 'ov_title_size'
+const settings_key_ov_shade_enabled = 'ov_shade_enabled'
+const settings_key_ov_menu_placement = 'ov_menu_placement'
+const settings_key_ov_title_double_click = 'ov_title_double_click'
+const settings_key_ov_has_top_bar = 'ov_has_top_bar'
+const settings_key_ov_has_bottom_bar = 'ov_has_bottom_bar'
+const settings_key_ov_has_window_list = 'ov_has_window_list'
+const settings_key_ov_icons_visible = 'ov_icons_visible'
+const settings_key_ov_icon_source = 'ov_icon_source'
 
 // The built-in defaults, named once so encode can omit a field that equals its
 // default and decode can fall back to it for an absent/garbage key.
@@ -57,6 +71,43 @@ fn encode_settings(s Settings) string {
 	// taskbar_mode: default is .standard.
 	if s.taskbar_mode != .standard {
 		lines << '${settings_key_taskbar_mode} combined'
+	}
+	// ── Per-axis overrides: written only when set (some) ───────────────
+	if v := s.ov_window_radius {
+		lines << '${settings_key_ov_window_radius} ${v}'
+	}
+	if v := s.ov_title_align {
+		lines << '${settings_key_ov_title_align} ${title_align_name(v)}'
+	}
+	if v := s.ov_ui_size {
+		lines << '${settings_key_ov_ui_size} ${v}'
+	}
+	if v := s.ov_title_size {
+		lines << '${settings_key_ov_title_size} ${v}'
+	}
+	if v := s.ov_shade_enabled {
+		lines << '${settings_key_ov_shade_enabled} ${bool_name(v)}'
+	}
+	if v := s.ov_menu_placement {
+		lines << '${settings_key_ov_menu_placement} ${menu_placement_name(v)}'
+	}
+	if v := s.ov_title_double_click {
+		lines << '${settings_key_ov_title_double_click} ${title_action_name(v)}'
+	}
+	if v := s.ov_has_top_bar {
+		lines << '${settings_key_ov_has_top_bar} ${bool_name(v)}'
+	}
+	if v := s.ov_has_bottom_bar {
+		lines << '${settings_key_ov_has_bottom_bar} ${bool_name(v)}'
+	}
+	if v := s.ov_has_window_list {
+		lines << '${settings_key_ov_has_window_list} ${bool_name(v)}'
+	}
+	if v := s.ov_icons_visible {
+		lines << '${settings_key_ov_icons_visible} ${bool_name(v)}'
+	}
+	if v := s.ov_icon_source {
+		lines << '${settings_key_ov_icon_source} ${icon_source_name(v)}'
 	}
 	return lines.join('\n')
 }
@@ -106,6 +157,66 @@ fn decode_settings(blob string) Settings {
 			}
 			settings_key_taskbar_mode {
 				s.taskbar_mode = if value == 'combined' { .combined } else { .standard }
+			}
+			settings_key_ov_window_radius {
+				if n := parse_settings_int(value) {
+					s.ov_window_radius = n
+				}
+			}
+			settings_key_ov_title_align {
+				if a := title_align_from(value) {
+					s.ov_title_align = a
+				}
+			}
+			settings_key_ov_ui_size {
+				if n := parse_settings_int(value) {
+					s.ov_ui_size = n
+				}
+			}
+			settings_key_ov_title_size {
+				if n := parse_settings_int(value) {
+					s.ov_title_size = n
+				}
+			}
+			settings_key_ov_shade_enabled {
+				if b := bool_from(value) {
+					s.ov_shade_enabled = b
+				}
+			}
+			settings_key_ov_menu_placement {
+				if m := menu_placement_from(value) {
+					s.ov_menu_placement = m
+				}
+			}
+			settings_key_ov_title_double_click {
+				if t := title_action_from(value) {
+					s.ov_title_double_click = t
+				}
+			}
+			settings_key_ov_has_top_bar {
+				if b := bool_from(value) {
+					s.ov_has_top_bar = b
+				}
+			}
+			settings_key_ov_has_bottom_bar {
+				if b := bool_from(value) {
+					s.ov_has_bottom_bar = b
+				}
+			}
+			settings_key_ov_has_window_list {
+				if b := bool_from(value) {
+					s.ov_has_window_list = b
+				}
+			}
+			settings_key_ov_icons_visible {
+				if b := bool_from(value) {
+					s.ov_icons_visible = b
+				}
+			}
+			settings_key_ov_icon_source {
+				if i := icon_source_from(value) {
+					s.ov_icon_source = i
+				}
 			}
 			else {}
 		} // unknown key: ignore, the field keeps its default

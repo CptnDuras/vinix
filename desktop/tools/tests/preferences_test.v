@@ -356,3 +356,44 @@ fn test_preferences_legacy_directory_is_not_removed_by_save() {
 	assert desktop_load_preferences(home) == preference_test_custom()
 	assert os.ls(home)!.len == 2
 }
+
+fn test_preferences_round_trip_the_per_axis_overrides() {
+	home := preference_test_home('overrides')
+	defer { os.rmdir_all(home) or {} }
+	p := DesktopPreferences{
+		settings: Settings{
+			preset_id:             'blue'
+			ov_window_radius:      6
+			ov_title_align:        .right
+			ov_ui_size:            14
+			ov_shade_enabled:      false
+			ov_menu_placement:     .in_window
+			ov_title_double_click: .shade
+			ov_has_top_bar:        true
+			ov_icons_visible:      false
+			ov_icon_source:        .files
+		}
+	}
+	assert desktop_save_preferences(home, p)
+	loaded := desktop_load_preferences(home)
+	assert loaded == p
+	// An override that is not set is not written, so it re-inherits.
+	record := os.read_file(desktop_preferences_path(home))!
+	assert record.contains('ov_window_radius=6\n')
+	assert !record.contains('ov_title_size')
+	assert !record.contains('ov_has_window_list')
+	assert loaded.settings.ov_title_size == none
+	assert loaded.settings.ov_has_window_list == none
+
+	// Clearing an override drops its key.
+	mut cleared := p
+	cleared.settings.ov_window_radius = none
+	assert desktop_save_preferences(home, cleared)
+	assert !os.read_file(desktop_preferences_path(home))!.contains('ov_window_radius')
+	assert desktop_load_preferences(home).settings.ov_window_radius == none
+
+	for bad in ['ov_title_align=middle', 'ov_icon_source=desk', 'ov_has_top_bar=yes',
+		'ov_ui_size=-1', 'ov_ui_size=0', 'ov_ui_size=1000', 'ov_ui_size=3\nov_ui_size=4'] {
+		assert desktop_parse_preferences('version=1\n${bad}\n') == none, bad
+	}
+}

@@ -85,6 +85,29 @@ mut:
 	wallpaper_color int
 	// Index into the wallpaper images, or -1 for the colour above.
 	wallpaper_image int = -1
+	// ── Per-axis user overrides (Blue spec A/G3) ───────────────────────
+	// A representative, UI-meaningful field per axis, each a sparse optional so
+	// "not set" (none) inherits the preset/default and a set value overrides it
+	// field-by-field. These flow into the resolver via the axis helpers and
+	// persist through A3. Wallpaper keeps its own dedicated fields above.
+	//
+	// Decor:
+	ov_window_radius ?int
+	ov_title_align   ?TitleAlign
+	// Typography:
+	ov_ui_size    ?int
+	ov_title_size ?int
+	// Behavior:
+	ov_shade_enabled      ?bool
+	ov_menu_placement     ?MenuPlacement
+	ov_title_double_click ?TitleAction
+	// Shell:
+	ov_has_top_bar     ?bool
+	ov_has_bottom_bar  ?bool
+	ov_has_window_list ?bool
+	// DesktopSurface:
+	ov_icons_visible ?bool
+	ov_icon_source   ?IconSource
 	// The input sources Ctrl-Space moves between, one KeyboardLayout.bit()
 	// each, and the one typing uses now. The current one is always enabled.
 	keyboard_layouts u32 = keyboard_layout_default_mask

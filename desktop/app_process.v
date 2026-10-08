@@ -19,9 +19,9 @@ import math.bits
 import ui2
 
 const app_protocol_magic = u32(0x56415050) // VAPP
-const app_protocol_version = u8(10)
-const app_request_header_size = 136
-const app_response_header_size = 128
+const app_protocol_version = u8(11)
+const app_request_header_size = 232
+const app_response_header_size = 224
 const app_protocol_max_payload = 16 * 1024 * 1024
 const app_protocol_max_string = 64 * 1024
 const app_protocol_max_elements = 16 * 1024
@@ -122,6 +122,65 @@ fn wire_put_i32(mut out []u8, value int) {
 	wire_put_u32(mut out, u32(value))
 }
 
+// wire_put_opt_i32 encodes an optional int as (is_set, value): is_set=1 followed
+// by the value when some, is_set=0 followed by 0 when none. The pair is fixed
+// width so the reader always advances two i32s.
+fn wire_put_opt_i32(mut out []u8, value ?int) {
+	if v := value {
+		wire_put_i32(mut out, 1)
+		wire_put_i32(mut out, v)
+	} else {
+		wire_put_i32(mut out, 0)
+		wire_put_i32(mut out, 0)
+	}
+}
+
+// opt_bool_i32 / opt_*_i32 project a typed optional into an ?int for the wire.
+fn opt_bool_i32(value ?bool) ?int {
+	v := value or { return none }
+	return if v { 1 } else { 0 }
+}
+
+fn opt_title_align_i32(value ?TitleAlign) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_menu_placement_i32(value ?MenuPlacement) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_title_action_i32(value ?TitleAction) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_icon_source_i32(value ?IconSource) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+// opt_in_range is true for none, and for a value within [low, high].
+fn opt_in_range(value WireOptInt, low int, high int) bool {
+	return !value.set || (value.value >= low && value.value <= high)
+}
+
+// opt_flag and opt_enum turn a range-checked wire value back into its type.
+fn opt_flag(value WireOptInt) ?bool {
+	if !value.set {
+		return none
+	}
+	return value.value == 1
+}
+
+fn opt_enum[T](value WireOptInt) ?T {
+	if !value.set {
+		return none
+	}
+	return unsafe { T(value.value) }
+}
+
 fn wire_put_u64(mut out []u8, value u64) {
 	for shift := 0; shift < 64; shift += 8 {
 		out << u8(value >> shift)
@@ -159,6 +218,34 @@ fn (mut r WireReader) take_u32() !u32 {
 
 fn (mut r WireReader) take_i32() !int {
 	return int(i32(r.take_u32()!))
+}
+
+// WireOptInt is an optional int as it comes off the wire, before it is range
+// checked and turned into its typed option.
+struct WireOptInt {
+	set   bool
+	value int
+}
+
+fn (o WireOptInt) opt() ?int {
+	if !o.set {
+		return none
+	}
+	return o.value
+}
+
+// take_opt_i32 reads what wire_put_opt_i32 wrote: a flag of 1 or 0 and a value.
+// Any other flag is an error.
+fn (mut r WireReader) take_opt_i32() !WireOptInt {
+	flag := r.take_i32()!
+	value := r.take_i32()!
+	if flag != 0 && flag != 1 {
+		return error('invalid optional application state')
+	}
+	return WireOptInt{
+		set:   flag == 1
+		value: value
+	}
 }
 
 fn (mut r WireReader) take_u64() !u64 {
@@ -203,6 +290,20 @@ fn wire_put_state(mut out []u8, state AppWireState) {
 	wire_put_u32(mut out, state.settings.keyboard_layouts)
 	wire_put_i32(mut out, int(state.settings.keyboard_layout))
 	wire_put_i32(mut out, int(state.settings.language))
+	// Per-axis overrides (Blue spec G3): each carried as (is_set, value) so a
+	// none override transmits as is_set=0 and re-inherits on the far side.
+	wire_put_opt_i32(mut out, state.settings.ov_window_radius)
+	wire_put_opt_i32(mut out, opt_title_align_i32(state.settings.ov_title_align))
+	wire_put_opt_i32(mut out, state.settings.ov_ui_size)
+	wire_put_opt_i32(mut out, state.settings.ov_title_size)
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_shade_enabled))
+	wire_put_opt_i32(mut out, opt_menu_placement_i32(state.settings.ov_menu_placement))
+	wire_put_opt_i32(mut out, opt_title_action_i32(state.settings.ov_title_double_click))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_top_bar))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_bottom_bar))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_window_list))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_icons_visible))
+	wire_put_opt_i32(mut out, opt_icon_source_i32(state.settings.ov_icon_source))
 	wire_put_i32(mut out, state.requested_scale)
 	wire_put_u32(mut out, state.capture_request.sequence)
 	wire_put_i32(mut out, int(state.capture_request.command))
@@ -232,6 +333,19 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 	keyboard_mask := reader.take_u32()!
 	keyboard_layout := reader.take_i32()!
 	language := reader.take_i32()!
+	// Per-axis overrides (Blue spec G3), in the same order they were written.
+	ov_window_radius := reader.take_opt_i32()!
+	ov_title_align_raw := reader.take_opt_i32()!
+	ov_ui_size := reader.take_opt_i32()!
+	ov_title_size := reader.take_opt_i32()!
+	ov_shade_enabled_raw := reader.take_opt_i32()!
+	ov_menu_placement_raw := reader.take_opt_i32()!
+	ov_title_double_click_raw := reader.take_opt_i32()!
+	ov_has_top_bar_raw := reader.take_opt_i32()!
+	ov_has_bottom_bar_raw := reader.take_opt_i32()!
+	ov_has_window_list_raw := reader.take_opt_i32()!
+	ov_icons_visible_raw := reader.take_opt_i32()!
+	ov_icon_source_raw := reader.take_opt_i32()!
 	requested_scale := reader.take_i32()!
 	capture_sequence := reader.take_u32()!
 	capture_command := reader.take_i32()!
@@ -256,6 +370,15 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 		|| keyboard_layout < int(KeyboardLayout.us) || keyboard_layout > int(KeyboardLayout.portuguese)
 		|| !keyboard_settings_valid(keyboard_mask, unsafe { KeyboardLayout(keyboard_layout) })
 		|| language < 0 || language >= desktop_languages.len
+		|| !opt_in_range(ov_title_align_raw, int(TitleAlign.left), int(TitleAlign.right))
+		|| !opt_in_range(ov_shade_enabled_raw, 0, 1)
+		|| !opt_in_range(ov_menu_placement_raw, int(MenuPlacement.global_), int(MenuPlacement.none_))
+		|| !opt_in_range(ov_title_double_click_raw, int(TitleAction.shade), int(TitleAction.none_))
+		|| !opt_in_range(ov_has_top_bar_raw, 0, 1)
+		|| !opt_in_range(ov_has_bottom_bar_raw, 0, 1)
+		|| !opt_in_range(ov_has_window_list_raw, 0, 1)
+		|| !opt_in_range(ov_icons_visible_raw, 0, 1)
+		|| !opt_in_range(ov_icon_source_raw, int(IconSource.shortcuts), int(IconSource.files))
 		|| !desktop_scale_valid(requested_scale)
 		|| capture_command < int(CaptureCommand.none_)
 		|| capture_command > int(CaptureCommand.stop) || capture_delay < 0
@@ -280,6 +403,18 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 			wallpaper_image:    wallpaper_image
 			keyboard_layouts:   keyboard_mask
 			keyboard_layout:    unsafe { KeyboardLayout(keyboard_layout) }
+			ov_window_radius:   ov_window_radius.opt()
+			ov_title_align:    opt_enum[TitleAlign](ov_title_align_raw)
+			ov_ui_size:         ov_ui_size.opt()
+			ov_title_size:      ov_title_size.opt()
+			ov_shade_enabled:   opt_flag(ov_shade_enabled_raw)
+			ov_menu_placement:  opt_enum[MenuPlacement](ov_menu_placement_raw)
+			ov_title_double_click: opt_enum[TitleAction](ov_title_double_click_raw)
+			ov_has_top_bar:     opt_flag(ov_has_top_bar_raw)
+			ov_has_bottom_bar:  opt_flag(ov_has_bottom_bar_raw)
+			ov_has_window_list: opt_flag(ov_has_window_list_raw)
+			ov_icons_visible:   opt_flag(ov_icons_visible_raw)
+			ov_icon_source:     opt_enum[IconSource](ov_icon_source_raw)
 		}
 		requested_scale: requested_scale
 		capture_request: CaptureRequest{

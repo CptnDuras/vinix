@@ -2455,3 +2455,78 @@ fn test_shortcut_release_outside_an_icon_restores_preview_without_persisting() {
 	assert desktop.shortcut_slot_for_app(app_index) == 0
 	assert !os.exists(shortcut_order_path(root))
 }
+
+// G3: a per-axis override beats the preset on that field alone, and clearing it
+// lets the preset show through again. Blue draws a top bar and has window shade
+// on; the overrides turn each off without touching the rest of the preset.
+fn test_per_axis_overrides_beat_the_preset_one_field_at_a_time() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().has_top_bar
+	assert desktop.behavior().shade_enabled
+	assert desktop.shell().has_bottom_bar
+
+	desktop.settings.ov_has_top_bar = false
+	desktop.settings.ov_shade_enabled = false
+	assert !desktop.shell().has_top_bar
+	assert !desktop.behavior().shade_enabled
+	assert desktop.shell().has_bottom_bar // untouched
+
+	desktop.settings.ov_has_top_bar = none
+	assert desktop.shell().has_top_bar
+	assert !desktop.behavior().shade_enabled // still overridden
+
+	// Typography and decor overrides reach the resolved axes.
+	desktop.settings.ov_title_size = 20
+	assert desktop.typography().title_size == 20
+	desktop.settings.ov_window_radius = 9
+	assert desktop.decor().window_radius == 9
+	// The wallpaper selection still layers over a per-axis surface override.
+	desktop.settings.ov_icons_visible = false
+	desktop.settings.wallpaper_color = 2
+	assert !desktop.surface().icons_visible
+	assert desktop.surface().wallpaper_color == 2
+}
+
+// The per-axis overrides cross to application processes with the rest of the
+// settings, and a flag or value outside its range is a damaged message.
+fn test_overrides_survive_the_application_wire() {
+	state := AppWireState{
+		settings: Settings{
+			preset_id: 'blue'
+			ov_window_radius: 7
+			ov_title_align: .center
+			ov_shade_enabled: true
+			ov_menu_placement: .none_
+			ov_title_double_click: .hide
+			ov_has_window_list: false
+			ov_icon_source: .files
+		}
+	}
+	mut out := []u8{}
+	wire_put_state(mut out, state)
+	mut reader := WireReader{
+		data: out
+	}
+	decoded := wire_take_state(mut reader) or { panic(err) }
+	assert decoded.settings == state.settings
+	assert decoded.settings.ov_ui_size == none
+
+	// An enum value outside its range is a damaged message.
+	mut bad := []u8{}
+	wire_put_state(mut bad, AppWireState{
+		settings: Settings{
+			ov_title_align: unsafe { TitleAlign(9) }
+		}
+	})
+	mut bad_reader := WireReader{
+		data: bad
+	}
+	accepted := wire_take_state(mut bad_reader) or { return }
+	assert false, 'accepted ${accepted.settings.ov_title_align or { TitleAlign.left }}'
+}

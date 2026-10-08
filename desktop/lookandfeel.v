@@ -535,3 +535,87 @@ fn resolve_settings(bs BlueSettings) EffectiveConfig {
 	preset := lookandfeel_by_id(bs.preset_id)
 	return resolve_config(preset, bs)
 }
+
+// ── Enum <-> string mappings for the override keys ─────────────────
+// Stable string names so the on-disk form is human-readable and does not depend
+// on enum ordinal values (which could shift if the enums are reordered).
+
+fn bool_name(b bool) string {
+	return if b { 'true' } else { 'false' }
+}
+
+fn title_align_name(a TitleAlign) string {
+	return match a {
+		.left { 'left' }
+		.center { 'center' }
+		.right { 'right' }
+	}
+}
+
+fn title_align_from(s string) ?TitleAlign {
+	return match s {
+		'left' { TitleAlign.left }
+		'center' { TitleAlign.center }
+		'right' { TitleAlign.right }
+		else { none }
+	}
+}
+
+fn menu_placement_name(m MenuPlacement) string {
+	return match m {
+		.global_ { 'global' }
+		.in_window { 'in_window' }
+		.none_ { 'none' }
+	}
+}
+
+fn menu_placement_from(s string) ?MenuPlacement {
+	return match s {
+		'global' { MenuPlacement.global_ }
+		'in_window' { MenuPlacement.in_window }
+		'none' { MenuPlacement.none_ }
+		else { none }
+	}
+}
+
+fn title_action_name(t TitleAction) string {
+	return match t {
+		.shade { 'shade' }
+		.hide { 'hide' }
+		.maximize { 'maximize' }
+		.none_ { 'none' }
+	}
+}
+
+fn title_action_from(s string) ?TitleAction {
+	return match s {
+		'shade' { TitleAction.shade }
+		'hide' { TitleAction.hide }
+		'maximize' { TitleAction.maximize }
+		'none' { TitleAction.none_ }
+		else { none }
+	}
+}
+
+fn icon_source_name(i IconSource) string {
+	return match i {
+		.shortcuts { 'shortcuts' }
+		.files { 'files' }
+	}
+}
+
+fn icon_source_from(s string) ?IconSource {
+	return match s {
+		'shortcuts' { IconSource.shortcuts }
+		'files' { IconSource.files }
+		else { none }
+	}
+}
+
+fn bool_from(s string) ?bool {
+	return match s {
+		'true' { true }
+		'false' { false }
+		else { none }
+	}
+}

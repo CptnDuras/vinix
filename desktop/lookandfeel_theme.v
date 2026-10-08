@@ -55,61 +55,65 @@ fn registry_id_at(index int) string {
 // selected preset against empty overrides. The WM reads this for shade,
 // focus, maximize policy, etc.
 fn (d &Desktop) behavior() EffectiveBehavior {
-	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	eff := resolve_settings(d.settings.blue_overrides())
 	return eff.behavior
 }
 
 // shell resolves the current preset's shell arrangement (Blue spec E): whether
-// a top bar and/or bottom bar are present.
+// a top bar and/or bottom bar are present, plus the user's per-axis overrides.
 fn (d &Desktop) shell() EffectiveShell {
-	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	eff := resolve_settings(d.settings.blue_overrides())
 	return eff.shell
 }
 
-// surface resolves the current preset's desktop-surface axis (Blue spec H):
-// wallpaper selection, desktop-icon source, and icon visibility.
+// surface resolves the desktop-surface axis (Blue spec H): wallpaper selection,
+// desktop-icon source, and icon visibility.
 //
 // The user's live wallpaper selection (held in the existing `Settings` fields
 // the picker writes) is fed in as the override so it still wins over a
 // preset-supplied backdrop (H1 acceptance (c)); when the user has made no
-// explicit choice, a preset backdrop shows through (H1 acceptance (b)).
+// explicit choice, a preset backdrop shows through (H1 acceptance (b)). The
+// per-axis icon overrides (source/visibility) are threaded alongside it.
 fn (d &Desktop) surface() EffectiveSurface {
-	// A chosen image (>= 0) or a non-default colour index is an explicit user
-	// override. The image sentinel is -1 (no image); colour index 0 is the
-	// built-in default, so only a non-zero colour counts as an override when no
-	// image is set.
-	over := if d.settings.wallpaper_image >= 0 {
+	// Start from the projected per-axis overrides (icon source/visibility), then
+	// layer the dedicated wallpaper selection on top. A chosen image (>= 0) or a
+	// non-default colour index is an explicit user override; the image sentinel
+	// is -1 (no image) and colour index 0 is the built-in default.
+	mut over := d.settings.blue_overrides()
+	icon := over.surface or { DesktopSurfaceConfig{} }
+	over.surface = if d.settings.wallpaper_image >= 0 {
 		DesktopSurfaceConfig{
+			icon_source:     icon.icon_source
+			icons_visible:   icon.icons_visible
 			wallpaper_image: d.settings.wallpaper_image
 		}
 	} else if d.settings.wallpaper_color != 0 {
 		DesktopSurfaceConfig{
+			icon_source:     icon.icon_source
+			icons_visible:   icon.icons_visible
 			wallpaper_color: d.settings.wallpaper_color
 			wallpaper_image: -1
 		}
 	} else {
-		DesktopSurfaceConfig{}
+		icon
 	}
-	eff := resolve_settings(BlueSettings{
-		preset_id: d.settings.preset_id
-		surface: over
-	})
+	eff := resolve_settings(over)
 	return eff.surface
 }
 
-// typography resolves the current preset's Typography axis (Blue spec C1):
-// UI/title point sizes and smoothing. render.v and the title chrome read this
-// for text sizing so a preset (or, later, a user override) can retune type
-// without touching the renderer.
+// typography resolves the Typography axis (Blue spec C1): UI/title point sizes
+// and smoothing, with the user's per-axis overrides applied. render.v and the
+// title chrome read this for text sizing.
 fn (d &Desktop) typography() EffectiveTypography {
-	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	eff := resolve_settings(d.settings.blue_overrides())
 	return eff.typography
 }
 
-// decor resolves the current preset's Decorations axis (Blue spec B). The
-// renderer reads this for the cursor colours (B4); the full chrome migration
-// still flows through preset_theme() until every Theme field lands in Decor.
+// decor resolves the Decorations axis (Blue spec B), with the user's per-axis
+// overrides applied. The renderer reads this for the cursor colours (B4); the
+// full chrome migration still flows through preset_theme() until every Theme
+// field lands in Decor.
 fn (d &Desktop) decor() EffectiveDecor {
-	eff := resolve_settings(BlueSettings{ preset_id: d.settings.preset_id })
+	eff := resolve_settings(d.settings.blue_overrides())
 	return eff.decor
 }
