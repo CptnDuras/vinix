@@ -331,3 +331,50 @@ fn (mut d Desktop) draw_skinned_bar(active bool, x int, y int, w int, h int) boo
 	}
 	return d.draw_drawable(dr, x, y, w, h, 0)
 }
+
+// The skins on offer, read once: the application protocol names a skin by its
+// place in this list, so the desktop and Settings must see the same one.
+struct SkinCatalog {
+mut:
+	loaded  bool
+	entries []SkinEntry
+}
+
+__global skin_catalog_cache = SkinCatalog{}
+
+fn skin_catalog() []SkinEntry {
+	if !skin_catalog_cache.loaded {
+		skin_catalog_cache.entries = list_skins()
+		skin_catalog_cache.loaded = true
+	}
+	return skin_catalog_cache.entries
+}
+
+// skin_wire_value carries a skin choice as a small integer: nothing for "follow
+// the look", 0 for "no skin", and a skin's place in the catalogue plus one.
+fn skin_wire_value(id string) ?int {
+	if id.len == 0 {
+		return none
+	}
+	if id == 'none' {
+		return 0
+	}
+	for i, entry in skin_catalog() {
+		if entry.id == id {
+			return i + 1
+		}
+	}
+	return none
+}
+
+fn skin_from_wire(value ?int) string {
+	v := value or { return '' }
+	if v == 0 {
+		return 'none'
+	}
+	entries := skin_catalog()
+	if v - 1 < entries.len {
+		return entries[v - 1].id
+	}
+	return ''
+}

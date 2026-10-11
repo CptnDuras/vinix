@@ -20,6 +20,25 @@ fn (d &Desktop) chrome_spec() ChromeSpec {
 			skin: spec.skin
 		}
 	}
+	// The user's own choices beat the look and the skin.
+	if kind := d.settings.ov_title_kind {
+		spec = ChromeSpec{
+			...spec
+			kind: kind
+		}
+	}
+	if align := d.settings.ov_tab_align {
+		spec = ChromeSpec{
+			...spec
+			tab_align: align
+		}
+	}
+	if packed := d.settings.ov_widgets {
+		spec = ChromeSpec{
+			...spec
+			widgets: widgets_unpack(u32(packed))
+		}
+	}
 	if spec.widgets.len > 0 {
 		return spec
 	}

@@ -1878,7 +1878,7 @@ fn (mut d Desktop) draw_cursor() {
 // and the frame itself, which also spans the empty strip beside the tab, paints
 // nothing of its own. It reports whether it took the frame.
 fn (mut d Desktop) draw_tabbed_frame(el &ui2.Element, x int, y int, w int, h int) bool {
-	if d.settings.is_macos() || d.theme().chrome.kind != .tab {
+	if d.settings.is_macos() || d.chrome_spec().kind != .tab {
 		return false
 	}
 	title_h := d.theme().title_height

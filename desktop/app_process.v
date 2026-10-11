@@ -19,9 +19,9 @@ import math.bits
 import ui2
 
 const app_protocol_magic = u32(0x56415050) // VAPP
-const app_protocol_version = u8(11)
-const app_request_header_size = 232
-const app_response_header_size = 224
+const app_protocol_version = u8(12)
+const app_request_header_size = 264
+const app_response_header_size = 256
 const app_protocol_max_payload = 16 * 1024 * 1024
 const app_protocol_max_string = 64 * 1024
 const app_protocol_max_elements = 16 * 1024
@@ -142,6 +142,11 @@ fn opt_bool_i32(value ?bool) ?int {
 }
 
 fn opt_title_align_i32(value ?TitleAlign) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_title_kind_i32(value ?TitleKind) ?int {
 	v := value or { return none }
 	return int(v)
 }
@@ -304,6 +309,11 @@ fn wire_put_state(mut out []u8, state AppWireState) {
 	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_window_list))
 	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_icons_visible))
 	wire_put_opt_i32(mut out, opt_icon_source_i32(state.settings.ov_icon_source))
+	// Window chrome (Blue spec B5).
+	wire_put_opt_i32(mut out, opt_title_kind_i32(state.settings.ov_title_kind))
+	wire_put_opt_i32(mut out, opt_title_align_i32(state.settings.ov_tab_align))
+	wire_put_opt_i32(mut out, state.settings.ov_widgets)
+	wire_put_opt_i32(mut out, skin_wire_value(state.settings.skin_id))
 	wire_put_i32(mut out, state.requested_scale)
 	wire_put_u32(mut out, state.capture_request.sequence)
 	wire_put_i32(mut out, int(state.capture_request.command))
@@ -346,6 +356,10 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 	ov_has_window_list_raw := reader.take_opt_i32()!
 	ov_icons_visible_raw := reader.take_opt_i32()!
 	ov_icon_source_raw := reader.take_opt_i32()!
+	ov_title_kind_raw := reader.take_opt_i32()!
+	ov_tab_align_raw := reader.take_opt_i32()!
+	ov_widgets_raw := reader.take_opt_i32()!
+	skin_raw := reader.take_opt_i32()!
 	requested_scale := reader.take_i32()!
 	capture_sequence := reader.take_u32()!
 	capture_command := reader.take_i32()!
@@ -379,6 +393,10 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 		|| !opt_in_range(ov_has_window_list_raw, 0, 1)
 		|| !opt_in_range(ov_icons_visible_raw, 0, 1)
 		|| !opt_in_range(ov_icon_source_raw, int(IconSource.shortcuts), int(IconSource.files))
+		|| !opt_in_range(ov_title_kind_raw, int(TitleKind.full), int(TitleKind.tab))
+		|| !opt_in_range(ov_tab_align_raw, int(TitleAlign.left), int(TitleAlign.right))
+		|| !opt_in_range(ov_widgets_raw, 0, 0x0fffffff)
+		|| !opt_in_range(skin_raw, 0, 4096)
 		|| !desktop_scale_valid(requested_scale)
 		|| capture_command < int(CaptureCommand.none_)
 		|| capture_command > int(CaptureCommand.stop) || capture_delay < 0
@@ -415,6 +433,10 @@ fn wire_take_state(mut reader WireReader) !AppWireState {
 			ov_has_window_list: opt_flag(ov_has_window_list_raw)
 			ov_icons_visible:   opt_flag(ov_icons_visible_raw)
 			ov_icon_source:     opt_enum[IconSource](ov_icon_source_raw)
+			ov_title_kind:      opt_enum[TitleKind](ov_title_kind_raw)
+			ov_tab_align:       opt_enum[TitleAlign](ov_tab_align_raw)
+			ov_widgets:         ov_widgets_raw.opt()
+			skin_id:            skin_from_wire(skin_raw.opt())
 		}
 		requested_scale: requested_scale
 		capture_request: CaptureRequest{

@@ -47,7 +47,8 @@ fn desktop_preset_id_valid(id string) bool {
 // only while its override is set, and an absent key inherits the preset.
 const desktop_override_keys = ['ov_window_radius', 'ov_title_align', 'ov_ui_size', 'ov_title_size',
 	'ov_shade_enabled', 'ov_menu_placement', 'ov_title_double_click', 'ov_has_top_bar',
-	'ov_has_bottom_bar', 'ov_has_window_list', 'ov_icons_visible', 'ov_icon_source']
+	'ov_has_bottom_bar', 'ov_has_window_list', 'ov_icons_visible', 'ov_icon_source', 'ov_title_kind', 'ov_tab_align',
+	'ov_widgets']
 
 // The duplicate-detection bit of an override key, after the fixed keys' bits;
 // zero for a key that is not an override.
@@ -75,6 +76,12 @@ fn desktop_parse_override(mut s Settings, key string, value string) ?bool {
 		'ov_has_window_list' { s.ov_has_window_list = bool_from(value)? }
 		'ov_icons_visible' { s.ov_icons_visible = bool_from(value)? }
 		'ov_icon_source' { s.ov_icon_source = icon_source_from(value)? }
+		'ov_title_kind' { s.ov_title_kind = title_kind_from(value)? }
+		'ov_tab_align' { s.ov_tab_align = title_align_from(value)? }
+		'ov_widgets' {
+			list := widgets_from_text(value)?
+			s.ov_widgets = int(widgets_pack(list))
+		}
 		else {}
 	}
 	return true
@@ -119,6 +126,18 @@ fn desktop_encode_overrides(s Settings) string {
 	if v := s.ov_icon_source {
 		out += 'ov_icon_source=${icon_source_name(v)}\n'
 	}
+	if v := s.ov_title_kind {
+		out += 'ov_title_kind=${title_kind_name(v)}\n'
+	}
+	if v := s.ov_tab_align {
+		out += 'ov_tab_align=${title_align_name(v)}\n'
+	}
+	if v := s.ov_widgets {
+		out += 'ov_widgets=${widgets_to_text(widgets_unpack(u32(v)))}\n'
+	}
+	if s.skin_id.len > 0 {
+		out += 'skin=${s.skin_id}\n'
+	}
 	return out
 }
 
@@ -129,6 +148,9 @@ fn desktop_preferences_valid(p DesktopPreferences) bool {
 		&& int(p.settings.taskbar_mode) >= int(TaskbarMode.standard)
 		&& int(p.settings.taskbar_mode) <= int(TaskbarMode.combined)
 		&& desktop_preset_id_valid(p.settings.preset_id)
+		&& (p.settings.skin_id.len == 0 || p.settings.skin_id == 'none'
+		|| skin_id_valid(p.settings.skin_id))
+		&& (p.settings.ov_widgets or { 0 }) >= 0 && (p.settings.ov_widgets or { 0 }) <= 0x0fffffff
 		&& (p.settings.ov_window_radius or { 0 }) >= 0 && (p.settings.ov_window_radius or { 0 }) <= 64
 		&& (p.settings.ov_ui_size or { 8 }) >= 8 && (p.settings.ov_ui_size or { 8 }) <= 96
 		&& (p.settings.ov_title_size or { 8 }) >= 8 && (p.settings.ov_title_size or { 8 }) <= 96
@@ -259,6 +281,7 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 			'keyboard_layouts' { u32(2048) }
 			'keyboard_layout' { u32(4096) }
 			'language' { u32(8192) }
+			'skin' { u32(1) << 30 }
 			else { desktop_override_bit(key) }
 		}
 		if seen & bit != 0 {
@@ -301,6 +324,12 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 			}
 			'language' {
 				p.settings.language = desktop_language_from_code(value)?
+			}
+			'skin' {
+				if value != 'none' && !skin_id_valid(value) {
+					return none
+				}
+				p.settings.skin_id = value
 			}
 			'clock_24_hour' {
 				p.settings.clock_24_hour = match value {

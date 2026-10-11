@@ -8,7 +8,7 @@ command -v "$v" >/dev/null 2>&1 || { echo 'ERROR: V is required.' >&2; exit 1; }
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 mkdir "$work/clients"
-for name in device_io.v platform.c.v backlight_client.v battery_client.v wifi_client.v scale.v lookandfeel.v maximize_policy.v settings_model.v preferences.v preferences.c.v; do
+for name in device_io.v platform.c.v backlight_client.v battery_client.v wifi_client.v scale.v lookandfeel.v chrome_model.v skin_model.v maximize_policy.v settings_model.v preferences.v preferences.c.v; do
     cp "$root/desktop/$name" "$work/clients/"
 done
 cp "$root/desktop/libc_compat.h" "$work/clients/"

@@ -2530,3 +2530,53 @@ fn test_overrides_survive_the_application_wire() {
 	accepted := wire_take_state(mut bad_reader) or { return }
 	assert false, 'accepted ${accepted.settings.ov_title_align or { TitleAlign.left }}'
 }
+
+fn test_window_chrome_choices_survive_the_application_wire() {
+	widgets := widgets_from_text('close@leading,maximize@trailing') or { panic('widgets') }
+	state := AppWireState{
+		settings: Settings{
+			ov_title_kind: .tab
+			ov_tab_align: .right
+			ov_widgets: int(widgets_pack(widgets))
+			skin_id: 'none'
+		}
+	}
+	mut out := []u8{}
+	wire_put_state(mut out, state)
+	mut reader := WireReader{
+		data: out
+	}
+	decoded := wire_take_state(mut reader) or { panic(err) }
+	assert decoded.settings.ov_title_kind or { TitleKind.full } == .tab
+	assert decoded.settings.ov_tab_align or { TitleAlign.left } == .right
+	assert decoded.settings.ov_widgets or { 0 } == int(widgets_pack(widgets))
+	assert decoded.settings.skin_id == 'none'
+	// Nothing set stays nothing.
+	mut plain := []u8{}
+	wire_put_state(mut plain, AppWireState{})
+	mut plain_reader := WireReader{
+		data: plain
+	}
+	back := wire_take_state(mut plain_reader) or { panic(err) }
+	assert back.settings.ov_title_kind == none && back.settings.ov_widgets == none
+	assert back.settings.skin_id == ''
+}
+
+fn test_user_chrome_choices_beat_the_look() {
+	mut d := Desktop{}
+	d.settings.preset_id = 'default'
+	assert d.chrome_spec().kind == .full
+	d.settings.ov_title_kind = .tab
+	d.settings.ov_tab_align = .center
+	spec := d.chrome_spec()
+	assert spec.kind == .tab && spec.tab_align == .center
+	// The stock three buttons remain until the user names their own.
+	assert spec.widgets.len == 3
+	d.settings.ov_widgets = int(widgets_pack(widgets_from_text('menu@leading,close@trailing') or { panic('w') }))
+	spec2 := d.chrome_spec()
+	assert spec2.widgets.len == 2 && spec2.widgets[0].action == .menu
+	// A look's own tab can be flattened back to a full bar.
+	d.settings.preset_id = 'beos'
+	d.settings.ov_title_kind = .full
+	assert d.chrome_spec().kind == .full
+}

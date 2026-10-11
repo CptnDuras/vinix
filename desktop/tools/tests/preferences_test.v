@@ -397,3 +397,36 @@ fn test_preferences_round_trip_the_per_axis_overrides() {
 		assert desktop_parse_preferences('version=1\n${bad}\n') == none, bad
 	}
 }
+
+fn test_preferences_round_trip_the_window_chrome_choices() {
+	home := preference_test_home('chrome')
+	defer { os.rmdir_all(home) or {} }
+	widgets := widgets_from_text('close@leading,shade@trailing,maximize@trailing') or { panic('widgets') }
+	p := DesktopPreferences{
+		settings: Settings{
+			preset_id:      'default'
+			skin_id:        'glass'
+			ov_title_kind:  .tab
+			ov_tab_align:   .center
+			ov_widgets:     int(widgets_pack(widgets))
+		}
+	}
+	assert desktop_save_preferences(home, p)
+	assert desktop_load_preferences(home) == p
+	record := os.read_file(desktop_preferences_path(home))!
+	assert record.contains('skin=glass\n')
+	assert record.contains('ov_title_kind=tab\n')
+	assert record.contains('ov_widgets=close@leading,shade@trailing,maximize@trailing\n')
+	// A skin may also be turned off outright.
+	none_skin := DesktopPreferences{
+		settings: Settings{
+			skin_id: 'none'
+		}
+	}
+	assert desktop_save_preferences(home, none_skin)
+	assert desktop_load_preferences(home).settings.skin_id == 'none'
+	for bad in ['skin=../etc', 'skin=Bad Skin', 'ov_title_kind=wide', 'ov_widgets=close@middle',
+		'ov_widgets=blink@leading', 'ov_tab_align=top', 'skin=a\nskin=b'] {
+		assert desktop_parse_preferences('version=1\n${bad}\n') == none, bad
+	}
+}

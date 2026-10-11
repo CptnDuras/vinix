@@ -349,3 +349,18 @@ fn chrome_apply_key(mut spec ChromeSpec, key string, value string) bool {
 	}
 	return true
 }
+
+fn title_kind_name(k TitleKind) string {
+	return match k {
+		.full { 'full' }
+		.tab { 'tab' }
+	}
+}
+
+fn title_kind_from(name string) ?TitleKind {
+	return match name {
+		'full' { TitleKind.full }
+		'tab' { TitleKind.tab }
+		else { none }
+	}
+}
