@@ -191,3 +191,159 @@ fn tab_x(spec ChromeSpec, window_w int, tab_w int) int {
 fn maxi(a int, b int) int {
 	return if a > b { a } else { b }
 }
+
+fn widget_action_from_name(name string) ?WidgetAction {
+	return match name {
+		'close' { WidgetAction.close }
+		'minimize' { WidgetAction.minimize }
+		'maximize' { WidgetAction.maximize }
+		'shade' { WidgetAction.shade }
+		'menu' { WidgetAction.menu }
+		else { none }
+	}
+}
+
+fn title_align_from_text(name string) ?TitleAlign {
+	return match name {
+		'left' { TitleAlign.left }
+		'center' { TitleAlign.center }
+		'right' { TitleAlign.right }
+		else { none }
+	}
+}
+
+// widgets_from_text reads "close@leading,maximize@trailing,..." into widgets,
+// in order. Any entry it cannot read, or more than max_widgets of them, makes
+// the whole list unusable.
+const max_widgets = 8
+
+fn widgets_from_text(text string) ?[]WidgetSpec {
+	mut out := []WidgetSpec{}
+	if text.trim_space().len == 0 {
+		return out
+	}
+	for item in text.split(',') {
+		parts := item.trim_space().split('@')
+		if parts.len != 2 {
+			return none
+		}
+		action := widget_action_from_name(parts[0]) or { return none }
+		anchor := match parts[1] {
+			'leading' { WidgetAnchor.leading }
+			'trailing' { WidgetAnchor.trailing }
+			else { return none }
+		}
+		out << WidgetSpec{
+			action: action
+			anchor: anchor
+		}
+		if out.len > max_widgets {
+			return none
+		}
+	}
+	return out
+}
+
+// widgets_to_text is the inverse of widgets_from_text.
+fn widgets_to_text(widgets []WidgetSpec) string {
+	mut parts := []string{}
+	for w in widgets {
+		anchor := if w.anchor == .leading { 'leading' } else { 'trailing' }
+		parts << '${widget_action_name(w.action)}@${anchor}'
+	}
+	return parts.join(',')
+}
+
+// A widget list carried in one u32: four bits each, up to eight, in order, with
+// zero ending the list. Bit 3 is the anchor (set = trailing) and bits 0..2 are
+// the action plus one. This is the form the application protocol and the
+// preferences file's overrides share, so neither needs a variable-length field.
+fn widgets_pack(widgets []WidgetSpec) u32 {
+	mut v := u32(0)
+	for i, w in widgets {
+		if i >= max_widgets {
+			break
+		}
+		code := u32(int(w.action) + 1) | if w.anchor == .trailing { u32(8) } else { u32(0) }
+		v |= code << u32(4 * i)
+	}
+	return v
+}
+
+fn widgets_unpack(v u32) []WidgetSpec {
+	mut out := []WidgetSpec{}
+	for i in 0 .. max_widgets {
+		code := (v >> u32(4 * i)) & 0xf
+		if code == 0 {
+			break
+		}
+		action := int(code & 7) - 1
+		if action < 0 || action > int(WidgetAction.menu) {
+			return []WidgetSpec{}
+		}
+		out << WidgetSpec{
+			action: unsafe { WidgetAction(action) }
+			anchor: if code & 8 != 0 { WidgetAnchor.trailing } else { WidgetAnchor.leading }
+		}
+	}
+	return out
+}
+
+// chrome_apply_key sets one field of a ChromeSpec from its text name and value,
+// as skin.cfg's `chrome.*` lines spell it. It reports whether it understood.
+fn chrome_apply_key(mut spec ChromeSpec, key string, value string) bool {
+	match key {
+		'kind' {
+			spec = ChromeSpec{
+				...spec
+				kind: match value {
+					'full' { TitleKind.full }
+					'tab' { TitleKind.tab }
+					else { return false }
+				}
+			}
+		}
+		'tab_sizing' {
+			spec = ChromeSpec{
+				...spec
+				tab_sizing: match value {
+					'fit' { TabSizing.fit }
+					'fixed' { TabSizing.fixed }
+					'fraction' { TabSizing.fraction }
+					else { return false }
+				}
+			}
+		}
+		'tab_align' {
+			a := title_align_from_text(value) or { return false }
+			spec = ChromeSpec{
+				...spec
+				tab_align: a
+			}
+		}
+		'tab_px', 'tab_pct', 'tab_pad', 'tab_overlap', 'tab_slant' {
+			if value.len == 0 || !value.bytes().all(it >= `0` && it <= `9`) || value.len > 4 {
+				return false
+			}
+			n := value.int()
+			spec = match key {
+				'tab_px' { ChromeSpec{ ...spec, tab_px: n } }
+				'tab_pct' { ChromeSpec{ ...spec, tab_pct: if n > 100 { 100 } else { n } } }
+				'tab_pad' { ChromeSpec{ ...spec, tab_pad: n } }
+				'tab_overlap' { ChromeSpec{ ...spec, tab_overlap: n } }
+				else { ChromeSpec{ ...spec, tab_slant: n } }
+			}
+		}
+		'widgets' {
+			w := widgets_from_text(value) or { return false }
+			spec = ChromeSpec{
+				...spec
+				widgets: w
+			}
+		}
+		else {
+			return false
+		}
+	}
+	return true
+}
