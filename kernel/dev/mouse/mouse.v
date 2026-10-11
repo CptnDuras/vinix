@@ -309,11 +309,15 @@ fn handler() {
 			continue
 		}
 
+		// Each delta is 9 bits: the byte is the low eight and bit 4 (X) or
+		// bit 5 (Y) of the flags is the sign. Sign-extending the byte alone is
+		// wrong for -256..-129, which the host sends when it turns an absolute
+		// pointer into relative motion: they arrive as a byte below 128.
 		if current_packet.flags & (1 << 4) != 0 {
-			current_packet.x_mov = u32(i8(u8(current_packet.x_mov)))
+			current_packet.x_mov = u32(i32(current_packet.x_mov & 0xff) - 256)
 		}
 		if current_packet.flags & (1 << 5) != 0 {
-			current_packet.y_mov = u32(i8(u8(current_packet.y_mov)))
+			current_packet.y_mov = u32(i32(current_packet.y_mov & 0xff) - 256)
 		}
 
 		mouse_res.l.acquire()

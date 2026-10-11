@@ -100,13 +100,12 @@ fn console_add_csi_u(codepoint u8) {
 	console_meta_chorded = true
 }
 
-fn keyboard_handler() {
-	vect := idt.allocate_vector()
-
-	C.kprintf(c'console: PS/2 keyboard vector is 0x%llx\n', u64(vect))
-
-	apic.io_apic_set_irq_redirect(cpu_locals[0].lapic_id, vect, 1, true)
-
+// ps2_controller_setup runs on the boot thread, before the keyboard thread
+// exists and before the mouse driver talks to the controller. Doing it from
+// the keyboard thread raced mouse.initialise(): the flush could eat the
+// mouse's ACKs or the port disable could land after the mouse was set up,
+// leaving input dead on some boots.
+fn ps2_controller_setup() {
 	// Disable primary and secondary PS/2 ports
 	write_ps2(0x64, 0xad)
 	write_ps2(0x64, 0xa7)
@@ -135,6 +134,14 @@ fn keyboard_handler() {
 	if ps2_config & (1 << 5) != 0 {
 		write_ps2(0x64, 0xa8)
 	}
+}
+
+fn keyboard_handler() {
+	vect := idt.allocate_vector()
+
+	C.kprintf(c'console: PS/2 keyboard vector is 0x%llx\n', u64(vect))
+
+	apic.io_apic_set_irq_redirect(cpu_locals[0].lapic_id, vect, 1, true)
 
 	console_convtab_numpad_numlock = {
 		u8(0x37): u8(`*`)
@@ -420,6 +427,7 @@ pub fn initialise() {
 
 	setup_console()
 
+	ps2_controller_setup()
 	spawn keyboard_handler()
 }
 

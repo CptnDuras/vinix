@@ -63,7 +63,11 @@ if [ -n "$GCCLIB" ]; then
 fi
 CC="$LLVM_CLANG --target=$CROSS_TRIPLE --sysroot=${SYSROOT} ${GCC_TC_FLAG} -static-libgcc"
 LD="ld.lld"
-LLVM_TOOL_DIR="$(dirname "$LLVM_CLANG")"
+LLVM_TOOL_DIR="$(dirname "$(command -v "$LLVM_CLANG")")"
+# A ccache shim directory holds clang but not the other LLVM tools.
+if [ ! -x "$LLVM_TOOL_DIR/llvm-ar" ] && command -v llvm-ar >/dev/null 2>&1; then
+    LLVM_TOOL_DIR="$(dirname "$(command -v llvm-ar)")"
+fi
 AR="$LLVM_TOOL_DIR/llvm-ar"
 RANLIB="$LLVM_TOOL_DIR/llvm-ranlib"
 STRIP="$LLVM_TOOL_DIR/llvm-strip"
