@@ -460,6 +460,7 @@ const lookandfeel_registry = [
 			title_align: .center
 		}
 		behavior: BehaviorConfig{
+			shade_enabled: true
 			title_double_click: .shade
 			menu_placement: .global_
 		}

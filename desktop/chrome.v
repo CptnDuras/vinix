@@ -12,7 +12,14 @@ import ui2
 // side the user has chosen.
 fn (d &Desktop) chrome_spec() ChromeSpec {
 	theme := d.theme()
-	spec := theme.chrome
+	mut spec := theme.chrome
+	// A skin may carry its own shape for the bar and its own set of widgets.
+	if d.skin_active() && d.skin_state.skin.has_chrome {
+		spec = ChromeSpec{
+			...d.skin_state.skin.chrome
+			skin: spec.skin
+		}
+	}
 	if spec.widgets.len > 0 {
 		return spec
 	}

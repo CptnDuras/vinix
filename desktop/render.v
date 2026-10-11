@@ -550,6 +550,9 @@ fn (mut d Desktop) draw_surface(el &ui2.Element, x int, y int, w int, h int, dep
 	theme := d.theme()
 	if el.id.ends_with('.titlebar') {
 		active := el.box.bg == theme.title_active_bg
+		if d.draw_skinned_bar(active, x, y, w, h) {
+			return
+		}
 		bottom := if active {
 			theme.title_active_bg2
 		} else {
@@ -1097,6 +1100,9 @@ fn (mut d Desktop) draw_catalina_switch(el &ui2.Element, x int, y int, w int, h 
 }
 
 fn (mut d Desktop) draw_button(el &ui2.Element, x int, y int, w int, h int) {
+	if d.draw_skinned_widget(el, x, y, w, h) {
+		return
+	}
 	if d.settings.is_macos() {
 		match el.kind {
 			.checkbox {

@@ -236,6 +236,8 @@ mut:
 	wallpaper_width       int
 	wallpaper_height      int
 	wallpaper_valid       bool
+	// The window skin in force and the art read for it (skin.v).
+	skin_state SkinState
 
 	tz_offset_seconds i64
 }
@@ -488,6 +490,7 @@ fn (mut d Desktop) activate(id int) {
 // because the wallpaper gradient is painted by the compositor before the tree
 // is rendered, and ui2 has no gradient to declare.
 fn (mut d Desktop) build_tree() ui2.Element {
+	d.sync_skin()
 	begin_frame_elements()
 	mut children := frame_elements(available_apps.len + d.windows.len + 6)
 	// Shortcuts first, so every window paints over them.
@@ -628,9 +631,12 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 		if w.action == .shade && !shade_on {
 			continue
 		}
-		widgets << w
+		skin_size := if sw := d.skin_widget(widget_action_name(w.action)) { sw.size } else { 0 }
+		widgets << if w.size == 0 && skin_size > 0 { WidgetSpec{
+				...w
+				size: skin_size
+			} } else { w }
 	}
-	buttons_left := d.settings.button_side == .left
 	text_width := if d.fonts.len > 0 && (tabbed || toolbar.image_path.len > 0) {
 		d.face_for(title_style).text_width(title_text)
 	} else {

@@ -69,6 +69,8 @@ struct ChromeSpec {
 	tab_slant int
 	// widgets, when not empty, replaces the stock buttons.
 	widgets []WidgetSpec
+	// The skin this look wears unless the user picks another; see skin.v.
+	skin string
 }
 
 // WidgetSlot is a widget with its place in the bar, in the bar's own
@@ -215,7 +217,7 @@ fn title_align_from_text(name string) ?TitleAlign {
 // widgets_from_text reads "close@leading,maximize@trailing,..." into widgets,
 // in order. Any entry it cannot read, or more than max_widgets of them, makes
 // the whole list unusable.
-const max_widgets = 8
+const max_widgets = 7
 
 fn widgets_from_text(text string) ?[]WidgetSpec {
 	mut out := []WidgetSpec{}
@@ -254,7 +256,7 @@ fn widgets_to_text(widgets []WidgetSpec) string {
 	return parts.join(',')
 }
 
-// A widget list carried in one u32: four bits each, up to eight, in order, with
+// A widget list carried in one u32: four bits each, up to seven, in order, with
 // zero ending the list. Bit 3 is the anchor (set = trailing) and bits 0..2 are
 // the action plus one. This is the form the application protocol and the
 // preferences file's overrides share, so neither needs a variable-length field.

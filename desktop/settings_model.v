@@ -108,6 +108,9 @@ mut:
 	// DesktopSurface:
 	ov_icons_visible ?bool
 	ov_icon_source   ?IconSource
+	// The window skin: empty follows the look, 'none' wears no skin, anything
+	// else is a skin id (skin.v).
+	skin_id string
 	// The input sources Ctrl-Space moves between, one KeyboardLayout.bit()
 	// each, and the one typing uses now. The current one is always enabled.
 	keyboard_layouts u32 = keyboard_layout_default_mask

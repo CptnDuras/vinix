@@ -151,6 +151,7 @@ const theme_beos = Theme{
 		// The yellow tab is a tag on the window's top edge, not a bar across it:
 		// as wide as its title needs, at the left, with a close box and a zoom
 		// box inside it.
+		skin: 'beos-boxes'
 		kind: .tab
 		tab_sizing: .fit
 		tab_align: .left

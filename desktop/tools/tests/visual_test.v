@@ -134,3 +134,29 @@ fn test_active_title_uses_the_theme_colour() {
 	// title fill or its gradient/bevel — assert it is not the window body.
 	assert px != theme.window_body || theme.title_active_bg == theme.window_body
 }
+
+// The BeOS look wears a built-in skin whose close box is a vector: a hollow
+// square. Its frame is dark and its middle shows the tab through it.
+fn test_beos_close_box_is_a_hollow_vector_square() {
+	mut d := snapshot_desktop('beos')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	assert d.skin_active()
+	// The window is at (60, 70); the close box is 14 wide, 5 in, centred in the
+	// 22 pixel tab.
+	frame_px := pixel_at(&d, 66, 81)
+	middle_px := pixel_at(&d, 72, 81)
+	assert (frame_px >> 16) & 0xff < 0x90
+	assert (middle_px >> 16) & 0xff > 0xd0
+	// And the tab is narrower than the window: right of it is the desktop.
+	assert pixel_at(&d, 60 + 340, 80) != pixel_at(&d, 80, 80)
+}
+
+fn test_a_look_without_a_skin_draws_its_stock_controls() {
+	mut d := snapshot_desktop('default')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	assert !d.skin_active()
+}
