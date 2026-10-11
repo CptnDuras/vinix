@@ -265,6 +265,8 @@ fn (mut d Desktop) spawn(title string, page Page, x int, y int, width int, heigh
 		id_close:       '${prefix}.close'
 		id_maximize:    '${prefix}.maximize'
 		id_minimize:    '${prefix}.minimize'
+		id_shade:       '${prefix}.shade'
+		id_menu:        '${prefix}.menu'
 		id_divider:     '${prefix}.divider'
 		id_body:        '${prefix}.body'
 		id_resize:      '${prefix}.resize'
@@ -567,69 +569,6 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 	title_text_color := if active { theme.title_text_active } else { theme.title_text_inactive }
 	title_bg := if active { theme.title_active_bg } else { theme.title_inactive_bg }
 
-	// Close, then zoom, then minimise, laid out from whichever end the setting
-	// puts them at. Ordering close outermost is what both conventions do.
-	buttons_left := d.settings.button_side == .left
-	span := 3 * theme.button_size + 2 * theme.button_gap
-	mut button_x := if buttons_left {
-		theme.button_inset
-	} else {
-		window.width - theme.button_inset - theme.button_size
-	}
-	step := if buttons_left {
-		theme.button_size + theme.button_gap
-	} else {
-		-(theme.button_size + theme.button_gap)
-	}
-
-	// macOS shows the glyphs in all three discs as soon as the pointer is over
-	// any of them, not just the one under it.
-	set_hovered := d.hover == window.id_close || d.hover == window.id_minimize
-		|| d.hover == window.id_maximize
-
-	maximize_glyph := if theme.button_look == .traffic {
-		// Catalina calls this the zoom control. Its mark stays a plus while the
-		// standard window frame toggles between its two sizes.
-		'builtin:zoom'
-	} else {
-		if window.maximized { 'builtin:restore' } else { 'builtin:maximize' }
-	}
-
-	// Traffic lights are read as a group, and red-yellow-green left to right is
-	// the whole of what makes them recognisable — so they keep that order at
-	// either end, rather than reversing when they move to the right. Flat
-	// buttons have no such signature and instead put close outermost, which is
-	// what both conventions do.
-	mut close_x, mut middle_x, mut inner_x := button_x, button_x + step, button_x + 2 * step
-	mut middle, mut inner := window.id_minimize, window.id_maximize
-	mut middle_glyph, mut inner_glyph := 'builtin:minimize', maximize_glyph
-	if theme.button_look == .traffic {
-		left_edge := if buttons_left {
-			theme.button_inset
-		} else {
-			window.width - theme.button_inset - span
-		}
-		stride := theme.button_size + theme.button_gap
-		close_x = left_edge
-		middle_x = left_edge + stride
-		inner_x = left_edge + 2 * stride
-		middle_glyph = 'builtin:traffic_minimize'
-		inner_glyph = 'builtin:zoom'
-	} else if !buttons_left {
-		// Inward from close on the right: zoom, then minimise.
-		middle, inner = window.id_maximize, window.id_minimize
-		middle_glyph, inner_glyph = maximize_glyph, 'builtin:minimize'
-	}
-
-	close_glyph := if theme.button_look == .traffic {
-		'builtin:traffic_close'
-	} else {
-		'builtin:close'
-	}
-	close := d.title_button(window.id_close, close_glyph, close_x, active, set_hovered)
-	maximize := d.title_button(middle, middle_glyph, middle_x, active, set_hovered)
-	minimize := d.title_button(inner, inner_glyph, inner_x, active, set_hovered)
-
 	// A shaded window has no body to build: its application is not asked for
 	// a frame at zero height.
 	mut background := theme.window_body
@@ -681,10 +620,39 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 		lines: 1
 	}
 
-	// The title takes what the buttons leave. Centred themes centre it over the
+	chrome := d.chrome_spec()
+	tabbed := chrome.kind == .tab && !d.settings.is_macos()
+	shade_on := d.behavior().shade_enabled
+	mut widgets := []WidgetSpec{cap: chrome.widgets.len}
+	for w in chrome.widgets {
+		if w.action == .shade && !shade_on {
+			continue
+		}
+		widgets << w
+	}
+	buttons_left := d.settings.button_side == .left
+	text_width := if d.fonts.len > 0 && (tabbed || toolbar.image_path.len > 0) {
+		d.face_for(title_style).text_width(title_text)
+	} else {
+		0
+	}
+	lead_span := widget_extent(widgets, .leading, theme.button_size, theme.button_gap)
+	trail_span := widget_extent(widgets, .trailing, theme.button_size, theme.button_gap)
+	lead_ext := if lead_span > 0 { theme.button_inset + lead_span + 10 } else { 0 }
+	trail_ext := if trail_span > 0 { theme.button_inset + trail_span + 10 } else { 0 }
+	// A tab is as wide as its chrome says; every other bar is the window's width.
+	bar_w := if tabbed {
+		tab_width(chrome, window.width, text_width + maxi(lead_ext, 14) + maxi(trail_ext, 14))
+	} else {
+		window.width
+	}
+	bar_x := if tabbed { tab_x(chrome, window.width, bar_w) } else { 0 }
+
+	// The title takes what the widgets leave. Centred themes centre it over the
 	// whole bar and simply accept a shorter run.
-	text_inset_left := if buttons_left { theme.button_inset + span + 10 } else { 14 }
-	title_limit := window.width - span - theme.button_inset - text_inset_left - 10
+	text_inset_left := if lead_ext > 0 { lead_ext } else { 14 }
+	title_limit := bar_w - text_inset_left - maxi(lead_ext, trail_ext) - if lead_ext == 0
+		&& trail_ext == 0 { 14 } else { 0 }
 	// A folder's title carries its icon, as Finder's does, the two centred as one.
 	title_icon_width := if toolbar.image_path.len > 0 && centered && d.fonts.len > 0 {
 		20
@@ -696,25 +664,37 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 	} else {
 		text_inset_left
 	}
-	title_w := if centered { window.width } else { title_limit }
+	title_w := if centered { bar_w } else { title_limit }
 	title := ui2.label(window.id_title, title_text, ui2.rect(f64(title_x), 0, f64(title_w), f64(theme.title_height)),
 		title_style)
 
-	mut title_children := frame_elements(7)
+	mut title_children := frame_elements(9)
 	title_children << title
 	if title_icon_width > 0 {
-		text_width := d.face_for(title_style).text_width(title_text)
 		title_children << ui2.Element{
-			...ui2.image('', toolbar.image_path, ui2.rect(f64((window.width - text_width) / 2 +
+			...ui2.image('', toolbar.image_path, ui2.rect(f64((bar_w - text_width) / 2 +
 				title_icon_width / 2 - title_icon_width), f64((theme.title_height - 16) / 2), 16, 16))
 			text_style: ui2.TextStyle{
 				color: toolbar.text_style.color
 			}
 		}
 	}
-	title_children << minimize
-	title_children << maximize
-	title_children << close
+	// macOS shows the glyphs in all three discs as soon as the pointer is over
+	// any of them, not just the one under it.
+	mut set_hovered := false
+	for w in widgets {
+		if d.hover == d.widget_id(window, w.action) {
+			set_hovered = true
+		}
+	}
+	slots := layout_widgets(widgets, bar_w, theme.title_height, theme.button_size, theme.button_gap,
+		theme.button_inset)
+	for slot in slots {
+		spec := widgets[slot.index]
+		id := d.widget_id(window, spec.action)
+		title_children << d.title_widget(spec, id, d.widget_glyph(spec, window.maximized),
+			slot.x, slot.size, theme.title_height, active, set_hovered)
+	}
 	// In-window menu placement (Blue spec F2): the focused window hosts its own
 	// menu in the title area rather than a global top bar. The affordance is a
 	// small marker at the leading edge; its id is stable so hit routing and
@@ -736,7 +716,7 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 			}
 		}
 	}
-	title_bar := ui2.draggable_view(window.id_titlebar, ui2.rect(0, 0, f64(window.width), f64(theme.title_height +
+	title_bar := ui2.draggable_view(window.id_titlebar, ui2.rect(f64(bar_x), 0, f64(bar_w), f64(theme.title_height +
 		toolbar_height)), ui2.BoxStyle{
 		bg: title_bg
 	}, title_children)
@@ -757,9 +737,15 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 	if !shaded {
 		window_children << body
 	}
+	if tabbed && !shaded {
+		// The tab sits over the frame's top rule, which carries on either side.
+		window_children << divider
+	}
 	window_children << title_bar
 	if !shaded {
-		window_children << divider
+		if !tabbed {
+			window_children << divider
+		}
 		// Arranged windows already fill a desktop-defined region. A normal
 		// window retains an invisible target at each corner for pointer
 		// resizing, without adding chrome over the application's surface.
@@ -773,10 +759,12 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 			// The upper corners are the title bar's, whose buttons sit a few
 			// pixels in from them. There the grip is an L along the two outer
 			// edges, so the buttons and the bar's own drag keep the rest.
-			window_children << resize_grip(window.id_resize_nw, 0, 0, grip, edge, ui2.cursor_resize_nwse)
-			window_children << resize_grip(window.id_resize_nw, 0, 0, edge, grip, ui2.cursor_resize_nwse)
-			window_children << resize_grip(window.id_resize_ne, right, 0, grip, edge, ui2.cursor_resize_nesw)
-			window_children << resize_grip(window.id_resize_ne, window.width - edge, 0, edge, grip,
+			// A tabbed window's body starts under the tab, so its upper corners do too.
+			top := if tabbed { theme.title_height } else { 0 }
+			window_children << resize_grip(window.id_resize_nw, 0, top, grip, edge, ui2.cursor_resize_nwse)
+			window_children << resize_grip(window.id_resize_nw, 0, top, edge, grip, ui2.cursor_resize_nwse)
+			window_children << resize_grip(window.id_resize_ne, right, top, grip, edge, ui2.cursor_resize_nesw)
+			window_children << resize_grip(window.id_resize_ne, window.width - edge, top, edge, grip,
 				ui2.cursor_resize_nesw)
 		}
 	}
@@ -1392,22 +1380,23 @@ fn desktop_owns(action string) bool {
 	return false
 }
 
-fn (d &Desktop) title_button(id string, glyph string, x int, active bool, set_hovered bool) ui2.Element {
+// title_widget is one control in a window's bar. Its face follows its shape: a
+// flat square lights up under the pointer, a disc is coloured while its window
+// is focused and shows its glyph only while the pointer is over the set.
+fn (d &Desktop) title_widget(spec WidgetSpec, id string, glyph string, x int, size int, bar_h int, active bool, set_hovered bool) ui2.Element {
 	theme := d.theme()
-	y := (theme.title_height - theme.button_size) / 2
+	y := (bar_h - size) / 2
 	hovered := d.hover == id
-	is_close := glyph == 'builtin:close' || glyph == 'builtin:traffic_close'
+	is_close := spec.action == .close
 
-	if theme.button_look == .traffic {
-		// A disc: coloured when the window is focused, grey when it is not, and
-		// carrying its glyph only while the pointer is over the set. Radius is
-		// half the size, which is how a rounded rect becomes a circle.
-		is_minimize := glyph == 'builtin:minimize' || glyph == 'builtin:traffic_minimize'
+	if spec.shape == .disc {
+		// Radius is half the size, which is how a rounded rect becomes a circle.
+		warm := spec.action == .minimize || spec.action == .shade
 		fill := if !active {
 			theme.traffic_idle
 		} else if is_close {
 			theme.traffic_close
-		} else if is_minimize {
+		} else if warm {
 			theme.traffic_minimize
 		} else {
 			theme.traffic_zoom
@@ -1416,21 +1405,21 @@ fn (d &Desktop) title_button(id string, glyph string, x int, active bool, set_ho
 			theme.traffic_idle_edge
 		} else if is_close {
 			theme.traffic_close_edge
-		} else if is_minimize {
+		} else if warm {
 			theme.traffic_minimize_edge
 		} else {
 			theme.traffic_zoom_edge
 		}
 		glyph_color := if is_close {
 			theme.traffic_close_glyph
-		} else if is_minimize {
+		} else if warm {
 			theme.traffic_minimize_glyph
 		} else {
 			theme.traffic_zoom_glyph
 		}
-		return ui2.button_with_image(id, '', if set_hovered { glyph } else { '' }, ui2.rect(f64(x), f64(y), f64(theme.button_size), f64(theme.button_size)), ui2.BoxStyle{
+		return ui2.button_with_image(id, '', if set_hovered { glyph } else { '' }, ui2.rect(f64(x), f64(y), f64(size), f64(size)), ui2.BoxStyle{
 			bg:            fill
-			radius:        theme.button_size / 2
+			radius:        size / 2
 			border_color:  edge
 			border_left:   1
 			border_top:    1
@@ -1448,7 +1437,7 @@ fn (d &Desktop) title_button(id string, glyph string, x int, active bool, set_ho
 	} else {
 		theme.button_hover
 	}
-	return ui2.button_with_image(id, '', glyph, ui2.rect(f64(x), f64(y), f64(theme.button_size), f64(theme.button_size)), ui2.BoxStyle{
+	return ui2.button_with_image(id, '', glyph, ui2.rect(f64(x), f64(y), f64(size), f64(size)), ui2.BoxStyle{
 		bg:          bg
 		radius:      5
 		transparent: !hovered
@@ -2528,6 +2517,13 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 			}
 			'minimize' {
 				d.minimize(id)
+			}
+			'shade' {
+				d.toggle_shade(id)
+			}
+			'menu' {
+				d.raise(id)
+				d.open_window_menu(id, x, y)
 			}
 			else {
 				d.raise(id)

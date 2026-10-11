@@ -55,6 +55,8 @@ mut:
 	id_close    string
 	id_maximize string
 	id_minimize string
+	id_shade    string
+	id_menu     string
 	id_divider  string
 	id_body     string
 	// One grip per corner; id_resize is the lower right.

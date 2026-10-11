@@ -492,6 +492,9 @@ fn (mut d Desktop) draw_surface(el &ui2.Element, x int, y int, w int, h int, dep
 		d.canvas.blend_round_rect(x, y, w, h, radius, el.box.bg, taskbar_progress_alpha)
 		return
 	}
+	if depth == 1 && el.id.starts_with('win.') && d.draw_tabbed_frame(el, x, y, w, h) {
+		return
+	}
 	floating := depth == 1 && (el.id.starts_with('win.') || el.id == switcher_panel_id
 		|| el.id == action_start_panel || el.id == taskbar_preview_panel
 		|| el.id == action_tray_flyout || el.id == taskbar_tooltip_id)
@@ -1124,7 +1127,7 @@ fn (mut d Desktop) draw_button(el &ui2.Element, x int, y int, w int, h int) {
 	// into enlarged square steps. Draw this one tiny, circular control at the
 	// backing-store resolution instead.
 	is_title_button := el.id.ends_with('.close') || el.id.ends_with('.minimize')
-		|| el.id.ends_with('.maximize')
+		|| el.id.ends_with('.maximize') || el.id.ends_with('.shade') || el.id.ends_with('.menu')
 	is_traffic_light := d.theme().button_look == .traffic && is_title_button
 	mut text_color := if el.kind == .toggle_button && el.checked {
 		el.toggle_down_text_style.color
@@ -1293,6 +1296,16 @@ fn (mut d Desktop) draw_builtin_glyph(path string, x int, y int, w int, h int, c
 		}
 		'minimize' {
 			d.canvas.fill_rect(cx - half, cy, 2 * half, 1, color)
+		}
+		'shade' {
+			// A bar over a shorter one: the window rolled up to its title.
+			d.canvas.fill_rect(cx - half, cy - half, 2 * half, 2, color)
+			d.canvas.fill_rect(cx - half, cy + 1, 2 * half, 1, color)
+		}
+		'window_menu' {
+			d.canvas.fill_rect(cx - half, cy - half, 2 * half, 1, color)
+			d.canvas.fill_rect(cx - half, cy, 2 * half, 1, color)
+			d.canvas.fill_rect(cx - half, cy + half, 2 * half, 1, color)
 		}
 		'traffic_minimize' {
 			// The Catalina collapse mark is a 6x2 dash in a 12-pixel disc.
@@ -1852,4 +1865,37 @@ fn (mut d Desktop) draw_cursor() {
 			}
 		}
 	}
+}
+
+// draw_tabbed_frame paints the shadow and edge of a window whose title is a tab
+// rather than a bar across it (BeOS): the body and the tab are two rectangles,
+// and the frame itself, which also spans the empty strip beside the tab, paints
+// nothing of its own. It reports whether it took the frame.
+fn (mut d Desktop) draw_tabbed_frame(el &ui2.Element, x int, y int, w int, h int) bool {
+	if d.settings.is_macos() || d.theme().chrome.kind != .tab {
+		return false
+	}
+	title_h := d.theme().title_height
+	mut tab_left := 0
+	mut tab_width := 0
+	for child in el.children {
+		if child.id.ends_with('.titlebar') {
+			tab_left = int(child.frame.x)
+			tab_width = int(child.frame.width)
+		}
+	}
+	if tab_width == 0 {
+		return false
+	}
+	edge := d.theme().window_edge
+	alpha := d.theme().shadow_alpha
+	if h > title_h {
+		d.canvas.drop_shadow_behind(x, y + title_h, w, h - title_h, 0, 7, alpha)
+	}
+	d.canvas.drop_shadow_behind(x + tab_left, y, tab_width, title_h, 0, 7, alpha)
+	if h > title_h {
+		d.canvas.stroke_round_rect(x, y + title_h, w, h - title_h, 0, edge, 190)
+	}
+	d.canvas.stroke_round_rect(x + tab_left, y, tab_width, title_h, 0, edge, 190)
+	return true
 }

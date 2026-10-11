@@ -88,6 +88,9 @@ struct Theme {
 	title_inactive_bg2 u32
 	// Title bar buttons
 	button_look        ButtonLook
+	// The shape of the bar and the widgets on it (Blue spec B5). The zero value
+	// is a full-width bar with the stock buttons for button_look.
+	chrome ChromeSpec
 	// Beveled chrome (Blue spec B3): when enabled, the title bar draws a raised
 	// bevel using bevel_light/bevel_dark (typically ramp-derived). Flat looks
 	// leave bevel_enabled false and pay nothing.

@@ -83,6 +83,14 @@ const theme_platinum = Theme{
 	title_bold:          true
 	title_size:          12
 	button_look:         .flat
+	chrome: ChromeSpec{
+		// A close box at one end; the zoom and collapse boxes at the other.
+		widgets: [
+			WidgetSpec{ action: .close, anchor: .leading },
+			WidgetSpec{ action: .maximize, anchor: .trailing },
+			WidgetSpec{ action: .shade, anchor: .trailing },
+		]
+	}
 	bevel_enabled:       true
 	bevel_light:         0xf4f4f4
 	bevel_dark:          0x999999
@@ -120,8 +128,7 @@ const theme_platinum = Theme{
 }
 
 // BeOS: restraint and tight spacing, a slightly greenish light gray, a yellow
-// title accent, square corners. (The partial-width title tab is a later
-// structural addition; this captures the palette and spacing.)
+// title accent, square corners, and a title that is a tab rather than a bar.
 const theme_beos = Theme{
 	name:                'BeOS'
 	window_body:         0xdedede
@@ -140,6 +147,20 @@ const theme_beos = Theme{
 	title_bold:          true
 	title_size:          12
 	button_look:         .flat
+	chrome: ChromeSpec{
+		// The yellow tab is a tag on the window's top edge, not a bar across it:
+		// as wide as its title needs, at the left, with a close box and a zoom
+		// box inside it.
+		kind: .tab
+		tab_sizing: .fit
+		tab_align: .left
+		tab_pad: 8
+		tab_overlap: 0
+		widgets: [
+			WidgetSpec{ action: .close, anchor: .leading },
+			WidgetSpec{ action: .maximize, anchor: .trailing },
+		]
+	}
 	bevel_enabled:       true
 	bevel_light:         0xf6f6f6
 	bevel_dark:          0x8a8a8a
