@@ -1809,3 +1809,69 @@ wm.not_installed.title
 -----
 wm.taskbar.group
 {0}  ({1})
+-----
+settings.category.windows
+Окна
+-----
+settings.windows.titlebar
+Заголовок
+-----
+settings.windows.titlebar_note
+Полоса во всю ширину окна или вкладка на его верхнем краю.
+-----
+settings.windows.follow
+Как в теме
+-----
+settings.windows.bar
+Полоса
+-----
+settings.windows.tab
+Вкладка
+-----
+settings.windows.tab_position
+Положение вкладки
+-----
+settings.windows.pos_left
+Слева
+-----
+settings.windows.pos_center
+По центру
+-----
+settings.windows.pos_right
+Справа
+-----
+settings.windows.widgets
+Кнопки заголовка
+-----
+settings.windows.widgets_note
+Какие кнопки есть у окна и на каком краю заголовка находится каждая.
+-----
+settings.windows.off
+Нет
+-----
+settings.windows.action.close
+Закрыть
+-----
+settings.windows.action.minimize
+Свернуть
+-----
+settings.windows.action.maximize
+Развернуть
+-----
+settings.windows.action.shade
+Свернуть в заголовок
+-----
+settings.windows.action.menu
+Меню
+-----
+settings.windows.skin
+Оформление
+-----
+settings.windows.skin_note
+Графика для заголовка и его кнопок: растровая или векторная.
+-----
+settings.windows.skin_none
+Без оформления
+-----
+settings.windows.reset
+Вернуть как в теме

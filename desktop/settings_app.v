@@ -17,6 +17,7 @@ import ui2
 
 enum SettingsCategory {
 	appearance
+	windows
 	date_time
 	language
 	theme
@@ -27,12 +28,13 @@ enum SettingsCategory {
 	keyboard
 }
 
-const settings_categories = [SettingsCategory.appearance, .date_time, .language, .theme, .wallpaper,
+const settings_categories = [SettingsCategory.appearance, .windows, .date_time, .language, .theme, .wallpaper,
 	.wifi, .display, .battery, .keyboard]
 
 fn (c SettingsCategory) title() string {
 	return match c {
 		.appearance { tr('settings.category.appearance') }
+		.windows { tr('settings.category.windows') }
 		.date_time { tr('settings.category.date_time') }
 		.language { tr('settings.category.language') }
 		.theme { tr('settings.category.theme') }
@@ -53,6 +55,11 @@ const settings_action_clock_date = 'settings.clock.date.'
 const settings_action_clock_weekday = 'settings.clock.weekday.'
 const settings_action_language = 'settings.language.'
 const settings_action_theme = 'settings.theme.'
+const settings_action_title_kind = 'settings.titlekind.'
+const settings_action_tab_align = 'settings.tabalign.'
+const settings_action_widget = 'settings.widget.'
+const settings_action_skin = 'settings.skin.'
+const settings_action_reset_chrome = 'settings.reset.chrome'
 const settings_action_color = 'settings.color.'
 const settings_action_image = 'settings.image.'
 // G3: reset the user's wallpaper override back to the preset/default (the
@@ -178,6 +185,7 @@ fn (a &SettingsApp) pane(width int, height int) []ui2.Element {
 	}
 	return match a.category {
 		.appearance { a.appearance_pane(width) }
+		.windows { a.windows_pane(width) }
 		.date_time { a.date_time_pane(width) }
 		.language { a.language_pane(width) }
 		.theme { a.theme_pane(width) }
@@ -501,6 +509,9 @@ fn (mut a SettingsApp) handle(event_id string) ! {
 		return
 	}
 	if a.handle_keyboard(event_id) {
+		return
+	}
+	if a.handle_windows(event_id) {
 		return
 	}
 	if event_id.starts_with(settings_action_side) {

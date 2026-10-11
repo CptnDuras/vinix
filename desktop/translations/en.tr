@@ -1809,3 +1809,69 @@ wm.not_installed.title
 -----
 wm.taskbar.group
 {0}  ({1})
+-----
+settings.category.windows
+Windows
+-----
+settings.windows.titlebar
+Title bar
+-----
+settings.windows.titlebar_note
+A bar across the window, or a tab on its top edge.
+-----
+settings.windows.follow
+Follow the look
+-----
+settings.windows.bar
+Bar
+-----
+settings.windows.tab
+Tab
+-----
+settings.windows.tab_position
+Tab position
+-----
+settings.windows.pos_left
+Left
+-----
+settings.windows.pos_center
+Centre
+-----
+settings.windows.pos_right
+Right
+-----
+settings.windows.widgets
+Title bar controls
+-----
+settings.windows.widgets_note
+Which controls a window has, and which end of its title bar each sits at.
+-----
+settings.windows.off
+Off
+-----
+settings.windows.action.close
+Close
+-----
+settings.windows.action.minimize
+Minimise
+-----
+settings.windows.action.maximize
+Zoom
+-----
+settings.windows.action.shade
+Roll up
+-----
+settings.windows.action.menu
+Menu
+-----
+settings.windows.skin
+Skin
+-----
+settings.windows.skin_note
+Artwork for the title bar and its controls, as bitmaps or vectors.
+-----
+settings.windows.skin_none
+None
+-----
+settings.windows.reset
+Reset to the look

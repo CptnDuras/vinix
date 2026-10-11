@@ -1809,3 +1809,69 @@ wm.not_installed.title
 -----
 wm.taskbar.group
 {0}  ({1})
+-----
+settings.category.windows
+Ventanas
+-----
+settings.windows.titlebar
+Barra de título
+-----
+settings.windows.titlebar_note
+Una barra a lo ancho de la ventana, o una pestaña en su borde superior.
+-----
+settings.windows.follow
+Según el tema
+-----
+settings.windows.bar
+Barra
+-----
+settings.windows.tab
+Pestaña
+-----
+settings.windows.tab_position
+Posición de la pestaña
+-----
+settings.windows.pos_left
+Izquierda
+-----
+settings.windows.pos_center
+Centro
+-----
+settings.windows.pos_right
+Derecha
+-----
+settings.windows.widgets
+Controles de la barra
+-----
+settings.windows.widgets_note
+Qué controles tiene una ventana y en qué extremo de la barra va cada uno.
+-----
+settings.windows.off
+Ninguno
+-----
+settings.windows.action.close
+Cerrar
+-----
+settings.windows.action.minimize
+Minimizar
+-----
+settings.windows.action.maximize
+Ampliar
+-----
+settings.windows.action.shade
+Enrollar
+-----
+settings.windows.action.menu
+Menú
+-----
+settings.windows.skin
+Aspecto
+-----
+settings.windows.skin_note
+Imágenes para la barra de título y sus controles, en mapa de bits o vectores.
+-----
+settings.windows.skin_none
+Ninguno
+-----
+settings.windows.reset
+Restablecer al tema
