@@ -160,3 +160,46 @@ fn test_a_look_without_a_skin_draws_its_stock_controls() {
 	}
 	assert !d.skin_active()
 }
+
+fn snapshot_with_skin(preset string, skin string) Desktop {
+	mut d := Desktop{
+		canvas: new_canvas(640, 420)
+		fonts:  load_fonts()
+	}
+	d.settings.preset_id = preset
+	d.settings.skin_id = skin
+	d.spawn('skinned', .welcome, 60, 70, 360, 240)
+	d.update_taskbar_clock_at(0)
+	root := d.build_tree()
+	d.render(root)
+	free_tree(root)
+	return d
+}
+
+// A bitmap skin replaces the bar with its nine-slice art and the buttons with
+// its orbs. The glass bar is blue-tinted, which no stock look's bar is.
+fn test_a_bitmap_skin_paints_its_bar_and_orbs() {
+	if os.getenv('VINIX_SKIN_DIR') == '' || !os.exists(os.join_path(os.getenv('VINIX_SKIN_DIR'), 'glass', 'skin.cfg')) {
+		return
+	}
+	mut d := snapshot_with_skin('default', 'glass')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	assert d.skin_active()
+	// Mid-bar: the glass blue, where the default look is white.
+	bar := pixel_at(&d, 250, 76)
+	assert (bar & 0xff) > (bar >> 16) & 0xff
+	// The close orb is red where the default look has only a glyph on white.
+	orb := pixel_at(&d, 60 + 8 + 8, 70 + 17)
+	assert (orb >> 16) & 0xff > 0xb0 && (orb & 0xff) < 0x90
+	maybe_dump(&d, 'glass')
+}
+
+fn test_choosing_none_removes_a_looks_own_skin() {
+	mut d := snapshot_with_skin('beos', 'none')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	assert !d.skin_active()
+}

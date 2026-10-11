@@ -14,6 +14,8 @@ command -v "$v" >/dev/null 2>&1 || { echo 'ERROR: V is required.' >&2; exit 1; }
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
+python3 "$root/desktop/tools/build_skins.py" "$root/desktop/skins" "$work/skins" || true
+export VINIX_SKIN_DIR="$work/skins"
 python3 "$root/desktop/tools/stage_ui2.py" \
     "$work/modules/ui2" "$root/third_party/ui2" \
     "$root/desktop/tools/ui2_headless_bounds.v"

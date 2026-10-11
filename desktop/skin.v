@@ -11,10 +11,17 @@
 // as BeOS can ship vector controls without any files.
 module main
 
+import os
 import ui2
 
-const skin_dir = '/usr/share/vinix/skins'
-const skin_index = '${skin_dir}/index.txt'
+const skin_default_dir = '/usr/share/vinix/skins'
+// skin_root is where installed skins live. VINIX_SKIN_DIR moves it, which is how
+// the tests and a skin author's own checkout point the desktop at their files.
+fn skin_root() string {
+	custom := os.getenv('VINIX_SKIN_DIR')
+	return if custom.len > 0 { custom } else { skin_default_dir }
+}
+
 // The most a single skin asset may weigh; a window's chrome never needs more.
 const skin_asset_max = 2 * 1024 * 1024
 const skin_cache_masks = 64
@@ -48,12 +55,13 @@ fn list_skins() []SkinEntry {
 			name: builtin_skin_name(id)
 		}
 	}
-	info := desktop_stat(skin_index) or { return out }
+	index := '${skin_root()}/index.txt'
+	info := desktop_stat(index) or { return out }
 	if info.size == 0 || info.size > 64 * 1024 {
 		return out
 	}
 	mut buffer := []u8{len: int(info.size) + 1}
-	got := desktop_read_file(skin_index, buffer.data, info.size)
+	got := desktop_read_file(index, buffer.data, info.size)
 	if got <= 0 {
 		return out
 	}
@@ -116,7 +124,7 @@ fn load_skin(id string) ?Skin {
 	if cfg := builtin_skin_cfg(id) {
 		return parse_skin(id, 'builtin:${id}', cfg)
 	}
-	dir := '${skin_dir}/${id}'
+	dir := '${skin_root()}/${id}'
 	path := '${dir}/skin.cfg'
 	info := desktop_stat(path) or { return none }
 	if info.is_dir || info.size == 0 || info.size > u64(skin_cfg_max) {
