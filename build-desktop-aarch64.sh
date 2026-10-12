@@ -1359,6 +1359,13 @@ if [ -d "$BUILD_DIR/wallpapers" ]; then
         "$BUILD_DIR/wallpapers"/SOURCES.txt "$STAGING/usr/share/vinix/wallpapers/" 2>/dev/null || true
 fi
 
+# Window skins: PNG art is converted to the VBM1 bitmaps the desktop reads.
+echo "==> Skins..."
+rm -rf "$STAGING/usr/share/vinix/skins"
+mkdir -p "$STAGING/usr/share/vinix/skins"
+python3 "$SCRIPT_DIR/desktop/tools/build_skins.py" "$SCRIPT_DIR/desktop/skins" \
+    "$STAGING/usr/share/vinix/skins" || true
+
 # Keep a system-owned development copy outside persistent /root. It lets an
 # upgraded machine build even when its carried home predates /root/vmodules.
 # The editable home copy is seeded from the same exact host-build sources.
