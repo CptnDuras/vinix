@@ -844,7 +844,12 @@ fn (mut d Desktop) tray_flyout_element() ?ui2.Element {
 	if x < 6 {
 		x = 6
 	}
-	y := d.canvas.height - taskbar_height - height - 6
+	// Above the bottom bar, or under the top bar when that is all there is.
+	y := if d.shell().has_bottom_bar {
+		d.canvas.height - taskbar_height - height - 6
+	} else {
+		top_bar_height + 6
+	}
 	d.tray.flyout_x = x
 	d.tray.flyout_y = y
 	d.tray.flyout_width = width

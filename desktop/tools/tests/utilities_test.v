@@ -2223,10 +2223,15 @@ fn test_tray_renders_status_without_overlapping_clock() {
 	root := desktop.build_tree()
 	topbar := utility_element_named(root, 'topbar') or { panic('missing top bar') }
 	tray := utility_element_named(topbar, top_bar_tray_id) or { panic('missing tray') }
-	// One cell per registered item, in order (wifi then battery).
-	assert tray.children.len == 2
-	assert tray.children[0].id == 'tray.wifi'
-	assert tray.children[1].id == 'tray.battery'
+	// One real tray icon per registered item, in order (network then battery),
+	// carrying the same actions as the taskbar's tray so their flyouts work.
+	// An icon the machine has no hardware for (a battery on a desktop) is not
+	// shown, as in the taskbar's tray, so there may be fewer than registered.
+	assert tray.children.len >= 1 && tray.children.len <= 2
+	assert tray.children[0].id == 'tray.icon.network'
+	if tray.children.len == 2 {
+		assert tray.children[1].id == 'tray.icon.battery'
+	}
 	// The tray sits entirely to the left of the clock (no overlap).
 	clock := utility_element_named(topbar, 'topbar.clock') or { panic('missing clock') }
 	assert tray.frame.x + tray.frame.width <= clock.frame.x
@@ -2240,12 +2245,31 @@ fn test_tray_renders_status_without_overlapping_clock() {
 	defer {
 		unsafe { free(plain.canvas.pixels) }
 	}
-	// Platinum has a top bar but no tray items.
-	plain.settings.preset_id = 'platinum'
-	assert plain.shell().tray_items.len == 0
+	// A look with a top bar and a bottom bar but no tray items of its own leaves
+	// the tray to the bottom bar and takes no room in the top one.
+	plain.settings.preset_id = 'blue'
+	plain.settings.ov_has_bottom_bar = true
+	assert plain.shell().tray_items.len == 2
 	plain.update_taskbar_clock_at(0)
-	ptree := plain.build_tree()
-	assert utility_element_named(ptree, top_bar_tray_id) == none
+
+	// A look with a top bar and nothing at the bottom has nowhere else for its
+	// status icons, so the top bar carries the whole tray.
+	mut mac := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(mac.canvas.pixels) }
+	}
+	mac.settings.preset_id = 'platinum'
+	assert mac.shell().tray_items.len == 0 && !mac.shell().has_bottom_bar
+	mac.update_taskbar_clock_at(0)
+	ptree := mac.build_tree()
+	mac_top := utility_element_named(ptree, 'topbar') or { panic('missing top bar') }
+	mac_tray := utility_element_named(mac_top, top_bar_tray_id) or { panic('missing tray') }
+	assert mac_tray.children.len >= 1
+	clock2 := utility_element_named(mac_top, 'topbar.clock') or { panic('missing clock') }
+	assert mac_tray.frame.x + mac_tray.frame.width <= clock2.frame.x
 	free_tree(ptree)
 }
 

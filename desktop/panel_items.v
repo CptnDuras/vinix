@@ -16,9 +16,8 @@ const top_bar_action_system = 'taskbar.system'
 const top_bar_app_menu_id = 'topbar.app_menu'
 const top_bar_launcher_id = 'topbar.launcher'
 const top_bar_tray_id = 'topbar.tray'
-const tray_icon_size = 18
-const tray_gap = 4
-const tray_pad = 10
+const top_bar_menu_width = 172
+const top_bar_item_max_width = 150
 
 // top_bar_element builds the top panel. Item ids are stable so hit routing and
 // tests can find them:
@@ -31,12 +30,14 @@ const tray_pad = 10
 fn (d &Desktop) top_bar_element() ui2.Element {
 	theme := d.theme()
 	width := d.canvas.width
+	shell := d.shell()
+	item_h := top_bar_height - 4
 
-	mut children := frame_elements(7)
+	mut children := frame_elements(16)
 
 	// Leading: the system menu (the Blue leaf / Apple-style menu). Reuses the
 	// start-toggle action so clicking it opens the system menu host.
-	children << ui2.button_with_image(top_bar_action_system, '', 'builtin:vinix', ui2.rect(f64(taskbar_padding), 2, f64(start_button_width), f64(top_bar_height - 4)), ui2.BoxStyle{
+	children << ui2.button_with_image(top_bar_action_system, '', 'builtin:vinix', ui2.rect(f64(taskbar_padding), 2, f64(start_button_width), f64(item_h)), ui2.BoxStyle{
 		bg: if d.start_menu_open || d.hover == top_bar_action_system {
 			theme.accent
 		} else {
@@ -46,47 +47,102 @@ fn (d &Desktop) top_bar_element() ui2.Element {
 	}, ui2.TextStyle{
 		color: theme.taskbar_text_active
 	})
+	mut left_x := taskbar_padding + start_button_width + 10
 
 	// Global app-menu slot (Blue spec F2): when the resolved menu_placement is
 	// .global, the focused window's menu is hosted here in the top bar (the
 	// Platinum / GNOME arrangement). The Shell owns only the slot; the menu
 	// content is F's system_window_menu of the focused window. The slot targets
 	// this position — F fills it — which keeps the E↔F graph acyclic.
-	if d.behavior().menu_placement == .global_ {
+	global_menu := d.behavior().menu_placement == .global_
+	if global_menu {
 		if idx := d.window_index(d.focus) {
 			menu := system_window_menu(d.windows[idx].title, d.behavior().shade_enabled)
-			menu_x := taskbar_padding + start_button_width + 10
-			children << d.app_menu_slot(menu, menu_x)
+			children << d.app_menu_slot(menu, left_x)
+			left_x += top_bar_menu_width + 10
 		}
 	}
 
 	// Launcher strip (Blue spec E4): a pinned-app strip of icon_tiles placed
 	// after the system menu (the BeOS Deskbar arrangement). Rendered only when
 	// the resolved shell pins apps, so shells without a launcher are unchanged.
-	pins := d.shell().launcher_pins
+	pins := shell.launcher_pins
 	if pins.len > 0 {
-		launch_x := taskbar_padding + start_button_width + 10
-		children << d.launcher_element(pins, launch_x)
+		launcher := d.launcher_element(pins, left_x)
+		left_x += int(launcher.frame.width) + 10
+		children << launcher
 	}
 
 	// Trailing: the clock, right-aligned in a reserved area.
 	clock_w := taskbar_clock_width
-	children << ui2.label('topbar.clock', d.taskbar_clock_time, ui2.rect(f64(width - taskbar_padding - clock_w), 4, f64(clock_w), f64(top_bar_height - 6)), ui2.TextStyle{
+	clock_x := width - taskbar_padding - clock_w
+	children << ui2.label('topbar.clock', d.taskbar_clock_time, ui2.rect(f64(clock_x), 4, f64(clock_w), f64(top_bar_height - 6)), ui2.TextStyle{
 		color: theme.taskbar_text_active
 		size: 14
 		bold: true
 		align: .right
 	})
+	mut right_x := clock_x - 8
 
-	// Tray (Blue spec E5): status icons in the trailing slot, left of the
-	// clock. Rendered only when the resolved shell registers items, so an empty
-	// tray occupies no space and does not overlap the clock. Notifications are a
-	// deferred tray extension (GAP-13).
-	tray := d.shell().tray_items
-	if tray.len > 0 {
-		tray_w := tray.len * (tray_icon_size + tray_gap) - tray_gap
-		tray_x := width - taskbar_padding - clock_w - tray_pad - tray_w
-		children << d.tray_element(tray, tray_x)
+	// Tray (Blue spec E5): the status icons, left of the clock. A shell without
+	// a bottom bar has nowhere else for them, so it shows the whole tray; one
+	// that registers its own items shows those. An empty tray takes no space.
+	if shell.tray_items.len > 0 || !shell.has_bottom_bar {
+		tray := d.tray_element(shell.tray_items, right_x)
+		if tray.children.len > 0 {
+			right_x = int(tray.frame.x) - 8
+			children << tray
+		}
+	}
+
+	// The workspace pager, which the bottom bar would otherwise carry.
+	if !shell.has_bottom_bar {
+		pager_w := workspace_count * workspace_button_width + (workspace_count - 1) * workspace_button_gap
+		pager_x := right_x - pager_w
+		if pager_x > left_x + 80 {
+			for workspace in 0 .. workspace_count {
+				id := workspace_action_ids[workspace]
+				active := workspace == d.current_workspace
+				occupied := d.workspace_window_count(workspace) > 0
+				children << ui2.button(id, workspace_labels[workspace], ui2.rect(f64(pager_x +
+					workspace * (workspace_button_width + workspace_button_gap)), 2,
+					f64(workspace_button_width), f64(item_h)), ui2.BoxStyle{
+					bg:     if active {
+						theme.accent
+					} else if d.hover == id {
+						theme.taskbar_item_hover
+					} else {
+						theme.taskbar_item_bg
+					}
+					radius: 4
+				}, ui2.TextStyle{
+					color: if active || occupied { theme.taskbar_text_active } else { theme.taskbar_muted }
+					size:  12
+					bold:  active
+					align: .center
+				})
+			}
+			right_x = pager_x - 8
+		}
+	}
+
+	// The window list, when the shell wants one and no bottom bar holds it. A
+	// global menu takes this room in the Mac arrangement, and shows the focused
+	// window's name itself.
+	if shell.has_window_list && !shell.has_bottom_bar && !global_menu && right_x > left_x + 60 {
+		entries := d.taskbar_entries()
+		defer {
+			unsafe { entries.free() }
+		}
+		item_w := mini(d.taskbar_item_width(entries.len, left_x, right_x), top_bar_item_max_width)
+		mut x := left_x
+		for entry in entries {
+			if x + item_w > right_x {
+				break
+			}
+			d.taskbar_entry_elements(mut children, entry, x, 2, item_w, item_h, false, false)
+			x += item_w + taskbar_item_gap
+		}
 	}
 
 	// A hairline along the bottom edge separates the bar from the desktop.
@@ -99,6 +155,10 @@ fn (d &Desktop) top_bar_element() ui2.Element {
 	}, children)
 }
 
+fn mini(a int, b int) int {
+	return if a < b { a } else { b }
+}
+
 // app_menu_slot renders a menu's top-level titles as a horizontal menu bar in
 // the top panel (Blue spec F2, global placement). The slot's own id is stable
 // (top_bar_app_menu_id); each title carries the menu's title text. Clicking the
@@ -108,7 +168,7 @@ fn (d &Desktop) app_menu_slot(menu Menu, x int) ui2.Element {
 	mut children := frame_elements(1)
 	// A single leading title (the window/app name). Per-app submenus (F4) are
 	// deferred; the first cut surfaces the window menu behind one title.
-	label_w := 160
+	label_w := top_bar_menu_width - 12
 	children << ui2.label('', menu.title, ui2.rect(6, 4, f64(label_w), f64(top_bar_height - 6)), ui2.TextStyle{
 		color: theme.taskbar_text_active
 		size: 13
@@ -154,29 +214,40 @@ fn (d &Desktop) launcher_element(pins []int, x int) ui2.Element {
 	}, children)
 }
 
-// tray_element renders the status tray (Blue spec E5): a run of status items in
-// the trailing slot starting at `x`, left of the clock. Each item is a small
-// labelled cell with a stable id ('tray.<kind>'); the first cut shows status
-// text (a battery/wifi glyph set is later). Notifications are a deferred tray
-// extension (GAP-13). An empty tray is never rendered (the caller gates on len),
-// so the tray occupies no space by default.
-fn (d &Desktop) tray_element(items []TrayStatus, x int) ui2.Element {
-	theme := d.theme()
-	mut children := frame_elements(items.len)
-	mut tx := 0
-	for item in items {
-		id, glyph := match item {
-			.battery { 'tray.battery', 'BAT' }
-			.wifi { 'tray.wifi', 'WiFi' }
+// tray_element renders the status tray (Blue spec E5) as real tray icons, ending
+// at `right` and growing leftwards, the same icons and actions the taskbar's
+// tray has, so their flyouts work. `wanted` limits it to the statuses a shell
+// registers; empty means every icon the tray shows. An empty tray has no
+// children and a zero width.
+fn (d &Desktop) tray_element(wanted []TrayStatus, right int) ui2.Element {
+	mut children := frame_elements(tray_item_count + 1)
+	mut items := []int{}
+	for index in 0 .. tray_item_count {
+		item := tray_item_from_index(index)
+		if !d.tray.on_taskbar(item) {
+			continue
 		}
-		children << ui2.label(id, glyph, ui2.rect(f64(tx), 5, f64(tray_icon_size), f64(top_bar_height - 8)), ui2.TextStyle{
-			color: theme.taskbar_text_active
-			size: 10
-			align: .center
-		})
-		tx += tray_icon_size + tray_gap
+		if wanted.len > 0 {
+			status := match item {
+				.network { TrayStatus.wifi }
+				.battery { TrayStatus.battery }
+				else { continue }
+			}
+			if status !in wanted {
+				continue
+			}
+		}
+		items << index
 	}
-	width := if tx > 0 { tx - tray_gap } else { 0 }
+	width := items.len * tray_icon_width
+	x := right - width
+	mut at := 0
+	for index in items {
+		item := tray_item_from_index(index)
+		children << d.tray_icon_element(tray_icon_actions[index], d.tray_glyph(item), at, 2,
+			tray_icon_width, top_bar_height - 4, d.tray.flyout == tray_flyout_for(item))
+		at += tray_icon_width
+	}
 	return ui2.view(top_bar_tray_id, ui2.rect(f64(x), 0, f64(width), f64(top_bar_height)), ui2.BoxStyle{
 		transparent: true
 	}, children)
