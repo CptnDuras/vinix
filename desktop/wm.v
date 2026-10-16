@@ -100,12 +100,6 @@ mut:
 	// H2 (files icon mode): the directory whose entries the desktop shows when
 	// icon_source is `files`. Overridable (tests point it at a temp dir).
 	icons_dir string = desktop_icons_dir
-	// Double-click tracking on a window title bar, for the configurable
-	// title_double_click action (Blue spec D3). Records the last title-bar
-	// press so a second press on the same title within the threshold fires the
-	// action rather than starting another drag.
-	last_title_click_ms     u64
-	last_title_click_window int
 	// The system window menu (Blue spec F3), when open: the window it belongs
 	// to (0 = none) and the screen position it is anchored at.
 	window_menu_id int
@@ -478,6 +472,19 @@ fn (mut d Desktop) snap_window(id int, snap WindowSnap) {
 	d.windows[index].maximized = false
 	d.windows[index].snap = snap
 	d.raise(id)
+}
+
+// run_title_double_click does what the look's title_double_click policy says
+// (Blue spec D3): maximize, roll the window up, hide it, or nothing. Detecting
+// the double click, with its time and pointer-distance limits, is
+// titlebar_pointer_down_at's job.
+fn (mut d Desktop) run_title_double_click(id int) {
+	match d.behavior().title_double_click {
+		.shade { d.toggle_shade(id) }
+		.hide { d.minimize(id) }
+		.maximize { d.toggle_maximize(id) }
+		.none_ { d.raise(id) }
+	}
 }
 
 // toggle_shade rolls a window up to its title bar, or restores it. It applies
@@ -2987,26 +2994,6 @@ fn (mut d Desktop) on_pointer_down(x int, y int) {
 		part := rest[dot + 1..]
 		match part {
 			'titlebar' {
-				// A second press on the same title bar within the threshold is
-				// a double-click: run the configured title action (Blue D3)
-				// instead of starting a drag.
-				now := desktop_monotonic_ms()
-				is_double := d.last_title_click_window == id
-					&& now >= d.last_title_click_ms
-					&& now - d.last_title_click_ms <= title_double_click_ms
-				d.last_title_click_ms = now
-				d.last_title_click_window = id
-				if is_double {
-					d.last_title_click_ms = 0
-					d.last_title_click_window = 0
-					match d.behavior().title_double_click {
-						.shade { d.toggle_shade(id) }
-						.hide { d.minimize(id) }
-						.maximize { d.toggle_maximize(id) }
-						.none_ { d.raise(id) }
-					}
-					return
-				}
 				d.raise(id)
 				index := d.window_index(id) or { return }
 				d.drag = Drag{

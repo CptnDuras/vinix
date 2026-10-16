@@ -839,8 +839,8 @@ fn test_windows_xp_clock_is_small_plain_and_in_the_middle() {
 	// The default bar only reserves its time; the classic themes keep both boxes.
 	for kind in ['default', 'windows7', 'macos'] {
 		desktop.settings.preset_id = kind
-		assert desktop.taskbar_clock_box() == if kind == .default_ { compact_clock_width } else { taskbar_clock_width }
-		assert desktop.taskbar_build_box() == if kind == .default_ { 0 } else { taskbar_build_width }
+		assert desktop.taskbar_clock_box() == if kind == 'default' { compact_clock_width } else { taskbar_clock_width }
+		assert desktop.taskbar_build_box() == if kind == 'default' { 0 } else { taskbar_build_width }
 		assert !desktop.taskbar_luna()
 	}
 }

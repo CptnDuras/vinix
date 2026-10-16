@@ -13,9 +13,6 @@ module main
 // theme is known — an AppFactory declares a height in the abstract.
 const default_title_height = 22
 
-// How close two title-bar presses must be (ms) to count as a double-click for
-// the configurable title action (Blue spec D3).
-const title_double_click_ms = u64(400)
 // The invisible resize target at each corner remains large enough to grab at
 // either logical scale, while the frame cannot be collapsed past a useful
 // title bar and a small application body. The upper corners' targets are only

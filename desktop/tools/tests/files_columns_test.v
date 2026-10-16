@@ -175,11 +175,11 @@ fn test_horizontal_swipes_pan_columns_in_both_themes_without_scrolling_rows() {
 		os.write_file(os.join_path(root, 'item-${index}.txt'), 'hello') or { panic(err) }
 	}
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(root) or {}
 	}
 	for theme in ['default', 'macos'] {
-		files_follow_theme(theme)
+		files_follow_theme(theme == 'macos')
 		mut app := FilesContextApp{}
 		app.files.browser.read(root.clone())
 		app.files.set_view_mode(.columns)

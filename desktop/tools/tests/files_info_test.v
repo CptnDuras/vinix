@@ -125,13 +125,13 @@ fn test_files_info_keyboard_and_modal_preserve_folder_navigation_and_tab() {
 fn test_files_info_toolbar_and_overlay_render_under_both_desktop_themes() {
 	root := files_info_test_root('vinix-files-info-ui-test')
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(root) or {}
 	}
 	mut app := FileBrowserApp{}
 	app.browser.read(root.clone())
 	for theme in ['default', 'macos'] {
-		files_follow_theme(theme)
+		files_follow_theme(theme == 'macos')
 		begin_frame_elements()
 		tree := app.build(ui2.rect(0, 0, 800, 500))!
 		assert files_info_test_find(tree, files_action_info) != none
@@ -148,7 +148,7 @@ fn test_files_info_toolbar_and_overlay_render_under_both_desktop_themes() {
 fn test_files_context_info_keyboard_keeps_commander_tab_and_blocks_mouse_back() {
 	root := files_info_test_root('vinix-files-info-context-test')
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(root) or {}
 	}
 	mut app := FilesContextApp{}

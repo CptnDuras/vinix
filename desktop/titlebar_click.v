@@ -96,7 +96,7 @@ fn (mut d Desktop) titlebar_pointer_down_at(previous TitlebarClick, x int, y int
 		d.windows[index].snap = previous.snap
 		d.set_hover(action)
 		d.dirty = true
-		d.toggle_maximize(id)
+		d.run_title_double_click(id)
 		return TitlebarClick{}
 	}
 

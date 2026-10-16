@@ -8,10 +8,6 @@ module main
 fn set_titlebar_test_target(mut desktop Desktop, id int) {
 	index := desktop.window_index(id) or { panic('missing test window') }
 	window := desktop.windows[index]
-	// Each press here stands alone; presses a few microseconds apart must not
-	// count as a double-click on the title bar.
-	desktop.last_title_click_ms = 0
-	desktop.last_title_click_window = 0
 	target := HitTarget{
 		action_id: 'win.${id}.titlebar'
 		x: window.x
@@ -528,4 +524,35 @@ fn test_corner_resize_respects_minimum_size_and_usable_desktop() {
 	index = desktop.window_index(id) or { panic('missing maximum-sized window') }
 	assert desktop.windows[index].x + desktop.windows[index].width == 800
 	assert desktop.windows[index].y + desktop.windows[index].height == 600 - taskbar_height
+}
+
+// The look's own policy decides what a title-bar double-click does (Blue spec
+// D3): BeOS rolls the window up, where the default maximizes it. The same
+// time and distance limits apply to every look.
+fn test_titlebar_double_click_runs_the_looks_own_action() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 800
+			height: 600
+		}
+	}
+	desktop.settings.preset_id = 'beos'
+	id := desktop.spawn('Welcome', .welcome, 120, 80, 400, 260)
+	set_titlebar_test_target(mut desktop, id)
+	x := 200
+	y := 80 + desktop.theme().title_height / 2
+	mut click := TitlebarClick{}
+	click = desktop.titlebar_pointer_down_at(click, x, y, 1_000)
+	desktop.on_pointer_up(x, y)
+	set_titlebar_test_target(mut desktop, id)
+	// A press far from the first is not a double-click, whatever the look.
+	far := desktop.titlebar_pointer_down_at(click, x + 80, y, 1_100)
+	assert far.window_id == id
+	assert !desktop.windows.last().shaded
+	desktop.on_pointer_up(x + 80, y)
+	set_titlebar_test_target(mut desktop, id)
+	click = desktop.titlebar_pointer_down_at(far, x + 80, y, 1_200)
+	assert click.window_id == 0
+	assert desktop.windows.last().shaded
+	assert !desktop.windows.last().maximized
 }
