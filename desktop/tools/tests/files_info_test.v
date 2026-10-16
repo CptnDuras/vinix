@@ -130,7 +130,7 @@ fn test_files_info_toolbar_and_overlay_render_under_both_desktop_themes() {
 	}
 	mut app := FileBrowserApp{}
 	app.browser.read(root.clone())
-	for theme in [ThemeKind.default_, ThemeKind.macos] {
+	for theme in ['default', 'macos'] {
 		files_follow_theme(theme)
 		begin_frame_elements()
 		tree := app.build(ui2.rect(0, 0, 800, 500))!

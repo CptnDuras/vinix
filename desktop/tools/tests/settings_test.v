@@ -246,7 +246,7 @@ fn test_200_percent_traffic_lights_use_native_resolution_circles() {
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(40, 20, 80, 40, desktop_scale_200)
 		settings: Settings{
-			theme:       .macos
+			preset_id: 'macos'
 			button_side: .left
 		}
 	}
@@ -279,7 +279,7 @@ fn test_catalina_checkbox_uses_native_hidpi_curves_and_tick() {
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(40, 24, 80, 48, desktop_scale_200)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -357,7 +357,7 @@ fn test_catalina_cursor_uses_clean_hidpi_artwork() {
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(20, 24, 40, 48, desktop_scale_200)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -411,7 +411,7 @@ fn test_catalina_theme_uses_measured_window_chrome() {
 
 	d := Desktop{
 		settings: Settings{
-			theme:       .macos
+			preset_id: 'macos'
 			button_side: .left
 		}
 	}
@@ -450,7 +450,7 @@ fn test_catalina_native_button_uses_measured_normal_default_and_pressed_renditio
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(360, 80, 360, 80, 1)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -526,7 +526,7 @@ fn test_catalina_text_field_uses_measured_focus_ring_inset_and_caret() {
 		canvas:   new_scaled_canvas(150, 60, 150, 60, 1)
 		fonts:    load_fonts()
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -592,7 +592,7 @@ fn test_catalina_native_button_rasterizes_curves_and_gradients_at_hidpi_scale() 
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(120, 40, 240, 80, 2)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -623,7 +623,7 @@ fn test_catalina_native_button_casts_a_shadow_and_rings_focus() {
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(260, 40, 260, 40, 1)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -669,7 +669,7 @@ fn test_catalina_inactive_window_drops_default_face_and_focus_ring() {
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(380, 40, 380, 40, 1)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -719,7 +719,7 @@ fn test_catalina_window_frame_tells_its_buttons_whether_it_is_focused() {
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(160, 80, 160, 80, 1)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -761,7 +761,7 @@ fn test_catalina_directional_button_captions_are_visible_without_font_glyphs() {
 	mut desktop := Desktop{
 		canvas:   new_scaled_canvas(220, 44, 220, 44, 1)
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	defer {
@@ -813,7 +813,7 @@ fn test_catalina_chrome_renders_measured_rows() {
 		canvas: new_scaled_canvas(640, 480, 640, 480, 1)
 		fonts:  load_fonts()
 		settings: Settings{
-			theme:       .macos
+			preset_id: 'macos'
 			button_side: .left
 		}
 	}
@@ -845,7 +845,7 @@ fn test_catalina_chrome_renders_measured_rows() {
 fn test_selecting_catalina_theme_starts_with_controls_on_left() {
 	mut desktop := Desktop{
 		settings: Settings{
-			theme:       .default_
+			preset_id: 'default'
 			button_side: .right
 		}
 	}
@@ -853,15 +853,15 @@ fn test_selecting_catalina_theme_starts_with_controls_on_left() {
 		category: .theme
 		desktop:  &desktop
 	}
-	app.handle('${settings_action_theme}1') or { panic(err) }
-	assert desktop.settings.theme == .macos
+	app.handle('${settings_action_theme}${registry_index_of('macos')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'macos'
 	assert desktop.settings.button_side == .left
 }
 
 fn test_selecting_windows7_theme_puts_controls_on_right_and_offers_its_colours() {
 	mut desktop := Desktop{
 		settings: Settings{
-			theme:       .macos
+			preset_id:       'macos'
 			button_side: .left
 		}
 	}
@@ -879,8 +879,8 @@ fn test_selecting_windows7_theme_puts_controls_on_right_and_offers_its_colours()
 		}
 	}
 	assert swatches == 0
-	app.handle('${settings_action_theme}2') or { panic(err) }
-	assert desktop.settings.theme == .windows7
+	app.handle('${settings_action_theme}${registry_index_of('windows7')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'windows7'
 	assert desktop.settings.button_side == .right
 	assert desktop.settings.glass_color == 0
 	begin_frame_elements()
@@ -908,7 +908,7 @@ fn test_selecting_windows7_theme_puts_controls_on_right_and_offers_its_colours()
 	assert selected == 1
 	app.handle('${settings_action_glass}7') or { panic(err) }
 	assert desktop.settings.glass_color == 7
-	assert desktop.settings.theme == .windows7
+	assert desktop.settings.preset_id == 'windows7'
 	app.handle('${settings_action_glass}15') or { panic(err) }
 	assert desktop.settings.glass_color == 15
 	// A swatch that does not exist chooses nothing.
@@ -916,15 +916,15 @@ fn test_selecting_windows7_theme_puts_controls_on_right_and_offers_its_colours()
 	app.handle('${settings_action_glass}x') or { panic(err) }
 	assert desktop.settings.glass_color == 15
 	// Going back keeps the colour for the next time the glass is worn.
-	app.handle('${settings_action_theme}0') or { panic(err) }
-	assert desktop.settings.theme == .default_
+	app.handle('${settings_action_theme}${registry_index_of('default')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'default'
 	assert desktop.settings.glass_color == 15
 }
 
 fn test_windows7_theme_is_kept_from_programs_built_before_it() {
 	glass := AppWireState{
 		settings:        Settings{
-			theme:       .windows7
+			preset_id:       'windows7'
 			glass_color: 11
 			language:    .ru
 		}
@@ -937,28 +937,28 @@ fn test_windows7_theme_is_kept_from_programs_built_before_it() {
 	// read, and its answer does not undo the theme or the colour.
 	old := app_features & ~app_feature_glass
 	plain := app_state_for_peer(glass, old, app_extended)
-	assert plain.settings.theme == .default_ && plain.settings.glass_color == 0
+	assert plain.settings.preset_id == 'default' && plain.settings.glass_color == 0
 	assert plain.settings.language == .ru
-	assert wire_theme(plain.settings) == 0
+	assert wire_theme(plain.settings) == registry_index_of('default')
 	assert app_state_from_peer(plain, old, app_extended, glass.settings) == glass
 	// Its own choice of theme still counts.
 	chosen := AppWireState{
 		...plain
 		settings: Settings{
 			...plain.settings
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	answered := app_state_from_peer(chosen, old, app_extended, glass.settings)
-	assert answered.settings.theme == .macos && answered.settings.glass_color == 11
+	assert answered.settings.preset_id == 'macos' && answered.settings.glass_color == 11
 	macos := AppWireState{
 		settings:        Settings{
-			theme:       .macos
+			preset_id:       'macos'
 			glass_color: 3
 		}
 		requested_scale: desktop_scale_100
 	}
-	assert app_state_for_peer(macos, old, app_extended).settings.theme == .macos
+	assert app_state_for_peer(macos, old, app_extended).settings.preset_id == 'macos'
 	assert app_state_from_peer(app_state_for_peer(macos, old, app_extended), old, app_extended,
 		macos.settings) == macos
 
@@ -972,21 +972,21 @@ fn test_windows7_theme_is_kept_from_programs_built_before_it() {
 	begin_frame_elements()
 	pane := app.theme_pane(480)
 	for element in pane {
-		assert element.id != 'settings.theme.2'
+		assert element.id != '${settings_action_theme}${registry_index_of('windows7')}'
 		assert !element.id.starts_with(settings_action_glass)
 	}
-	app.handle('${settings_action_theme}2') or { panic(err) }
+	app.handle('${settings_action_theme}${registry_index_of('windows7')}') or { panic(err) }
 	app.handle('${settings_action_glass}5') or { panic(err) }
-	assert desktop.settings.theme == .default_ && desktop.settings.glass_color == 0
+	assert desktop.settings.preset_id == 'default' && desktop.settings.glass_color == 0
 	app_compositor_features = app_features
-	app.handle('${settings_action_theme}2') or { panic(err) }
-	assert desktop.settings.theme == .windows7
+	app.handle('${settings_action_theme}${registry_index_of('windows7')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'windows7'
 }
 
 fn test_selecting_windows_xp_theme_puts_controls_on_right() {
 	mut desktop := Desktop{
 		settings: Settings{
-			theme:       .macos
+			preset_id:       'macos'
 			button_side: .left
 			glass_color: 5
 		}
@@ -1012,8 +1012,8 @@ fn test_selecting_windows_xp_theme_puts_controls_on_right() {
 	}
 	assert choices == 4
 	assert last_right <= 480 - settings_padding
-	app.handle('${settings_action_theme}3') or { panic(err) }
-	assert desktop.settings.theme == .windows_xp
+	app.handle('${settings_action_theme}${registry_index_of('windowsxp')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'windowsxp'
 	assert desktop.settings.button_side == .right
 	// The glass colour is Windows 7's: it is neither offered nor lost.
 	assert desktop.settings.glass_color == 5
@@ -1021,14 +1021,14 @@ fn test_selecting_windows_xp_theme_puts_controls_on_right() {
 	for element in app.theme_pane(480) {
 		assert !element.id.starts_with(settings_action_glass)
 	}
-	app.handle('${settings_action_theme}0') or { panic(err) }
-	assert desktop.settings.theme == .default_
+	app.handle('${settings_action_theme}${registry_index_of('default')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'default'
 }
 
 fn test_windows_xp_theme_is_kept_from_programs_built_before_it() {
 	luna := AppWireState{
 		settings:        Settings{
-			theme:       .windows_xp
+			preset_id:       'windowsxp'
 			glass_color: 9
 			language:    .fr
 		}
@@ -1048,19 +1048,19 @@ fn test_windows_xp_theme_is_kept_from_programs_built_before_it() {
 	// One built before it reads the desktop's own look and keeps the glass
 	// colour it does understand; its answer does not undo the theme.
 	plain := app_state_for_peer(luna, app_features, 0)
-	assert plain.settings.theme == .default_ && plain.settings.glass_color == 9
+	assert plain.settings.preset_id == 'default' && plain.settings.glass_color == 9
 	assert plain.settings.language == .fr
 	assert wire_theme_valid(wire_theme(plain.settings))
 	assert app_state_from_peer(plain, app_features, 0, luna.settings) == luna
 	// One built before the glass as well reads neither.
 	oldest := app_features & ~app_feature_glass
 	bare := app_state_for_peer(luna, oldest, 0)
-	assert bare.settings.theme == .default_ && bare.settings.glass_color == 0
+	assert bare.settings.preset_id == 'default' && bare.settings.glass_color == 0
 	assert app_state_from_peer(bare, oldest, 0, luna.settings) == luna
 	// Windows 7 still reaches a program that knows it but not Windows XP.
 	glass := AppWireState{
 		settings:        Settings{
-			theme:       .windows7
+			preset_id:       'windows7'
 			glass_color: 4
 		}
 		requested_scale: desktop_scale_100
@@ -1084,21 +1084,21 @@ fn test_windows_xp_theme_is_kept_from_programs_built_before_it() {
 	app_compositor_extended = 0
 	begin_frame_elements()
 	for element in app.theme_pane(480) {
-		assert element.id != 'settings.theme.3'
+		assert element.id != '${settings_action_theme}${registry_index_of('windowsxp')}'
 	}
-	app.handle('${settings_action_theme}3') or { panic(err) }
-	assert desktop.settings.theme == .default_
+	app.handle('${settings_action_theme}${registry_index_of('windowsxp')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'default'
 	app_compositor_extended = app_extended
-	app.handle('${settings_action_theme}3') or { panic(err) }
-	assert desktop.settings.theme == .windows_xp
+	app.handle('${settings_action_theme}${registry_index_of('windowsxp')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'windowsxp'
 }
 
 fn test_theme_and_glass_colour_share_one_wire_field() {
-	for theme in [ThemeKind.default_, ThemeKind.macos, ThemeKind.windows7, ThemeKind.windows_xp]! {
+	for theme in ['default', 'macos', 'windows7', 'windowsxp']! {
 		for glass in [0, 7, 15]! {
 			state := AppWireState{
 				settings:        Settings{
-					theme:       theme
+					preset_id:   theme
 					glass_color: glass
 				}
 				requested_scale: desktop_scale_100
@@ -1110,15 +1110,17 @@ fn test_theme_and_glass_colour_share_one_wire_field() {
 			}
 			decoded := wire_take_state(mut reader) or { panic(err) }
 			assert reader.index == encoded.len
-			assert decoded.settings.theme == theme
+			assert decoded.settings.preset_id == theme
 			assert decoded.settings.glass_color == glass
 		}
 	}
 	// What a desktop built before the colour existed sends is still a theme.
-	assert wire_theme(Settings{ theme: .macos }) == 1
+	assert wire_theme(Settings{ preset_id: 'macos' }) == registry_index_of('macos')
 	assert wire_theme_valid(0) && wire_theme_valid(1) && wire_theme_valid(2 | (15 << 8))
 	assert wire_theme_valid(3) && wire_theme_valid(3 | (15 << 8))
-	assert !wire_theme_valid(4) && !wire_theme_valid(-1) && !wire_theme_valid(16 << 8)
+	assert wire_theme_valid(lookandfeel_registry.len - 1)
+	assert !wire_theme_valid(lookandfeel_registry.len) && !wire_theme_valid(-1)
+		&& !wire_theme_valid(16 << 8)
 }
 
 fn test_settings_missing_offline_readonly_and_stale_hits() {
@@ -1231,4 +1233,60 @@ fn test_settings_wifi_failures_stale_targets_and_narrow_layout() {
 	if _ := element_named(narrow, settings_wifi_toggle) {
 		assert false, 'offscreen Wi-Fi controls must not become hit targets'
 	}
+}
+
+// G3: the theme picker lists the registered presets in display order, selecting
+// one re-resolves live, and the wallpaper override shows inherited-vs-overridden
+// with a working per-setting reset that returns it to inherited.
+fn test_theme_picker_override_and_reset() {
+	mut desktop := &Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 800
+		}
+	}
+	mut app := &SettingsApp{
+		desktop: desktop
+		category: .theme
+	}
+	root := app.build(ui2.rect(0, 0, 620, 376)) or { panic(err) }
+
+	// (a) the picker lists exactly the registered presets, in order.
+	for i, lnf in lookandfeel_registry {
+		choice := element_named(root, '${settings_action_theme}${i}') or {
+			panic('missing preset choice ${i}')
+		}
+		assert choice.text == lnf.name
+	}
+
+	// (b) selecting a preset updates preset_id and re-resolves live.
+	mut blue_index := -1
+	for i, lnf in lookandfeel_registry {
+		if lnf.id == 'blue' {
+			blue_index = i
+		}
+	}
+	assert blue_index >= 0
+	app.handle('${settings_action_theme}${blue_index}') or { panic(err) }
+	assert desktop.settings.preset_id == 'blue'
+	assert desktop.behavior().shade_enabled // Blue enables shade — live re-resolve
+
+	// (c) with no wallpaper override the status reads "inherited" and no reset
+	// control is shown.
+	assert !wallpaper_is_overridden(desktop.settings)
+	inherited := app.build(ui2.rect(0, 0, 620, 376)) or { panic(err) }
+	assert element_named(inherited, settings_action_reset_wallpaper) == none
+
+	// Choosing a wallpaper colour is an override; the reset control appears.
+	app.handle('${settings_action_color}3') or { panic(err) }
+	assert desktop.settings.wallpaper_color == 3
+	assert wallpaper_is_overridden(desktop.settings)
+	over := app.build(ui2.rect(0, 0, 620, 376)) or { panic(err) }
+	assert element_named(over, settings_action_reset_wallpaper) != none
+
+	// The reset clears the override so the field re-inherits.
+	app.handle(settings_action_reset_wallpaper) or { panic(err) }
+	assert desktop.settings.wallpaper_image == -1
+	assert desktop.settings.wallpaper_color == 0
+	assert !wallpaper_is_overridden(desktop.settings)
 }

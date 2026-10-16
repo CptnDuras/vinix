@@ -21,9 +21,11 @@ import os
 import desktop.sessioncore
 
 const app_protocol_magic = u32(0x56415050) // VAPP
-const app_protocol_version = u8(11)
-const app_request_header_size = 152
-const app_response_header_size = 144
+// Version 13 carries both the power fields (11) and the Blue per-axis
+// overrides and skin (12): 136 bytes of header, plus 16, plus 128.
+const app_protocol_version = u8(13)
+const app_request_header_size = 280
+const app_response_header_size = 272
 const app_protocol_max_payload = 16 * 1024 * 1024
 const app_protocol_max_string = 64 * 1024
 const app_protocol_max_elements = 16 * 1024
@@ -205,6 +207,70 @@ fn wire_put_i32(mut out []u8, value int) {
 	wire_put_u32(mut out, u32(value))
 }
 
+// wire_put_opt_i32 encodes an optional int as (is_set, value): is_set=1 followed
+// by the value when some, is_set=0 followed by 0 when none. The pair is fixed
+// width so the reader always advances two i32s.
+fn wire_put_opt_i32(mut out []u8, value ?int) {
+	if v := value {
+		wire_put_i32(mut out, 1)
+		wire_put_i32(mut out, v)
+	} else {
+		wire_put_i32(mut out, 0)
+		wire_put_i32(mut out, 0)
+	}
+}
+
+// opt_bool_i32 / opt_*_i32 project a typed optional into an ?int for the wire.
+fn opt_bool_i32(value ?bool) ?int {
+	v := value or { return none }
+	return if v { 1 } else { 0 }
+}
+
+fn opt_title_align_i32(value ?TitleAlign) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_title_kind_i32(value ?TitleKind) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_menu_placement_i32(value ?MenuPlacement) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_title_action_i32(value ?TitleAction) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+fn opt_icon_source_i32(value ?IconSource) ?int {
+	v := value or { return none }
+	return int(v)
+}
+
+// opt_in_range is true for none, and for a value within [low, high].
+fn opt_in_range(value WireOptInt, low int, high int) bool {
+	return !value.set || (value.value >= low && value.value <= high)
+}
+
+// opt_flag and opt_enum turn a range-checked wire value back into its type.
+fn opt_flag(value WireOptInt) ?bool {
+	if !value.set {
+		return none
+	}
+	return value.value == 1
+}
+
+fn opt_enum[T](value WireOptInt) ?T {
+	if !value.set {
+		return none
+	}
+	return unsafe { T(value.value) }
+}
+
 fn wire_put_u64(mut out []u8, value u64) {
 	for shift := 0; shift < 64; shift += 8 {
 		out << u8(value >> shift)
@@ -242,6 +308,34 @@ fn (mut r WireReader) take_u32() !u32 {
 
 fn (mut r WireReader) take_i32() !int {
 	return int(i32(r.take_u32()!))
+}
+
+// WireOptInt is an optional int as it comes off the wire, before it is range
+// checked and turned into its typed option.
+struct WireOptInt {
+	set   bool
+	value int
+}
+
+fn (o WireOptInt) opt() ?int {
+	if !o.set {
+		return none
+	}
+	return o.value
+}
+
+// take_opt_i32 reads what wire_put_opt_i32 wrote: a flag of 1 or 0 and a value.
+// Any other flag is an error.
+fn (mut r WireReader) take_opt_i32() !WireOptInt {
+	flag := r.take_i32()!
+	value := r.take_i32()!
+	if flag != 0 && flag != 1 {
+		return error('invalid optional application state')
+	}
+	return WireOptInt{
+		set:   flag == 1
+		value: value
+	}
 }
 
 fn (mut r WireReader) take_u64() !u64 {
@@ -298,22 +392,24 @@ fn wire_taskbar_valid(value int) bool {
 		&& (value & ~(wire_taskbar_mode_mask | wire_taskbar_overview | wire_taskbar_workspaces)) == 0
 }
 
+// The low byte is the look-and-feel registry index, as it was for the theme
+// enum before: registry_id_at() maps it back to a preset id.
 fn wire_theme(settings Settings) int {
-	return int(settings.theme) | (settings.glass_color << wire_theme_glass_shift)
+	return registry_index_of(settings.preset_id) | (settings.glass_color << wire_theme_glass_shift)
 }
 
 fn wire_theme_valid(value int) bool {
 	kind := value & wire_theme_kind_mask
 	glass := value >> wire_theme_glass_shift
-	return value >= 0 && kind <= int(ThemeKind.windows_xp) && glass < glass_colors.len
+	return value >= 0 && kind < lookandfeel_registry.len && glass < glass_colors.len
 }
 
 // app_theme_hidden says whether a program with these features cannot read
 // this theme: Windows 7 without app_feature_glass, Windows XP without
 // app_extended_luna.
-fn app_theme_hidden(theme ThemeKind, peer_features u8, peer_extended u32) bool {
-	return (theme == .windows7 && peer_features & app_feature_glass == 0)
-		|| (theme == .windows_xp && peer_extended & app_extended_luna == 0)
+fn app_theme_hidden(preset_id string, peer_features u8, peer_extended u32) bool {
+	return (preset_id == 'windows7' && peer_features & app_feature_glass == 0)
+		|| (preset_id == 'windows_xp' && peer_extended & app_extended_luna == 0)
 }
 
 // Strip theme and taskbar fields a peer cannot read while keeping the same
@@ -321,7 +417,7 @@ fn app_theme_hidden(theme ThemeKind, peer_features u8, peer_extended u32) bool {
 fn app_state_for_peer(state AppWireState, peer_features u8, peer_extended u32) AppWireState {
 	glass := peer_features & app_feature_glass != 0
 	taskbar := peer_extended & app_extended_taskbar_visibility != 0
-	hidden := app_theme_hidden(state.settings.theme, peer_features, peer_extended)
+	hidden := app_theme_hidden(state.settings.preset_id, peer_features, peer_extended)
 	if glass && !hidden && taskbar {
 		return state
 	}
@@ -329,7 +425,7 @@ fn app_state_for_peer(state AppWireState, peer_features u8, peer_extended u32) A
 		...state
 		settings: Settings{
 			...state.settings
-			theme:       if hidden { ThemeKind.default_ } else { state.settings.theme }
+			preset_id:   if hidden { default_preset_id } else { state.settings.preset_id }
 			glass_color: if glass { state.settings.glass_color } else { 0 }
 			taskbar_show_overview: taskbar && state.settings.taskbar_show_overview
 			taskbar_show_workspaces: taskbar && state.settings.taskbar_show_workspaces
@@ -342,7 +438,7 @@ fn app_state_for_peer(state AppWireState, peer_features u8, peer_extended u32) A
 fn app_state_from_peer(state AppWireState, peer_features u8, peer_extended u32, current Settings) AppWireState {
 	glass := peer_features & app_feature_glass != 0
 	taskbar := peer_extended & app_extended_taskbar_visibility != 0
-	hidden := app_theme_hidden(current.theme, peer_features, peer_extended)
+	hidden := app_theme_hidden(current.preset_id, peer_features, peer_extended)
 	if glass && !hidden && taskbar {
 		return state
 	}
@@ -350,10 +446,10 @@ fn app_state_from_peer(state AppWireState, peer_features u8, peer_extended u32, 
 		...state
 		settings: Settings{
 			...state.settings
-			theme:       if hidden && state.settings.theme == .default_ {
-				current.theme
+			preset_id:   if hidden && state.settings.preset_id == default_preset_id {
+				current.preset_id
 			} else {
-				state.settings.theme
+				state.settings.preset_id
 			}
 			glass_color: if glass { state.settings.glass_color } else { current.glass_color }
 			taskbar_show_overview: if taskbar { state.settings.taskbar_show_overview } else { current.taskbar_show_overview }
@@ -379,6 +475,25 @@ fn wire_put_state(mut out []u8, state AppWireState) {
 	wire_put_i32(mut out, state.settings.sleep_minutes)
 	wire_put_i32(mut out, int(state.settings.lid_action))
 	wire_put_i32(mut out, int(state.settings.power_profile))
+	// Per-axis overrides (Blue spec G3): each carried as (is_set, value) so a
+	// none override transmits as is_set=0 and re-inherits on the far side.
+	wire_put_opt_i32(mut out, state.settings.ov_window_radius)
+	wire_put_opt_i32(mut out, opt_title_align_i32(state.settings.ov_title_align))
+	wire_put_opt_i32(mut out, state.settings.ov_ui_size)
+	wire_put_opt_i32(mut out, state.settings.ov_title_size)
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_shade_enabled))
+	wire_put_opt_i32(mut out, opt_menu_placement_i32(state.settings.ov_menu_placement))
+	wire_put_opt_i32(mut out, opt_title_action_i32(state.settings.ov_title_double_click))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_top_bar))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_bottom_bar))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_window_list))
+	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_icons_visible))
+	wire_put_opt_i32(mut out, opt_icon_source_i32(state.settings.ov_icon_source))
+	// Window chrome (Blue spec B5).
+	wire_put_opt_i32(mut out, opt_title_kind_i32(state.settings.ov_title_kind))
+	wire_put_opt_i32(mut out, opt_title_align_i32(state.settings.ov_tab_align))
+	wire_put_opt_i32(mut out, state.settings.ov_widgets)
+	wire_put_opt_i32(mut out, skin_wire_value(state.settings.skin_id))
 	wire_put_i32(mut out, state.requested_scale)
 	wire_put_u32(mut out, state.capture_request.sequence)
 	wire_put_i32(mut out, int(state.capture_request.command))
@@ -416,6 +531,23 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 	sleep_minutes := reader.take_i32()!
 	lid_action := reader.take_i32()!
 	power_profile := reader.take_i32()!
+	// Per-axis overrides (Blue spec G3), in the same order they were written.
+	ov_window_radius := reader.take_opt_i32()!
+	ov_title_align_raw := reader.take_opt_i32()!
+	ov_ui_size := reader.take_opt_i32()!
+	ov_title_size := reader.take_opt_i32()!
+	ov_shade_enabled_raw := reader.take_opt_i32()!
+	ov_menu_placement_raw := reader.take_opt_i32()!
+	ov_title_double_click_raw := reader.take_opt_i32()!
+	ov_has_top_bar_raw := reader.take_opt_i32()!
+	ov_has_bottom_bar_raw := reader.take_opt_i32()!
+	ov_has_window_list_raw := reader.take_opt_i32()!
+	ov_icons_visible_raw := reader.take_opt_i32()!
+	ov_icon_source_raw := reader.take_opt_i32()!
+	ov_title_kind_raw := reader.take_opt_i32()!
+	ov_tab_align_raw := reader.take_opt_i32()!
+	ov_widgets_raw := reader.take_opt_i32()!
+	skin_raw := reader.take_opt_i32()!
 	requested_scale := reader.take_i32()!
 	capture_sequence := reader.take_u32()!
 	capture_command := reader.take_i32()!
@@ -444,6 +576,19 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 		|| lid_action < int(LidAction.suspend) || lid_action > int(LidAction.ignore)
 		|| power_profile < int(PowerProfile.automatic)
 		|| power_profile > int(PowerProfile.power_saver)
+		|| !opt_in_range(ov_title_align_raw, int(TitleAlign.left), int(TitleAlign.right))
+		|| !opt_in_range(ov_shade_enabled_raw, 0, 1)
+		|| !opt_in_range(ov_menu_placement_raw, int(MenuPlacement.global_), int(MenuPlacement.none_))
+		|| !opt_in_range(ov_title_double_click_raw, int(TitleAction.shade), int(TitleAction.none_))
+		|| !opt_in_range(ov_has_top_bar_raw, 0, 1)
+		|| !opt_in_range(ov_has_bottom_bar_raw, 0, 1)
+		|| !opt_in_range(ov_has_window_list_raw, 0, 1)
+		|| !opt_in_range(ov_icons_visible_raw, 0, 1)
+		|| !opt_in_range(ov_icon_source_raw, int(IconSource.shortcuts), int(IconSource.files))
+		|| !opt_in_range(ov_title_kind_raw, int(TitleKind.full), int(TitleKind.tab))
+		|| !opt_in_range(ov_tab_align_raw, int(TitleAlign.left), int(TitleAlign.right))
+		|| !opt_in_range(ov_widgets_raw, 0, 0x0fffffff)
+		|| !opt_in_range(skin_raw, 0, 4096)
 		|| !desktop_scale_valid(requested_scale)
 		|| capture_command < int(CaptureCommand.none_)
 		|| capture_command > int(CaptureCommand.stop) || capture_delay < 0
@@ -460,7 +605,7 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 			taskbar_mode:       unsafe { TaskbarMode(taskbar_mode & wire_taskbar_mode_mask) }
 			taskbar_show_overview: taskbar_mode & wire_taskbar_overview != 0
 			taskbar_show_workspaces: taskbar_mode & wire_taskbar_workspaces != 0
-			theme:              unsafe { ThemeKind(theme & wire_theme_kind_mask) }
+			preset_id:          registry_id_at(theme & wire_theme_kind_mask)
 			glass_color:        theme >> wire_theme_glass_shift
 			language:           unsafe { DesktopLanguage(language) }
 			clock_24_hour:      clock_24_hour == 1
@@ -475,6 +620,22 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 			sleep_minutes:       sleep_minutes
 			lid_action:          unsafe { LidAction(lid_action) }
 			power_profile:       unsafe { PowerProfile(power_profile) }
+			ov_window_radius:   ov_window_radius.opt()
+			ov_title_align:    opt_enum[TitleAlign](ov_title_align_raw)
+			ov_ui_size:         ov_ui_size.opt()
+			ov_title_size:      ov_title_size.opt()
+			ov_shade_enabled:   opt_flag(ov_shade_enabled_raw)
+			ov_menu_placement:  opt_enum[MenuPlacement](ov_menu_placement_raw)
+			ov_title_double_click: opt_enum[TitleAction](ov_title_double_click_raw)
+			ov_has_top_bar:     opt_flag(ov_has_top_bar_raw)
+			ov_has_bottom_bar:  opt_flag(ov_has_bottom_bar_raw)
+			ov_has_window_list: opt_flag(ov_has_window_list_raw)
+			ov_icons_visible:   opt_flag(ov_icons_visible_raw)
+			ov_icon_source:     opt_enum[IconSource](ov_icon_source_raw)
+			ov_title_kind:      opt_enum[TitleKind](ov_title_kind_raw)
+			ov_tab_align:       opt_enum[TitleAlign](ov_tab_align_raw)
+			ov_widgets:         ov_widgets_raw.opt()
+			skin_id:            skin_from_wire(skin_raw.opt())
 		}
 		requested_scale: requested_scale
 		capture_request: CaptureRequest{
@@ -927,7 +1088,7 @@ fn apply_app_state(mut desktop Desktop, state AppWireState) {
 	}
 	language_changed := desktop.settings.language != state.settings.language
 	// Every window's frame, the taskbar and their glass follow the theme.
-	theme_changed := desktop.settings.theme != state.settings.theme
+	theme_changed := desktop.settings.preset_id != state.settings.preset_id
 		|| desktop.settings.glass_color != state.settings.glass_color
 	desktop.settings = state.settings
 	desktop.accept_capture_request(state.capture_request)

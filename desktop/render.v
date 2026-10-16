@@ -620,6 +620,9 @@ fn (mut d Desktop) draw_surface(el &ui2.Element, x int, y int, w int, h int, dep
 		d.canvas.blend_round_rect(x, y, w, h, radius, el.box.bg, taskbar_progress_alpha)
 		return
 	}
+	if depth == 1 && el.id.starts_with('win.') && d.draw_tabbed_frame(el, x, y, w, h) {
+		return
+	}
 	floating := (depth == 1 && (el.id.starts_with('win.') || el.id == switcher_panel_id
 		|| el.id == action_start_panel || el.id == taskbar_preview_panel
 		|| el.id == action_tray_flyout || el.id == taskbar_tooltip_id
@@ -676,6 +679,9 @@ fn (mut d Desktop) draw_surface(el &ui2.Element, x int, y int, w int, h int, dep
 	theme := d.theme()
 	if el.id.ends_with('.titlebar') {
 		active := el.box.bg == theme.title_active_bg
+		if d.draw_skinned_bar(active, x, y, w, h) {
+			return
+		}
 		bottom := if active {
 			theme.title_active_bg2
 		} else {
@@ -694,6 +700,11 @@ fn (mut d Desktop) draw_surface(el &ui2.Element, x int, y int, w int, h int, dep
 		}
 		if highlight != 0 {
 			d.canvas.fill_rect(x, y, w, 1, highlight)
+		}
+		// A raised bevel gives the title bar structural depth (Blue spec B3):
+		// light on top/left, dark on bottom/right. Flat looks skip this.
+		if theme.bevel_enabled {
+			d.canvas.bevel_rect(x, y, w, h, .raised, theme.bevel_width, theme.bevel_light, theme.bevel_dark, 0)
 		}
 	}
 }
@@ -724,10 +735,14 @@ fn (mut d Desktop) build_wallpaper(width int, height int) {
 	d.wallpaper_width = width
 	d.wallpaper_height = height
 	d.wallpaper_valid = true
-	if d.settings.wallpaper_image >= 0 {
+	// Blue spec H1: the wallpaper is resolved through the DesktopSurface axis
+	// (preset backdrop, overridable by the user), not read from bare Settings.
+	// Defaults resolve to the plain setting, so an all-none preset is unchanged.
+	surface := d.surface()
+	if surface.wallpaper_image >= 0 {
 		images := list_wallpapers()
-		if d.settings.wallpaper_image < images.len {
-			if image := load_raw_image(images[d.settings.wallpaper_image].file) {
+		if surface.wallpaper_image < images.len {
+			if image := load_raw_image(images[surface.wallpaper_image].file) {
 				d.wallpaper = []u32{len: width * height}
 				image.scale_into(mut d.wallpaper, width, height)
 				unsafe { image.pixels.free() }
@@ -739,8 +754,8 @@ fn (mut d Desktop) build_wallpaper(width int, height int) {
 		}
 	}
 	// A colour, or the fallback when an image will not load.
-	index := if d.settings.wallpaper_color < wallpaper_colors.len {
-		d.settings.wallpaper_color
+	index := if surface.wallpaper_color < wallpaper_colors.len && surface.wallpaper_color >= 0 {
+		surface.wallpaper_color
 	} else {
 		0
 	}
@@ -1225,7 +1240,10 @@ fn (mut d Desktop) draw_catalina_switch(el &ui2.Element, x int, y int, w int, h 
 }
 
 fn (mut d Desktop) draw_button(el &ui2.Element, x int, y int, w int, h int) {
-	if d.settings.theme == .macos {
+	if d.draw_skinned_widget(el, x, y, w, h) {
+		return
+	}
+	if d.settings.is_macos() {
 		match el.kind {
 			.checkbox {
 				d.draw_catalina_checkbox(el, x, y, w, h)
@@ -1255,7 +1273,7 @@ fn (mut d Desktop) draw_button(el &ui2.Element, x int, y int, w int, h int) {
 	// into enlarged square steps. Draw this one tiny, circular control at the
 	// backing-store resolution instead.
 	is_title_button := el.id.ends_with('.close') || el.id.ends_with('.minimize')
-		|| el.id.ends_with('.maximize')
+		|| el.id.ends_with('.maximize') || el.id.ends_with('.shade') || el.id.ends_with('.menu')
 	if el.id == action_start_toggle && d.walk.on_bar && d.walk.kind == .luna {
 		// Windows XP's Start button is all its own: luna.v.
 		d.draw_luna_start(el, x, y, w, h)
@@ -1278,7 +1296,7 @@ fn (mut d Desktop) draw_button(el &ui2.Element, x int, y int, w int, h int) {
 		el.text_style.color
 	}
 	if (el.kind == .button || el.kind == .toggle_button) && el.native_style
-		&& d.settings.theme == .macos {
+		&& d.settings.is_macos() {
 		text_color = d.draw_catalina_button(el, x, y, w, h)
 	} else if !el.box.transparent && d.walk.kind != .flat && (d.walk.on_bar || d.walk.on_menu) {
 		control_box := if el.kind == .toggle_button && el.checked {
@@ -1461,6 +1479,16 @@ fn (mut d Desktop) draw_builtin_glyph(path string, x int, y int, w int, h int, c
 		}
 		'minimize' {
 			d.canvas.fill_rect(cx - half, cy, 2 * half, 1, color)
+		}
+		'shade' {
+			// A bar over a shorter one: the window rolled up to its title.
+			d.canvas.fill_rect(cx - half, cy - half, 2 * half, 2, color)
+			d.canvas.fill_rect(cx - half, cy + 1, 2 * half, 1, color)
+		}
+		'window_menu' {
+			d.canvas.fill_rect(cx - half, cy - half, 2 * half, 1, color)
+			d.canvas.fill_rect(cx - half, cy, 2 * half, 1, color)
+			d.canvas.fill_rect(cx - half, cy + half, 2 * half, 1, color)
 		}
 		'traffic_minimize' {
 			// The Catalina collapse mark is a 6x2 dash in a 12-pixel disc.
@@ -2155,10 +2183,16 @@ fn (mut d Desktop) draw_cursor() {
 		}
 		break
 	}
-	if d.settings.theme == .macos {
+	if d.settings.is_macos() {
 		d.draw_catalina_cursor()
 		return
 	}
+	// B4: the cursor colours come from the resolved Decor axis so a preset can
+	// retheme the pointer. Defaults resolve to today's cursor_fill/cursor_edge,
+	// so an all-none preset is pixel-identical.
+	decor := d.decor()
+	fill := decor.cursor_fill
+	edge := decor.cursor_edge
 	// Keep a visible cursor even while /dev/pointer is between reports (or is
 	// temporarily unavailable). The desktop has a useful initial position at
 	// its centre, and hiding that position makes a working QEMU tablet appear
@@ -2184,10 +2218,43 @@ fn (mut d Desktop) draw_cursor() {
 	for row, line in cursor_mask {
 		for col := 0; col < line.len; col++ {
 			match line[col] {
-				`#` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, cursor_edge, 255) }
-				`.` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, cursor_fill, 255) }
+				`#` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, edge, 255) }
+				`.` { d.canvas.blend_pixel(d.pointer_x + col, d.pointer_y + row, fill, 255) }
 				else {}
 			}
 		}
 	}
+}
+
+// draw_tabbed_frame paints the shadow and edge of a window whose title is a tab
+// rather than a bar across it (BeOS): the body and the tab are two rectangles,
+// and the frame itself, which also spans the empty strip beside the tab, paints
+// nothing of its own. It reports whether it took the frame.
+fn (mut d Desktop) draw_tabbed_frame(el &ui2.Element, x int, y int, w int, h int) bool {
+	if d.settings.is_macos() || d.chrome_spec().kind != .tab {
+		return false
+	}
+	title_h := d.theme().title_height
+	mut tab_left := 0
+	mut tab_width := 0
+	for child in el.children {
+		if child.id.ends_with('.titlebar') {
+			tab_left = int(child.frame.x)
+			tab_width = int(child.frame.width)
+		}
+	}
+	if tab_width == 0 {
+		return false
+	}
+	edge := d.theme().window_edge
+	alpha := d.theme().shadow_alpha
+	if h > title_h {
+		d.canvas.drop_shadow_behind(x, y + title_h, w, h - title_h, 0, 7, alpha)
+	}
+	d.canvas.drop_shadow_behind(x + tab_left, y, tab_width, title_h, 0, 7, alpha)
+	if h > title_h {
+		d.canvas.stroke_round_rect(x, y + title_h, w, h - title_h, 0, edge, 190)
+	}
+	d.canvas.stroke_round_rect(x + tab_left, y, tab_width, title_h, 0, edge, 190)
+	return true
 }

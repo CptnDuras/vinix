@@ -45,10 +45,10 @@ fn test_plain_cursor_motion_keeps_the_scene_and_hover_unchanged() {
 }
 
 fn test_partial_updates_and_cursor_motion_match_complete_frames() {
-	for theme in [ThemeKind.default_, .macos, .windows7] {
+	for theme in ['default', 'macos', 'windows7'] {
 		for scale in [1, 2] {
 			mut d := Desktop{ canvas: new_scaled_canvas(160, 100, 160 * scale, 100 * scale, scale), pointer_x: 12, pointer_y: 14 }
-			d.settings.theme = theme
+			d.settings.preset_id = theme
 			d.settings.wallpaper_image = -1
 			initial := cursor_test_tree(0x112233)
 			d.render_clipped(initial, d.damage_clip(d.canvas_damage()), false)

@@ -140,13 +140,13 @@ fn test_window_chrome_borrows_strings_when_toolbars_move_between_themes() {
 	mut desktop := memory_fixture_desktop()
 	// Both layouts retain different frame-pool capacities. Warm each before
 	// measuring title-bar transfer and use the hit table after the tree is freed.
-	for theme in [ThemeKind.default_, ThemeKind.macos]! {
-		desktop.settings.theme = theme
+	for theme in ['default', 'macos']! {
+		desktop.settings.preset_id = theme
 		render_and_release(mut desktop)
 	}
 	C.vinix_heap_begin()
 	for iteration in 0 .. 40 {
-		desktop.settings.theme = if iteration % 2 == 0 { .default_ } else { .macos }
+		desktop.settings.preset_id = if iteration % 2 == 0 { 'default' } else { 'macos' }
 		render_and_release(mut desktop)
 		mut chrome_targets := 0
 		for target in desktop.targets {
@@ -184,7 +184,7 @@ fn glass_memory_frames(mut desktop Desktop) {
 
 fn test_glass_redraws_keep_only_their_backdrops() {
 	mut desktop := memory_fixture_desktop()
-	desktop.settings.theme = .windows7
+	desktop.settings.preset_id = 'windows7'
 	// The first pass allocates what glass keeps: each surface's backdrop at
 	// the largest size it reaches, the blur's work space, and the frame
 	// pool's capacity for these layouts. None of it is a reason to allocate
@@ -210,7 +210,7 @@ fn test_glass_redraws_keep_only_their_backdrops() {
 	render_and_release(mut desktop)
 	assert glass_memory_backdrops(&desktop) == backdrops - 1
 	// And another theme has no use for any of them.
-	desktop.settings.theme = .default_
+	desktop.settings.preset_id = 'default'
 	render_and_release(mut desktop)
 	assert !desktop.glass.allocated
 	assert glass_memory_backdrops(&desktop) == 0
@@ -218,7 +218,7 @@ fn test_glass_redraws_keep_only_their_backdrops() {
 
 fn test_luna_redraws_release_all_temporary_allocations() {
 	mut desktop := memory_fixture_desktop()
-	desktop.settings.theme = .windows_xp
+	desktop.settings.preset_id = 'windowsxp'
 	// Warm the frame pool for this layout, with the Start menu open and shut.
 	for open in [false, true, false] {
 		desktop.start_menu_open = open
@@ -256,7 +256,7 @@ fn luna_memory_hover(mut desktop Desktop, action string) {
 
 fn test_luna_start_menu_redraws_release_all_temporary_allocations() {
 	mut desktop := memory_fixture_desktop()
-	desktop.settings.theme = .windows_xp
+	desktop.settings.preset_id = 'windowsxp'
 	desktop.start_pins = [2]
 	// Warm the frame pool for each of the menu's layouts before measuring.
 	desktop.toggle_start_menu()
@@ -315,7 +315,7 @@ fn test_luna_start_menu_redraws_release_all_temporary_allocations() {
 
 fn test_luna_taskbar_redraws_release_all_temporary_allocations() {
 	mut desktop := memory_fixture_desktop()
-	desktop.settings.theme = .windows_xp
+	desktop.settings.preset_id = 'windowsxp'
 	desktop.settings.keyboard_layouts = 3
 	desktop.pinned_apps = [0, 3]
 	task := desktop.windows[0].id_task

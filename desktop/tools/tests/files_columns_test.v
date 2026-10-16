@@ -178,7 +178,7 @@ fn test_horizontal_swipes_pan_columns_in_both_themes_without_scrolling_rows() {
 		files_follow_theme(.default_)
 		os.rmdir_all(root) or {}
 	}
-	for theme in [ThemeKind.default_, .macos] {
+	for theme in ['default', 'macos'] {
 		files_follow_theme(theme)
 		mut app := FilesContextApp{}
 		app.files.browser.read(root.clone())

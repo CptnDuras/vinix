@@ -8,6 +8,10 @@ module main
 fn set_titlebar_test_target(mut desktop Desktop, id int) {
 	index := desktop.window_index(id) or { panic('missing test window') }
 	window := desktop.windows[index]
+	// Each press here stands alone; presses a few microseconds apart must not
+	// count as a double-click on the title bar.
+	desktop.last_title_click_ms = 0
+	desktop.last_title_click_window = 0
 	target := HitTarget{
 		action_id: 'win.${id}.titlebar'
 		x: window.x
@@ -336,14 +340,14 @@ fn record_window_test_targets(mut desktop Desktop, id int) {
 
 fn test_every_corner_of_a_normal_window_is_a_resize_grip() {
 	for side in [ButtonSide.right, ButtonSide.left] {
-		for theme in [ThemeKind.default_, ThemeKind.macos] {
+		for theme in ['default', 'macos'] {
 			mut desktop := Desktop{
 				canvas: Canvas{
 					width:  800
 					height: 600
 				}
 			}
-			desktop.settings.theme = theme
+			desktop.settings.preset_id = theme
 			desktop.settings.button_side = side
 			id := desktop.spawn('Welcome', .welcome, 120, 80, 400, 260)
 			record_window_test_targets(mut desktop, id)

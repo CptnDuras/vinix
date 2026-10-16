@@ -296,6 +296,10 @@ if [ -d "$BUILD_DIR/wallpapers" ]; then
         "$BUILD_DIR/wallpapers"/SOURCES.txt \
         "$STAGING/usr/share/vinix/wallpapers/" 2>/dev/null || true
 fi
+echo "==> Skins..."
+mkdir -p "$STAGING/usr/share/vinix/skins"
+python3 "$SCRIPT_DIR/desktop/tools/build_skins.py" "$SCRIPT_DIR/desktop/skins" \
+    "$STAGING/usr/share/vinix/skins" || true
 (
     # The V migration may leave no handwritten C sources to ship.
     shopt -s nullglob

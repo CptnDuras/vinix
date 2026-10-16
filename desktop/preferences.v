@@ -29,15 +29,132 @@ fn (p DesktopPreferences) configure_scale(width int, height int) int {
 	return p.scale
 }
 
+// A preset id is one word in the preferences file, so it can hold neither
+// whitespace nor a line break.
+fn desktop_preset_id_valid(id string) bool {
+	if id.len == 0 || id.len > 32 {
+		return false
+	}
+	for ch in id {
+		if !(ch.is_letter() || ch.is_digit() || ch == `_` || ch == `-`) {
+			return false
+		}
+	}
+	return true
+}
+
+// The per-axis overrides a user has set (Blue spec A3/G3). A key is written
+// only while its override is set, and an absent key inherits the preset.
+const desktop_override_keys = ['ov_window_radius', 'ov_title_align', 'ov_ui_size', 'ov_title_size',
+	'ov_shade_enabled', 'ov_menu_placement', 'ov_title_double_click', 'ov_has_top_bar',
+	'ov_has_bottom_bar', 'ov_has_window_list', 'ov_icons_visible', 'ov_icon_source', 'ov_title_kind', 'ov_tab_align',
+	'ov_widgets']
+
+// The duplicate-detection bit of an override key, after the fixed keys' bits;
+// zero for a key that is not an override.
+fn desktop_override_bit(key string) u64 {
+	for index, name in desktop_override_keys {
+		if name == key {
+			return u64(1) << (21 + u64(index))
+		}
+	}
+	return 0
+}
+
+// desktop_parse_override applies one override line; none for a bad value.
+fn desktop_parse_override(mut s Settings, key string, value string) ?bool {
+	match key {
+		'ov_window_radius' { s.ov_window_radius = desktop_preference_index(value)? }
+		'ov_title_align' { s.ov_title_align = title_align_from(value)? }
+		'ov_ui_size' { s.ov_ui_size = desktop_preference_index(value)? }
+		'ov_title_size' { s.ov_title_size = desktop_preference_index(value)? }
+		'ov_shade_enabled' { s.ov_shade_enabled = bool_from(value)? }
+		'ov_menu_placement' { s.ov_menu_placement = menu_placement_from(value)? }
+		'ov_title_double_click' { s.ov_title_double_click = title_action_from(value)? }
+		'ov_has_top_bar' { s.ov_has_top_bar = bool_from(value)? }
+		'ov_has_bottom_bar' { s.ov_has_bottom_bar = bool_from(value)? }
+		'ov_has_window_list' { s.ov_has_window_list = bool_from(value)? }
+		'ov_icons_visible' { s.ov_icons_visible = bool_from(value)? }
+		'ov_icon_source' { s.ov_icon_source = icon_source_from(value)? }
+		'ov_title_kind' { s.ov_title_kind = title_kind_from(value)? }
+		'ov_tab_align' { s.ov_tab_align = title_align_from(value)? }
+		'ov_widgets' {
+			list := widgets_from_text(value)?
+			s.ov_widgets = int(widgets_pack(list))
+		}
+		else {}
+	}
+	return true
+}
+
+// desktop_encode_overrides writes the overrides that are set, one per line.
+fn desktop_encode_overrides(s Settings) string {
+	mut out := ''
+	if v := s.ov_window_radius {
+		out += 'ov_window_radius=${v}\n'
+	}
+	if v := s.ov_title_align {
+		out += 'ov_title_align=${title_align_name(v)}\n'
+	}
+	if v := s.ov_ui_size {
+		out += 'ov_ui_size=${v}\n'
+	}
+	if v := s.ov_title_size {
+		out += 'ov_title_size=${v}\n'
+	}
+	if v := s.ov_shade_enabled {
+		out += 'ov_shade_enabled=${bool_name(v)}\n'
+	}
+	if v := s.ov_menu_placement {
+		out += 'ov_menu_placement=${menu_placement_name(v)}\n'
+	}
+	if v := s.ov_title_double_click {
+		out += 'ov_title_double_click=${title_action_name(v)}\n'
+	}
+	if v := s.ov_has_top_bar {
+		out += 'ov_has_top_bar=${bool_name(v)}\n'
+	}
+	if v := s.ov_has_bottom_bar {
+		out += 'ov_has_bottom_bar=${bool_name(v)}\n'
+	}
+	if v := s.ov_has_window_list {
+		out += 'ov_has_window_list=${bool_name(v)}\n'
+	}
+	if v := s.ov_icons_visible {
+		out += 'ov_icons_visible=${bool_name(v)}\n'
+	}
+	if v := s.ov_icon_source {
+		out += 'ov_icon_source=${icon_source_name(v)}\n'
+	}
+	if v := s.ov_title_kind {
+		out += 'ov_title_kind=${title_kind_name(v)}\n'
+	}
+	if v := s.ov_tab_align {
+		out += 'ov_tab_align=${title_align_name(v)}\n'
+	}
+	if v := s.ov_widgets {
+		out += 'ov_widgets=${widgets_to_text(widgets_unpack(u32(v)))}\n'
+	}
+	if s.skin_id.len > 0 {
+		out += 'skin=${s.skin_id}\n'
+	}
+	return out
+}
+
 fn desktop_preferences_valid(p DesktopPreferences) bool {
 	return (p.scale == 0 || desktop_scale_valid(p.scale))
 		&& int(p.settings.button_side) >= int(ButtonSide.right)
 		&& int(p.settings.button_side) <= int(ButtonSide.left)
 		&& int(p.settings.taskbar_mode) >= int(TaskbarMode.standard)
 		&& int(p.settings.taskbar_mode) <= int(TaskbarMode.combined)
-		&& int(p.settings.theme) >= int(ThemeKind.default_)
-		&& int(p.settings.theme) <= int(ThemeKind.windows_xp)
+		&& desktop_preset_id_valid(p.settings.preset_id)
 		&& p.settings.glass_color >= 0 && p.settings.glass_color < glass_colors.len
+		&& (p.settings.skin_id.len == 0 || p.settings.skin_id == 'none'
+		|| skin_id_valid(p.settings.skin_id))
+		&& (p.settings.ov_widgets or { 0 }) >= 0 && (p.settings.ov_widgets or { 0 }) <= 0x0fffffff
+		&& (p.settings.ov_window_radius or { 0 }) >= 0 && (p.settings.ov_window_radius or { 0 }) <= 64
+		&& (p.settings.ov_ui_size or { 8 }) >= 8 && (p.settings.ov_ui_size or { 8 }) <= 96
+		&& (p.settings.ov_title_size or { 8 }) >= 8 && (p.settings.ov_title_size or { 8 }) <= 96
 		&& int(p.settings.language) >= 0 && int(p.settings.language) < desktop_languages.len
 		&& p.settings.wallpaper_color >= 0
 		&& p.settings.wallpaper_color < wallpaper_colors.len
@@ -113,12 +230,7 @@ fn desktop_encode_preferences(p DesktopPreferences) ?string {
 	taskbar := if p.settings.taskbar_mode == .combined { 'combined' } else { 'standard' }
 	show_overview := if p.settings.taskbar_show_overview { 'true' } else { 'false' }
 	show_workspaces := if p.settings.taskbar_show_workspaces { 'true' } else { 'false' }
-	theme := match p.settings.theme {
-		.default_ { 'default' }
-		.macos { 'macos' }
-		.windows7 { 'windows7' }
-		.windows_xp { 'windowsxp' }
-	}
+	theme := p.settings.preset_id
 	language := p.settings.language.code()
 	clock_24_hour := if p.settings.clock_24_hour { 'true' } else { 'false' }
 	clock_show_seconds := if p.settings.clock_show_seconds { 'true' } else { 'false' }
@@ -130,7 +242,7 @@ fn desktop_encode_preferences(p DesktopPreferences) ?string {
 	sleep := desktop_encode_idle_timeout(p.settings.sleep_minutes)
 	lid_action := p.settings.lid_action.code()
 	power_profile := p.settings.power_profile.code()
-	record := 'version=1\nscale=${scale}\nbutton_side=${side}\ntaskbar_mode=${taskbar}\ntaskbar_show_overview=${show_overview}\ntaskbar_show_workspaces=${show_workspaces}\ntheme=${theme}\nglass_color=${p.settings.glass_color}\nlanguage=${language}\nclock_24_hour=${clock_24_hour}\nclock_show_seconds=${clock_show_seconds}\nclock_show_date=${clock_show_date}\nclock_show_weekday=${clock_show_weekday}\nwallpaper_color=${p.settings.wallpaper_color}\nwallpaper_image=${p.settings.wallpaper_image}\nkeyboard_layouts=${keyboard_sources}\nkeyboard_layout=${keyboard_layout}\ndisplay_off_after=${display_off}\nsleep_after=${sleep}\nlid_action=${lid_action}\npower_profile=${power_profile}\n'
+	record := 'version=1\nscale=${scale}\nbutton_side=${side}\ntaskbar_mode=${taskbar}\ntaskbar_show_overview=${show_overview}\ntaskbar_show_workspaces=${show_workspaces}\ntheme=${theme}\nglass_color=${p.settings.glass_color}\nlanguage=${language}\nclock_24_hour=${clock_24_hour}\nclock_show_seconds=${clock_show_seconds}\nclock_show_date=${clock_show_date}\nclock_show_weekday=${clock_show_weekday}\nwallpaper_color=${p.settings.wallpaper_color}\nwallpaper_image=${p.settings.wallpaper_image}\nkeyboard_layouts=${keyboard_sources}\nkeyboard_layout=${keyboard_layout}\ndisplay_off_after=${display_off}\nsleep_after=${sleep}\nlid_action=${lid_action}\npower_profile=${power_profile}\n${desktop_encode_overrides(p.settings)}'
 	unsafe {
 		display_off.free()
 		sleep.free()
@@ -171,7 +283,7 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 		return none
 	}
 	mut p := DesktopPreferences{}
-	mut seen := u32(0)
+	mut seen := u64(0)
 	mut start := 0
 	for start < record.len {
 		mut end := start
@@ -190,28 +302,29 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 		key := line[..equals].trim_space()
 		value := line[equals + 1..].trim_space()
 		bit := match key {
-			'version' { u32(1) }
-			'scale' { u32(2) }
-			'button_side' { u32(4) }
-			'taskbar_mode' { u32(8) }
-			'theme' { u32(16) }
-			'wallpaper_color' { u32(32) }
-			'wallpaper_image' { u32(64) }
-			'clock_24_hour' { u32(128) }
-			'clock_show_seconds' { u32(256) }
-			'clock_show_date' { u32(512) }
-			'clock_show_weekday' { u32(1024) }
-			'keyboard_layouts' { u32(2048) }
-			'keyboard_layout' { u32(4096) }
-			'language' { u32(8192) }
-			'display_off_after' { u32(16384) }
-			'sleep_after' { u32(32768) }
-			'lid_action' { u32(65536) }
-			'power_profile' { u32(131072) }
-			'glass_color' { u32(262144) }
-			'taskbar_show_overview' { u32(524288) }
-			'taskbar_show_workspaces' { u32(1048576) }
-			else { u32(0) }
+			'version' { u64(1) }
+			'scale' { u64(2) }
+			'button_side' { u64(4) }
+			'taskbar_mode' { u64(8) }
+			'theme' { u64(16) }
+			'wallpaper_color' { u64(32) }
+			'wallpaper_image' { u64(64) }
+			'clock_24_hour' { u64(128) }
+			'clock_show_seconds' { u64(256) }
+			'clock_show_date' { u64(512) }
+			'clock_show_weekday' { u64(1024) }
+			'keyboard_layouts' { u64(2048) }
+			'keyboard_layout' { u64(4096) }
+			'language' { u64(8192) }
+			'display_off_after' { u64(16384) }
+			'sleep_after' { u64(32768) }
+			'lid_action' { u64(65536) }
+			'power_profile' { u64(131072) }
+			'glass_color' { u64(262144) }
+			'taskbar_show_overview' { u64(524288) }
+			'taskbar_show_workspaces' { u64(1048576) }
+			'skin' { u64(1) << 40 }
+			else { desktop_override_bit(key) }
 		}
 		if seen & bit != 0 {
 			return none
@@ -258,16 +371,21 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 				}
 			}
 			'theme' {
-				p.settings.theme = match value {
-					'default' { ThemeKind.default_ }
-					'macos' { ThemeKind.macos }
-					'windows7' { ThemeKind.windows7 }
-					'windowsxp' { ThemeKind.windows_xp }
-					else { return none }
+				// Older files name only 'default' or 'macos'; every preset id is
+				// kept in the same key, so those read back unchanged.
+				if !desktop_preset_id_valid(value) {
+					return none
 				}
+				p.settings.preset_id = value
 			}
 			'language' {
 				p.settings.language = desktop_language_from_code(value)?
+			}
+			'skin' {
+				if value != 'none' && !skin_id_valid(value) {
+					return none
+				}
+				p.settings.skin_id = value
 			}
 			'clock_24_hour' {
 				p.settings.clock_24_hour = match value {
@@ -306,21 +424,25 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 			'sleep_after' { p.settings.sleep_minutes = desktop_parse_idle_timeout(value)? }
 			'lid_action' { p.settings.lid_action = lid_action_from_code(value)? }
 			'power_profile' { p.settings.power_profile = power_profile_from_code(value)? }
-			else {}
+			else {
+				if bit != 0 {
+					desktop_parse_override(mut p.settings, key, value)?
+				}
+			}
 		}
 	}
 	// A record naming only the current input source enables it beside US, and
 	// one listing only the enabled sources types with the first of them. When
 	// both are named the current one must be among the enabled.
-	if seen & u32(2048) == 0 {
+	if seen & u64(2048) == 0 {
 		p.settings.keyboard_layouts |= p.settings.keyboard_layout.bit()
-	} else if seen & u32(4096) == 0 {
+	} else if seen & u64(4096) == 0 {
 		p.settings.keyboard_layout = keyboard_first_layout(p.settings.keyboard_layouts)
 	}
 	// A record naming one idle timeout has never beside it, which holds with
 	// any time. When both are named they must already agree, as validation
 	// checks.
-	if seen & u32(1) == 0 || !desktop_preferences_valid(p) {
+	if seen & u64(1) == 0 || !desktop_preferences_valid(p) {
 		return none
 	}
 	return p

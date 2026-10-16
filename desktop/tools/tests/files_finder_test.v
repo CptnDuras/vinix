@@ -38,11 +38,11 @@ fn finder_test_home(name string) string {
 fn test_finder_toolbar_leads_the_tree_and_names_the_folder() {
 	root := finder_test_home('vinix-finder-toolbar-test')
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(os.dir(root)) or {}
 	}
 	desktop_use_user_home(root.clone())
-	files_follow_theme(.macos)
+	files_follow_theme(true)
 	mut app := FileBrowserApp{}
 	app.browser.read(root.clone())
 	tree := app.build(ui2.rect(0, 0, 800, 500))!
@@ -65,7 +65,7 @@ fn test_finder_toolbar_leads_the_tree_and_names_the_folder() {
 	assert !home.box.transparent && home.box.bg == finder_sidebar_selected
 	free_tree(tree)
 
-	files_follow_theme(.default_)
+	files_follow_theme(false)
 	plain := app.build(ui2.rect(0, 0, 800, 500))!
 	assert plain.children[0].id != app_toolbar_id
 	assert finder_test_find(plain, files_action_up) != none
@@ -75,12 +75,12 @@ fn test_finder_toolbar_leads_the_tree_and_names_the_folder() {
 fn test_finder_back_and_forward_retrace_the_folders_visited() {
 	root := finder_test_home('vinix-finder-history-test')
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(os.dir(root)) or {}
 	}
 	documents := os.join_path(root, 'Documents')
 	music := os.join_path(root, 'Music')
-	files_follow_theme(.macos)
+	files_follow_theme(true)
 	mut app := FileBrowserApp{}
 	app.browser.read(root.clone())
 	free_tree(app.build(ui2.rect(0, 0, 800, 500))!)
@@ -119,10 +119,10 @@ fn test_finder_back_and_forward_retrace_the_folders_visited() {
 fn test_finder_columns_have_finder_widths_rows_and_selections() {
 	root := finder_test_home('vinix-finder-columns-test')
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(os.dir(root)) or {}
 	}
-	files_follow_theme(.macos)
+	files_follow_theme(true)
 	mut app := FileBrowserApp{}
 	app.browser.read(root.clone())
 	app.set_view_mode(.columns)
@@ -159,11 +159,11 @@ fn test_finder_columns_have_finder_widths_rows_and_selections() {
 fn test_finder_search_narrows_the_folder_until_escape_or_a_move() {
 	root := finder_test_home('vinix-finder-search-test')
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(os.dir(root)) or {}
 	}
 	documents := os.join_path(root, 'Documents')
-	files_follow_theme(.macos)
+	files_follow_theme(true)
 	mut app := FileBrowserApp{}
 	app.browser.read(documents.clone())
 	free_tree(app.build(ui2.rect(0, 0, 800, 500))!)
@@ -214,7 +214,7 @@ fn test_finder_search_narrows_the_folder_until_escape_or_a_move() {
 fn test_macos_window_draws_the_toolbar_in_its_title_bar() {
 	root := finder_test_home('vinix-finder-titlebar-test')
 	defer {
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 		os.rmdir_all(os.dir(root)) or {}
 	}
 	desktop_use_user_home(root.clone())
@@ -224,7 +224,7 @@ fn test_macos_window_draws_the_toolbar_in_its_title_bar() {
 			height: 700
 		}
 	}
-	d.settings.theme = .macos
+	d.settings.preset_id = 'macos'
 	mut app := &FilesContextApp{
 		desktop: &d
 	}
@@ -254,7 +254,7 @@ fn test_macos_window_draws_the_toolbar_in_its_title_bar() {
 	assert frame.children[0].id == window.id_body
 	free_tree(frame)
 
-	d.settings.theme = .default_
+	d.settings.preset_id = 'default'
 	app.follow_theme()
 	plain := d.window_element(index)
 	plain_bar := finder_test_find(plain, window.id_titlebar) or { panic('no title bar') }
@@ -267,15 +267,15 @@ fn test_macos_window_draws_the_toolbar_in_its_title_bar() {
 fn test_finder_look_waits_for_a_compositor_that_can_draw_it() {
 	defer {
 		app_compositor_features = app_features
-		files_follow_theme(.default_)
+		files_follow_theme(false)
 	}
 	// A desktop that predates Finder's toolbar sends no features.
 	app_compositor_features = 0
-	files_follow_theme(.macos)
+	files_follow_theme(true)
 	assert !files_catalina
 	app_compositor_features = app_features
-	files_follow_theme(.macos)
+	files_follow_theme(true)
 	assert files_catalina
-	files_follow_theme(.default_)
+	files_follow_theme(false)
 	assert !files_catalina
 }

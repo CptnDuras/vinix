@@ -9,7 +9,7 @@ fn glass_test_desktop(scale int) Desktop {
 		fonts:  load_fonts_for_scale(scale)
 	}
 	desktop.tray.preferences_loaded = true
-	desktop.settings.theme = .windows7
+	desktop.settings.preset_id = 'windows7'
 	// A fixed time: nothing a comparison renders may tick in between.
 	desktop.update_taskbar_clock_at(1_760_000_000)
 	return desktop
@@ -278,7 +278,7 @@ fn test_glass_is_given_back_under_another_theme() {
 	desktop.spawn('Welcome', .welcome, 100, 60, 300, 220)
 	glass_test_full_frame(mut desktop)
 	assert desktop.glass.allocated
-	desktop.settings.theme = .default_
+	desktop.settings.preset_id = 'default'
 	glass_test_full_frame(mut desktop)
 	assert !desktop.glass.allocated
 	assert !desktop.glass.active
@@ -316,7 +316,7 @@ fn test_application_pointer_is_measured_from_the_body_inside_the_frame() {
 	assert desktop.window_border(&desktop.windows[index]) == 8
 	desktop.toggle_maximize(id)
 	assert desktop.window_border(&desktop.windows[index]) == 0
-	desktop.settings.theme = .macos
+	desktop.settings.preset_id = 'macos'
 	desktop.toggle_maximize(id)
 	assert desktop.window_border(&desktop.windows[index]) == 0
 }

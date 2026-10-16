@@ -400,7 +400,7 @@ fn open_files_with_context_menu(mut desktop Desktop) !NativeApp {
 
 fn (a &FilesContextApp) follow_theme() {
 	if a.desktop != unsafe { nil } {
-		files_follow_theme(a.desktop.settings.theme)
+		files_follow_theme(a.desktop.settings.is_macos())
 	}
 }
 

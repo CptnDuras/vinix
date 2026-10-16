@@ -18,6 +18,7 @@ import desktop.sessioncore
 
 enum SettingsCategory {
 	appearance
+	windows
 	date_time
 	language
 	theme
@@ -48,9 +49,10 @@ enum SettingsCategory {
 // also send these selectors to a newer Settings process.
 const settings_categories = [SettingsCategory.appearance, .date_time, .language, .theme, .wallpaper,
 	.wifi, .display, .battery, .power, .keyboard, .about, .sound, .bluetooth, .printers,
-	.users, .network, .privacy, .storage, .updates, .accessibility, .clock, .session, .shortcuts, .gestures, .taskbar]
+	.users, .network, .privacy, .storage, .updates, .accessibility, .clock, .session, .shortcuts, .gestures, .taskbar,
+	.windows]
 
-const settings_sidebar_categories = [SettingsCategory.appearance, .taskbar, .date_time, .language,
+const settings_sidebar_categories = [SettingsCategory.appearance, .windows, .taskbar, .date_time, .language,
 	.theme, .wallpaper, .wifi, .display, .battery, .power, .keyboard, .about, .sound, .bluetooth,
 	.printers, .users, .network, .privacy, .storage, .updates, .accessibility, .clock, .session,
 	.shortcuts, .gestures]
@@ -59,6 +61,7 @@ fn (c SettingsCategory) title() string {
 	return match c {
 		.appearance { tr('settings.category.appearance') }
 		.taskbar { tr('settings.category.taskbar') }
+		.windows { tr('settings.category.windows') }
 		.date_time { tr('settings.category.date_time') }
 		.language { tr('settings.category.language') }
 		.theme { tr('settings.category.theme') }
@@ -108,6 +111,15 @@ const settings_action_color = 'settings.color.'
 const settings_action_image = 'settings.image.'
 const settings_language_actions = ['settings.language.0', 'settings.language.1', 'settings.language.2',
 	'settings.language.3', 'settings.language.4', 'settings.language.5']!
+const settings_action_title_kind = 'settings.titlekind.'
+const settings_action_tab_align = 'settings.tabalign.'
+const settings_action_widget = 'settings.widget.'
+const settings_action_skin = 'settings.skin.'
+const settings_action_reset_chrome = 'settings.reset.chrome'
+// G3: reset the user's wallpaper override back to the preset/default (the
+// inherited value). The only axis with a live user-override path today is the
+// desktop surface's wallpaper (H1); this is the per-setting reset for it.
+const settings_action_reset_wallpaper = 'settings.reset.wallpaper'
 
 const settings_sidebar_width = 132
 const settings_padding = 16
@@ -288,6 +300,7 @@ fn (a &SettingsApp) pane(width int, height int) []ui2.Element {
 	return match a.category {
 		.appearance { a.appearance_pane(width) }
 		.taskbar { a.taskbar_pane(width) }
+		.windows { a.windows_pane(width) }
 		.date_time { a.date_time_pane(width) }
 		.language { a.language_pane(width) }
 		.theme { a.theme_pane(width) }
@@ -475,55 +488,81 @@ fn (a &SettingsApp) theme_pane(width int) []ui2.Element {
 	// themes that desktop can draw.
 	glass_offered := settings_glass_offered()
 	luna_offered := settings_luna_offered()
-	columns := 2 + if glass_offered { 1 } else { 0 } + if luna_offered { 1 } else { 0 }
-	choice := (inner - (columns - 1) * settings_row_gap) / columns
 
-	mut out := frame_elements(9 + glass_colors.len)
+	mut out := frame_elements(9 + glass_colors.len + 2 * lookandfeel_registry.len)
 	mut y := settings_padding
 
 	out << settings_heading(tr('settings.theme.heading'), y, width)
 	y += 22
 	out << settings_note(tr('settings.theme.note'), y, width)
 	y += 22
-	out << settings_choice('settings.theme.0', tr('settings.theme.default'), settings_padding, y, choice, settings.theme == .default_)
-	out << settings_choice('settings.theme.1', tr('settings.theme.macos'), settings_padding + choice + settings_row_gap, y, choice, settings.theme == .macos)
-	mut slot := 2
-	if glass_offered {
-		out << settings_choice('settings.theme.2', tr('settings.theme.windows7'), settings_padding + slot * (choice + settings_row_gap), y, choice, settings.theme == .windows7)
+	// Registry-driven picker: one choice per registered look, laid out two to a
+	// row. Adding a preset makes it appear here with no change to this code.
+	// Windows 7 and Windows XP are only offered when the desktop can draw them.
+	half := (inner - settings_row_gap) / 2
+	mut slot := 0
+	for i, lnf in lookandfeel_registry {
+		if (lnf.id == 'windows7' && !glass_offered) || (lnf.id == 'windowsxp' && !luna_offered) {
+			continue
+		}
+		col := slot % 2
+		x := if col == 0 { settings_padding } else { settings_padding + half + settings_row_gap }
+		out << settings_choice('${settings_action_theme}${i}', lnf.name, x, y, half,
+			settings.preset_id == lnf.id)
+		if col == 1 {
+			y += 28 + 10
+		}
 		slot++
 	}
-	if luna_offered {
-		out << settings_choice('settings.theme.3', tr('settings.theme.windowsxp'), settings_padding + slot * (choice + settings_row_gap), y, choice, settings.theme == .windows_xp)
+	if slot % 2 == 1 {
+		y += 28 + 10
 	}
-	y += 28 + 10
 
-	// Each description is two lines, broken where the translation breaks it.
-	match settings.theme {
-		.default_ {
-			out << settings_note(tr('settings.theme.default_note_1'), y, width)
-			y += 16
-			out << settings_note(tr('settings.theme.default_note_2'), y, width)
-		}
-		.macos {
-			out << settings_note(tr('settings.theme.macos_note_1'), y, width)
-			y += 16
-			out << settings_note(tr('settings.theme.macos_note_2'), y, width)
-		}
-		.windows7 {
+	// The selected look's own description: the translated pair for Windows 7 and
+	// Windows XP, each description two lines broken where the translation breaks
+	// it, and the registry's for the others.
+	match settings.preset_id {
+		'windows7' {
 			out << settings_note(tr('settings.theme.windows7_note_1'), y, width)
 			y += 16
 			out << settings_note(tr('settings.theme.windows7_note_2'), y, width)
+			y += 22
 		}
-		.windows_xp {
+		'windowsxp' {
 			out << settings_note(tr('settings.theme.windowsxp_note_1'), y, width)
 			y += 16
 			out << settings_note(tr('settings.theme.windowsxp_note_2'), y, width)
+			y += 22
+		}
+		else {
+			selected := lookandfeel_by_id(settings.preset_id)
+			out << settings_note(selected.description, y, width)
+			y += 22
 		}
 	}
-	if settings.theme != .windows7 {
+
+	// G3: inherited-vs-overridden display with a per-setting reset. The
+	// wallpaper is the axis with a live user-override path (H1): show whether
+	// the current wallpaper is inherited from the preset/default or overridden
+	// by the user, and offer a reset that clears the override so it re-inherits.
+	overridden := wallpaper_is_overridden(settings)
+	status := if overridden {
+		tr('settings.wallpaper.overridden')
+	} else {
+		tr('settings.wallpaper.inherited')
+	}
+	out << settings_note(status, y, width)
+	if overridden {
+		// A reset control, right-aligned, enabled only while overridden.
+		reset_w := 132
+		out << settings_choice(settings_action_reset_wallpaper, tr('settings.wallpaper.reset'),
+			width - settings_padding - reset_w, y - 4, reset_w, false)
+	}
+	y += 22
+	if settings.preset_id != 'windows7' {
 		return out
 	}
-	y += 16 + 22
+	y += 16
 
 	// The colour of the glass: Windows 7's own sixteen, in its two rows.
 	out << settings_heading(tr('settings.theme.glass_color'), y, width)
@@ -549,6 +588,13 @@ fn (a &SettingsApp) theme_pane(width int) []ui2.Element {
 	}
 
 	return out
+}
+
+// wallpaper_is_overridden reports whether the user has an explicit wallpaper
+// selection (an image, or a non-default colour) that overrides the preset —
+// the same test surface() uses to decide the override (Blue spec H1/G3).
+fn wallpaper_is_overridden(settings Settings) bool {
+	return settings.wallpaper_image >= 0 || settings.wallpaper_color != 0
 }
 
 // Each language is offered in its own name, three to a row.
@@ -677,6 +723,9 @@ fn (mut a SettingsApp) handle(event_id string) ! {
 	if a.handle_keyboard(event_id) {
 		return
 	}
+	if a.handle_windows(event_id) {
+		return
+	}
 	if event_id.starts_with(settings_action_side) {
 		a.desktop.settings.button_side = if event_id.ends_with('1') {
 			ButtonSide.left
@@ -742,30 +791,30 @@ fn (mut a SettingsApp) handle(event_id string) ! {
 		return
 	}
 	if event_id.starts_with(settings_action_theme) {
-		if event_id.ends_with('3') {
-			if !settings_luna_offered() {
-				return
-			}
-			a.desktop.settings.theme = .windows_xp
-			// Windows XP's caption buttons are at the right too.
-			a.desktop.settings.button_side = .right
-		} else if event_id.ends_with('2') {
-			if !settings_glass_offered() {
-				return
-			}
-			a.desktop.settings.theme = .windows7
-			// Windows 7's caption buttons are at the right, and a theme chosen
+		index := event_id[settings_action_theme.len..].int()
+		id := registry_id_at(index)
+		if (id == 'windowsxp' && !settings_luna_offered())
+			|| (id == 'windows7' && !settings_glass_offered()) {
+			return
+		}
+		a.desktop.settings.preset_id = id
+		if id == 'windowsxp' || id == 'windows7' {
+			// These themes' caption buttons are at the right, and a theme chosen
 			// afresh starts with its own geometry, as Catalina's does below.
 			a.desktop.settings.button_side = .right
-		} else if event_id.ends_with('1') {
-			a.desktop.settings.theme = .macos
+		} else if id == 'macos' {
 			// A freshly selected Catalina theme starts with Catalina geometry.
 			// Appearance remains independent, so the user can deliberately move
 			// the controls afterwards.
 			a.desktop.settings.button_side = .left
-		} else {
-			a.desktop.settings.theme = .default_
 		}
+		return
+	}
+	// G3: reset the wallpaper override so it re-inherits from the preset/default.
+	if event_id == settings_action_reset_wallpaper {
+		a.desktop.settings.wallpaper_image = -1
+		a.desktop.settings.wallpaper_color = 0
+		a.desktop.invalidate_wallpaper()
 		return
 	}
 	if event_id.starts_with(settings_action_color) {

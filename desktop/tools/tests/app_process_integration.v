@@ -321,21 +321,21 @@ fn main() {
 		panic(err)
 	}
 	settings.handle('${settings_action_category}1') or { panic(err) }
-	settings.handle('${settings_action_theme}1') or { panic(err) }
-	assert desktop.settings.theme == .macos
+	settings.handle('${settings_action_theme}${registry_index_of('macos')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'macos'
 	// Windows 7 and its glass colour come back in the same field of the state.
-	settings.handle('${settings_action_theme}2') or { panic(err) }
-	assert desktop.settings.theme == .windows7 && desktop.settings.glass_color == 0
+	settings.handle('${settings_action_theme}${registry_index_of('windows7')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'windows7' && desktop.settings.glass_color == 0
 	assert desktop.settings.button_side == .right
 	settings.handle('${settings_action_glass}9') or { panic(err) }
-	assert desktop.settings.theme == .windows7 && desktop.settings.glass_color == 9
+	assert desktop.settings.preset_id == 'windows7' && desktop.settings.glass_color == 9
 	// Windows XP reaches the application because it said at its start that it
 	// understands the theme, and was told that this compositor draws it.
-	settings.handle('${settings_action_theme}3') or { panic(err) }
-	assert desktop.settings.theme == .windows_xp && desktop.settings.glass_color == 9
+	settings.handle('${settings_action_theme}${registry_index_of('windowsxp')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'windowsxp' && desktop.settings.glass_color == 9
 	assert desktop.settings.button_side == .right
-	settings.handle('${settings_action_theme}1') or { panic(err) }
-	assert desktop.settings.theme == .macos && desktop.settings.glass_color == 9
+	settings.handle('${settings_action_theme}${registry_index_of('macos')}') or { panic(err) }
+	assert desktop.settings.preset_id == 'macos' && desktop.settings.glass_color == 9
 	settings.handle('${settings_action_category}${settings_categories.index(SettingsCategory.display)}') or {
 		panic(err)
 	}

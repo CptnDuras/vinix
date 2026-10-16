@@ -40,7 +40,7 @@ fn test_power_preferences_defaults_round_trip_and_validate() {
 	legacy := desktop_parse_preferences('version=1\ntheme=macos\n')?
 	assert legacy.settings.display_off_minutes == 0 && legacy.settings.sleep_minutes == 0
 	assert legacy.settings.lid_action == .suspend && legacy.settings.power_profile == .automatic
-	assert legacy.settings.theme == .macos
+	assert legacy.settings.preset_id == 'macos'
 
 	// Every timeout Settings offers, alone and in each pair that holds.
 	for display_off in idle_timeout_choices {
@@ -157,7 +157,7 @@ fn test_power_preferences_are_saved_with_everything_else() {
 	mut p := desktop_load_preferences(home)
 	assert p == DesktopPreferences{}
 	mut settings := Settings{
-		theme: .macos
+		preset_id: 'macos'
 	}
 	assert p.save_changes(settings, desktop_current_scale(), home)
 	for field in 0 .. 4 {
@@ -170,7 +170,7 @@ fn test_power_preferences_are_saved_with_everything_else() {
 		assert p.save_changes(settings, desktop_current_scale(), home)
 		loaded := desktop_load_preferences(home)
 		assert loaded.settings == settings
-		assert loaded.settings.theme == .macos && loaded.scale == 0
+		assert loaded.settings.preset_id == 'macos' && loaded.scale == 0
 		assert os.ls(home)! == [desktop_preferences_name]
 	}
 	record := os.read_file(desktop_preferences_path(home))!

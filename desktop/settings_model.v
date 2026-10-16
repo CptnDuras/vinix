@@ -22,13 +22,6 @@ enum TaskbarMode {
 	combined
 }
 
-enum ThemeKind {
-	default_
-	macos
-	windows7
-	windows_xp
-}
-
 // GlassColor is one of the colours Windows 7 offers for its window borders,
 // Start menu and taskbar. `intensity` is that preset's own strength, 0..255:
 // how much of the glass is the colour rather than what is behind it.
@@ -107,6 +100,12 @@ fn desktop_language_from_code(code string) ?DesktopLanguage {
 	return none
 }
 
+// is_macos reports whether the macOS preset is selected, for the few places
+// that behave differently under it (Finder-style Files, the Catalina cursor).
+fn (s Settings) is_macos() bool {
+	return s.preset_id == 'macos'
+}
+
 struct Settings {
 mut:
 	button_side  ButtonSide
@@ -114,7 +113,10 @@ mut:
 	// Optional taskbar navigation controls start hidden; shortcuts remain active.
 	taskbar_show_overview   bool
 	taskbar_show_workspaces bool
-	theme        ThemeKind
+	// The selected look-and-feel preset, by stable string id (Blue spec A/G).
+	// Selection is registry-driven, so adding a preset needs no change here;
+	// `Desktop.theme()` maps the id to a concrete `Theme` via preset_theme().
+	preset_id string = 'default'
 	// Index into glass_colors: what the Windows 7 theme tints its glass with.
 	glass_color int
 	language    DesktopLanguage
@@ -127,6 +129,37 @@ mut:
 	wallpaper_color int
 	// Index into the wallpaper images, or -1 for the colour above.
 	wallpaper_image int = -1
+	// ── Per-axis user overrides (Blue spec A/G3) ───────────────────────
+	// A representative, UI-meaningful field per axis, each a sparse optional so
+	// "not set" (none) inherits the preset/default and a set value overrides it
+	// field-by-field. These flow into the resolver via the axis helpers and
+	// persist through A3. Wallpaper keeps its own dedicated fields above.
+	//
+	// Decor:
+	ov_window_radius ?int
+	ov_title_align   ?TitleAlign
+	// Typography:
+	ov_ui_size    ?int
+	ov_title_size ?int
+	// Behavior:
+	ov_shade_enabled      ?bool
+	ov_menu_placement     ?MenuPlacement
+	ov_title_double_click ?TitleAction
+	// Window chrome (Blue spec B5): the bar's shape, where a tab sits, and the
+	// widget set as widgets_pack() writes it.
+	ov_title_kind ?TitleKind
+	ov_tab_align  ?TitleAlign
+	ov_widgets    ?int
+	// Shell:
+	ov_has_top_bar     ?bool
+	ov_has_bottom_bar  ?bool
+	ov_has_window_list ?bool
+	// DesktopSurface:
+	ov_icons_visible ?bool
+	ov_icon_source   ?IconSource
+	// The window skin: empty follows the look, 'none' wears no skin, anything
+	// else is a skin id (skin.v).
+	skin_id string
 	// The input sources Ctrl-Space moves between, one KeyboardLayout.bit()
 	// each, and the one typing uses now. The current one is always enabled.
 	keyboard_layouts u32 = keyboard_layout_default_mask

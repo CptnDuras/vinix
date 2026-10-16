@@ -25,7 +25,7 @@ fn preference_test_custom() DesktopPreferences {
 			taskbar_mode: .combined
 			taskbar_show_overview: true
 			taskbar_show_workspaces: true
-			theme: .macos
+			preset_id: 'macos'
 			language: .ru
 			clock_24_hour: false
 			clock_show_seconds: false
@@ -82,7 +82,7 @@ fn test_preferences_each_change_preserves_the_rest_of_the_snapshot() {
 		match field {
 			0 { settings.button_side = .left }
 			1 { settings.taskbar_mode = .combined }
-			2 { settings.theme = .macos }
+			2 { settings.preset_id = 'macos' }
 			3 { settings.wallpaper_color = 4 }
 			4 { settings.wallpaper_image = 2 }
 			5 { settings.clock_24_hour = false }
@@ -116,21 +116,21 @@ fn test_preferences_keep_the_windows7_theme_and_its_glass_colour() {
 	mut p := desktop_load_preferences(home)
 	p.configure_scale(1920, 1080)
 	settings := Settings{
-		theme:       .windows7
+		preset_id:       'windows7'
 		glass_color: 7
 	}
 	assert p.save_changes(settings, desktop_current_scale(), home)
 	loaded := desktop_load_preferences(home)
-	assert loaded.settings.theme == .windows7
+	assert loaded.settings.preset_id == 'windows7'
 	assert loaded.settings.glass_color == 7
 	record := os.read_file(desktop_preferences_path(home))!
 	assert record.contains('\ntheme=windows7\nglass_color=7\n')
 	// A record written before the colour existed reads as the first one, and
 	// the colour is kept whichever theme is worn.
 	old := desktop_parse_preferences('version=1\ntheme=windows7')?
-	assert old.settings.theme == .windows7 && old.settings.glass_color == 0
+	assert old.settings.preset_id == 'windows7' && old.settings.glass_color == 0
 	other := desktop_parse_preferences('version=1\ntheme=macos\nglass_color=15')?
-	assert other.settings.theme == .macos && other.settings.glass_color == 15
+	assert other.settings.preset_id == 'macos' && other.settings.glass_color == 15
 	// Only the sixteen colours Settings offers.
 	for record_text in ['version=1\nglass_color=16', 'version=1\nglass_color=-1',
 		'version=1\nglass_color=sky', 'version=1\nglass_color=1\nglass_color=2'] {
@@ -150,19 +150,21 @@ fn test_preferences_keep_the_windows_xp_theme() {
 	defer { os.rmdir_all(home) or {} }
 	mut p := desktop_load_preferences(home)
 	p.configure_scale(1920, 1080)
-	assert p.save_changes(Settings{ theme: .windows_xp }, desktop_current_scale(), home)
-	assert desktop_load_preferences(home).settings.theme == .windows_xp
+	assert p.save_changes(Settings{ preset_id: 'windowsxp' }, desktop_current_scale(), home)
+	assert desktop_load_preferences(home).settings.preset_id == 'windowsxp'
 	record := os.read_file(desktop_preferences_path(home))!
 	assert record.contains('\ntheme=windowsxp\n')
-	if _ := desktop_parse_preferences('version=1\ntheme=windows_xp') {
-		assert false, 'accepted a theme nobody writes'
+	// A well-formed id this build does not know is kept, and looks like the
+	// default: a file written by a newer build stays readable.
+	if loaded := desktop_parse_preferences('version=1\ntheme=windows_xp') {
+		assert lookandfeel_by_id(loaded.settings.preset_id).id == default_preset_id
 	}
 }
 
 fn test_preferences_optional_keys_comments_and_unknown_keys() {
 	assert desktop_parse_preferences('version=1')? == DesktopPreferences{}
 	p := desktop_parse_preferences('# desktop\r\n version = 1 \r\n\n theme = macos\nfuture_key=value\n')?
-	assert p.settings.theme == .macos
+	assert p.settings.preset_id == 'macos'
 	assert p.settings.button_side == .right
 	assert p.settings.taskbar_mode == .standard
 	assert !p.settings.taskbar_show_overview
@@ -207,7 +209,8 @@ fn test_preferences_reject_invalid_versions_fields_duplicates_and_overflow() {
 	for record in ['', 'theme=macos', 'version=2', 'version=1\nversion=1',
 		'version=1\nscale=0', 'version=1\nscale=200', 'version=1\nscale=2junk',
 		'version=1\nscale=1\nscale=2', 'version=1\nbutton_side=up',
-		'version=1\ntaskbar_mode=9', 'version=1\ntheme=other',
+		'version=1\ntaskbar_mode=9', 'version=1\ntheme=',
+		'version=1\ntheme=not a preset id',
 		'version=1\ntaskbar_show_overview=yes', 'version=1\ntaskbar_show_workspaces=1',
 		'version=1\ntaskbar_show_overview=true\ntaskbar_show_overview=false',
 		'version=1\ntaskbar_show_workspaces=false\ntaskbar_show_workspaces=true',
@@ -255,7 +258,7 @@ fn test_preferences_only_persist_applied_scale_with_other_changes() {
 	desktop_request_scale(desktop_scale_200)
 	assert p.save_changes(p.settings, previous, home)
 	assert os.ls(home)!.len == 0
-	settings := Settings{ theme: .macos }
+	settings := Settings{ preset_id: 'macos' }
 	assert p.save_changes(settings, previous, home)
 	assert desktop_load_preferences(home).scale == 0
 	desktop_restore_requested_scale()
@@ -264,7 +267,7 @@ fn test_preferences_only_persist_applied_scale_with_other_changes() {
 	desktop_commit_scale(desktop_scale_200)
 	assert p.save_changes(settings, previous, home)
 	loaded := desktop_load_preferences(home)
-	assert loaded.scale == desktop_scale_200 && loaded.settings.theme == .macos
+	assert loaded.scale == desktop_scale_200 && loaded.settings.preset_id == 'macos'
 	assert p.save_changes(settings, desktop_scale_200, '${home}/missing')
 }
 
@@ -413,4 +416,78 @@ fn test_preferences_legacy_directory_is_not_removed_by_save() {
 	// Publication already succeeded; cleanup failure does not corrupt it.
 	assert desktop_load_preferences(home) == preference_test_custom()
 	assert os.ls(home)!.len == 2
+}
+
+fn test_preferences_round_trip_the_per_axis_overrides() {
+	home := preference_test_home('overrides')
+	defer { os.rmdir_all(home) or {} }
+	p := DesktopPreferences{
+		settings: Settings{
+			preset_id:             'blue'
+			ov_window_radius:      6
+			ov_title_align:        .right
+			ov_ui_size:            14
+			ov_shade_enabled:      false
+			ov_menu_placement:     .in_window
+			ov_title_double_click: .shade
+			ov_has_top_bar:        true
+			ov_icons_visible:      false
+			ov_icon_source:        .files
+		}
+	}
+	assert desktop_save_preferences(home, p)
+	loaded := desktop_load_preferences(home)
+	assert loaded == p
+	// An override that is not set is not written, so it re-inherits.
+	record := os.read_file(desktop_preferences_path(home))!
+	assert record.contains('ov_window_radius=6\n')
+	assert !record.contains('ov_title_size')
+	assert !record.contains('ov_has_window_list')
+	assert loaded.settings.ov_title_size == none
+	assert loaded.settings.ov_has_window_list == none
+
+	// Clearing an override drops its key.
+	mut cleared := p
+	cleared.settings.ov_window_radius = none
+	assert desktop_save_preferences(home, cleared)
+	assert !os.read_file(desktop_preferences_path(home))!.contains('ov_window_radius')
+	assert desktop_load_preferences(home).settings.ov_window_radius == none
+
+	for bad in ['ov_title_align=middle', 'ov_icon_source=desk', 'ov_has_top_bar=yes',
+		'ov_ui_size=-1', 'ov_ui_size=0', 'ov_ui_size=1000', 'ov_ui_size=3\nov_ui_size=4'] {
+		assert desktop_parse_preferences('version=1\n${bad}\n') == none, bad
+	}
+}
+
+fn test_preferences_round_trip_the_window_chrome_choices() {
+	home := preference_test_home('chrome')
+	defer { os.rmdir_all(home) or {} }
+	widgets := widgets_from_text('close@leading,shade@trailing,maximize@trailing') or { panic('widgets') }
+	p := DesktopPreferences{
+		settings: Settings{
+			preset_id:      'default'
+			skin_id:        'glass'
+			ov_title_kind:  .tab
+			ov_tab_align:   .center
+			ov_widgets:     int(widgets_pack(widgets))
+		}
+	}
+	assert desktop_save_preferences(home, p)
+	assert desktop_load_preferences(home) == p
+	record := os.read_file(desktop_preferences_path(home))!
+	assert record.contains('skin=glass\n')
+	assert record.contains('ov_title_kind=tab\n')
+	assert record.contains('ov_widgets=close@leading,shade@trailing,maximize@trailing\n')
+	// A skin may also be turned off outright.
+	none_skin := DesktopPreferences{
+		settings: Settings{
+			skin_id: 'none'
+		}
+	}
+	assert desktop_save_preferences(home, none_skin)
+	assert desktop_load_preferences(home).settings.skin_id == 'none'
+	for bad in ['skin=../etc', 'skin=Bad Skin', 'ov_title_kind=wide', 'ov_widgets=close@middle',
+		'ov_widgets=blink@leading', 'ov_tab_align=top', 'skin=a\nskin=b'] {
+		assert desktop_parse_preferences('version=1\n${bad}\n') == none, bad
+	}
 }

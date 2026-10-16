@@ -312,9 +312,9 @@ const files_action_scrollbar = 'files.scrollbar'
 // follows desktop_language.
 __global files_catalina = false
 
-fn files_follow_theme(theme ThemeKind) {
+fn files_follow_theme(macos bool) {
 	// A compositor that cannot draw Finder's toolbar keeps Files as it was.
-	files_catalina = theme == .macos && app_compositor_features & app_feature_toolbar != 0
+	files_catalina = macos && app_compositor_features & app_feature_toolbar != 0
 }
 
 fn files_row_height() int {

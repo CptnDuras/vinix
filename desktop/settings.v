@@ -12,6 +12,39 @@
 // or reopened — the tree is composed from scratch each time anyway.
 module main
 
+// blue_overrides projects the Settings' per-axis override fields into the sparse
+// BlueSettings the resolver consumes. Each axis config carries only the fields
+// the user has explicitly set; unset fields stay none and inherit. Wallpaper is
+// threaded separately by surface() (it has dedicated Settings fields), so it is
+// not included here.
+fn (s Settings) blue_overrides() BlueSettings {
+	return BlueSettings{
+		preset_id: s.preset_id
+		decor:     DecorConfig{
+			window_radius: s.ov_window_radius
+			title_align:   s.ov_title_align
+		}
+		typography: TypographyConfig{
+			ui_size:    s.ov_ui_size
+			title_size: s.ov_title_size
+		}
+		behavior: BehaviorConfig{
+			shade_enabled:      s.ov_shade_enabled
+			menu_placement:     s.ov_menu_placement
+			title_double_click: s.ov_title_double_click
+		}
+		shell: ShellConfig{
+			has_top_bar:     s.ov_has_top_bar
+			has_bottom_bar:  s.ov_has_bottom_bar
+			has_window_list: s.ov_has_window_list
+		}
+		surface: DesktopSurfaceConfig{
+			icons_visible: s.ov_icons_visible
+			icon_source:   s.ov_icon_source
+		}
+	}
+}
+
 // ── Themes ─────────────────────────────────────────────────────────
 
 // ButtonLook says how the title bar buttons are drawn. `flat` is a glyph that
@@ -75,6 +108,10 @@ struct Theme {
 	title_text_active        u32
 	title_text_inactive      u32
 	title_centered           bool
+	// 3-way title alignment (Blue spec B3 / GAP-9). When unset (left) the
+	// legacy title_centered bool still centres; title_align takes precedence
+	// when not .left.
+	title_align              TitleAlign
 	title_bold               bool
 	title_size               int
 	// A second colour for the title bar, blended down its height. A theme that
@@ -83,6 +120,16 @@ struct Theme {
 	title_inactive_bg2 u32
 	// Title bar buttons
 	button_look        ButtonLook
+	// The shape of the bar and the widgets on it (Blue spec B5). The zero value
+	// is a full-width bar with the stock buttons for button_look.
+	window_chrome ChromeSpec
+	// Beveled chrome (Blue spec B3): when enabled, the title bar draws a raised
+	// bevel using bevel_light/bevel_dark (typically ramp-derived). Flat looks
+	// leave bevel_enabled false and pay nothing.
+	bevel_enabled bool
+	bevel_light   u32
+	bevel_dark    u32
+	bevel_width   int = 1
 	button_size        int
 	button_gap         int
 	button_inset       int
@@ -388,12 +435,7 @@ const theme_windows_xp = Theme{
 }
 
 fn (d &Desktop) theme() Theme {
-	return match d.settings.theme {
-		.default_ { theme_default }
-		.macos { theme_macos }
-		.windows7 { theme_windows7 }
-		.windows_xp { theme_windows_xp }
-	}
+	return preset_theme(d.settings.preset_id)
 }
 
 // window_border is the frame around this window's body on its left, right and

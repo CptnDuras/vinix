@@ -59,6 +59,8 @@ mut:
 	id_close    string
 	id_maximize string
 	id_minimize string
+	id_shade    string
+	id_menu     string
 	id_divider  string
 	id_body     string
 	// One grip per edge and corner; id_resize is the lower right.
@@ -81,6 +83,10 @@ mut:
 	minimized      bool
 	// Only a window hidden by Shake/Hide Others is restored by that gesture.
 	hidden_by_isolation bool
+	// Window-shade (roll-up): when shaded, the window collapses to its title
+	// bar; restore_height_shade holds the height to return to (Blue spec D1).
+	shaded               bool
+	restore_height_shade int
 	// Workspaces are zero-based internally and numbered from one in the UI.
 	// A window belongs to exactly one workspace; its application keeps running
 	// while another workspace is shown.

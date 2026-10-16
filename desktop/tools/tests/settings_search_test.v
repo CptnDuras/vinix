@@ -309,8 +309,8 @@ fn test_settings_search_sidebar_fits_default_content_and_keeps_pane_control_ids(
 	free_tree(tree)
 	app.handle('settings.search.field')!
 	app.paste_input('brightness')
-	for theme in [ThemeKind.default_, ThemeKind.macos]! {
-		desktop.settings.theme = theme
+	for theme in ['default', 'macos']! {
+		desktop.settings.preset_id = theme
 		begin_frame_elements()
 		search := app.build(ui2.rect(0, 0, 620, 376))!
 		focused := search.children[0].children[0]

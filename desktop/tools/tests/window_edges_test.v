@@ -43,10 +43,10 @@ fn edge_test_start(mut desktop Desktop, id int, edge string) (int, int) {
 }
 
 fn test_all_window_edges_expose_axis_specific_grips() {
-	for theme in [ThemeKind.default_, ThemeKind.macos] {
+	for theme in ['default', 'macos'] {
 		for side in [ButtonSide.left, ButtonSide.right] {
 			mut desktop := edge_test_desktop()
-			desktop.settings.theme = theme
+			desktop.settings.preset_id = theme
 			desktop.settings.button_side = side
 			id := desktop.spawn('Welcome', .welcome, 120, 80, 400, 260)
 			edge_test_targets(mut desktop, id)

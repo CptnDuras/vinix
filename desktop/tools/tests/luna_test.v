@@ -10,7 +10,7 @@ fn luna_test_desktop(scale int) Desktop {
 		fonts:  load_fonts_for_scale(scale)
 	}
 	desktop.tray.preferences_loaded = true
-	desktop.settings.theme = .windows_xp
+	desktop.settings.preset_id = 'windowsxp'
 	// A fixed time: nothing a comparison renders may tick in between.
 	desktop.update_taskbar_clock_at(1_760_000_000)
 	return desktop
@@ -246,7 +246,7 @@ fn test_windows_xp_taskbar_is_the_blue_bar() {
 		fonts:  load_fonts_for_scale(1)
 	}
 	desktop.tray.preferences_loaded = true
-	desktop.settings.theme = .windows_xp
+	desktop.settings.preset_id = 'windowsxp'
 	desktop.update_taskbar_clock_at(1_760_000_000)
 	id := desktop.spawn('Welcome', .welcome, 100, 60, 300, 220)
 	luna_test_full_frame(mut desktop)
@@ -298,7 +298,7 @@ fn luna_menu_test_desktop(scale int) Desktop {
 		fonts:  load_fonts_for_scale(scale)
 	}
 	desktop.tray.preferences_loaded = true
-	desktop.settings.theme = .windows_xp
+	desktop.settings.preset_id = 'windowsxp'
 	desktop.update_taskbar_clock_at(1_760_000_000)
 	return desktop
 }
@@ -546,8 +546,8 @@ fn test_windows_xp_start_button_is_green_in_the_corner() {
 		desktop.close_start_menu()
 
 		// The other themes keep their own button and their own menu.
-		for kind in [ThemeKind.default_, ThemeKind.windows7] {
-			desktop.settings.theme = kind
+		for kind in ['default', 'windows7'] {
+			desktop.settings.preset_id = kind
 			luna_test_full_frame(mut desktop)
 			plain := desktop.hit_target_named(action_start_toggle) or { panic('no Start button') }
 			assert plain.x > 0 && plain.width == start_button_width
@@ -558,7 +558,7 @@ fn test_windows_xp_start_button_is_green_in_the_corner() {
 			assert desktop.start_menu_pane_height() == int(own.height) - 14
 			assert desktop.start_menu_search_y(400) == 400 - start_menu_search_height - 8
 		}
-		desktop.settings.theme = .windows_xp
+		desktop.settings.preset_id = 'windowsxp'
 	}
 }
 
@@ -773,8 +773,8 @@ fn test_windows_xp_quick_launch_is_icons_alone() {
 	assert desktop.taskbar_slot_width(true, 0, 168) == luna_quick_width
 	assert desktop.taskbar_slot_width(true, 1, 168) == 168
 	assert desktop.taskbar_slot_width(false, 0, 168) == 168
-	for kind in [ThemeKind.default_, ThemeKind.windows7, ThemeKind.macos] {
-		desktop.settings.theme = kind
+	for kind in ['default', 'windows7', 'macos'] {
+		desktop.settings.preset_id = kind
 		assert desktop.taskbar_quick_count() == 0
 		assert desktop.taskbar_slot_width(true, 0, 168) == 168
 	}
@@ -837,8 +837,8 @@ fn test_windows_xp_clock_is_small_plain_and_in_the_middle() {
 	free_tree(badge_tree)
 
 	// The default bar only reserves its time; the classic themes keep both boxes.
-	for kind in [ThemeKind.default_, ThemeKind.windows7, ThemeKind.macos] {
-		desktop.settings.theme = kind
+	for kind in ['default', 'windows7', 'macos'] {
+		desktop.settings.preset_id = kind
 		assert desktop.taskbar_clock_box() == if kind == .default_ { compact_clock_width } else { taskbar_clock_width }
 		assert desktop.taskbar_build_box() == if kind == .default_ { 0 } else { taskbar_build_width }
 		assert !desktop.taskbar_luna()

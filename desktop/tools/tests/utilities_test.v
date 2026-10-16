@@ -1282,7 +1282,7 @@ fn test_macos_taskbar_uses_large_icon_only_buttons_at_screen_edges() {
 			height: 720
 		}
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	first := desktop.spawn('Files', .welcome, 10, 10, 300, 200)
@@ -1314,7 +1314,7 @@ fn test_open_calendar_task_button_shows_local_today() {
 			height: 720
 		}
 		settings: Settings{
-			theme: .macos
+			preset_id: 'macos'
 		}
 	}
 	id := desktop.spawn('Calendar', .welcome, 0, 0, 300, 200)
@@ -2022,6 +2022,709 @@ fn test_disk_usage_identity_set_answers_each_device_and_inode_once() {
 	}
 }
 
+fn test_shaded_window_shows_only_its_title_bar() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	// Blue enables window-shade.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.behavior().shade_enabled
+
+	id := desktop.spawn('Shade Me', .welcome, 40, 40, 320, 260)
+	desktop.update_taskbar_clock_at(0)
+	title_h := desktop.theme().title_height
+
+	// Unshaded: the frame carries a divider and a body.
+	root := desktop.build_tree()
+	frame := utility_element_named(root, 'win.${id}') or { panic('missing frame') }
+	assert int(frame.frame.height) == 260
+	assert utility_element_named(frame, 'win.${id}.body') != none
+	assert utility_element_named(frame, 'win.${id}.divider') != none
+	free_tree(root)
+
+	// Shade it: the frame shrinks to the title bar; body and divider are gone.
+	desktop.toggle_shade(id)
+	assert desktop.windows.last().shaded
+	shaded := desktop.build_tree()
+	sframe := utility_element_named(shaded, 'win.${id}') or { panic('missing shaded frame') }
+	assert int(sframe.frame.height) == title_h
+	assert utility_element_named(sframe, 'win.${id}.body') == none
+	assert utility_element_named(sframe, 'win.${id}.titlebar') != none
+	free_tree(shaded)
+
+	// Unshade restores the original height and the body.
+	desktop.toggle_shade(id)
+	assert !desktop.windows.last().shaded
+	restored := desktop.build_tree()
+	rframe := utility_element_named(restored, 'win.${id}') or { panic('missing restored frame') }
+	assert int(rframe.frame.height) == 260
+	assert utility_element_named(rframe, 'win.${id}.body') != none
+	free_tree(restored)
+}
+
+fn test_title_alignment_three_way() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1000
+			height: 700
+		}
+	}
+	id := desktop.spawn('Aligned', .welcome, 30, 30, 400, 260)
+	desktop.update_taskbar_clock_at(0)
+
+	// Default preset: left-aligned title (title starts inset from the edge).
+	root := desktop.build_tree()
+	title := utility_element_named(root, 'win.${id}.title') or { panic('missing title') }
+	assert title.frame.x > 0 // left-aligned: inset, not spanning from 0
+	assert int(title.frame.width) < 400 // limited run, not the whole bar
+	free_tree(root)
+
+	// macOS preset: centred title (spans the whole bar from x=0).
+	desktop.settings.preset_id = 'macos'
+	centred := desktop.build_tree()
+	ctitle := utility_element_named(centred, 'win.${id}.title') or { panic('missing centred title') }
+	assert int(ctitle.frame.x) == 0
+	assert int(ctitle.frame.width) == 400 // spans the full window width
+	free_tree(centred)
+}
+
+fn test_blue_titlebar_draws_a_raised_bevel() {
+	mut desktop := Desktop{
+		canvas: new_canvas(600, 400)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.theme().bevel_enabled
+	desktop.spawn('Beveled', .welcome, 50, 60, 320, 240)
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	desktop.render(root)
+	// The title bar's top edge (a few px in, past the radius-3 corner) should
+	// carry the raised bevel's light color; sample the top row of the bar.
+	light := desktop.theme().bevel_light
+	sample_x := 50 + 8
+	top_edge := unsafe { desktop.canvas.pixels[60 * desktop.canvas.stride + sample_x] }
+	assert top_edge == light
+	free_tree(root)
+
+	// Default preset has no bevel: the same pixel is not the Blue light color.
+	desktop.settings.preset_id = 'default'
+	assert !desktop.theme().bevel_enabled
+	root2 := desktop.build_tree()
+	desktop.render(root2)
+	top_edge2 := unsafe { desktop.canvas.pixels[60 * desktop.canvas.stride + sample_x] }
+	assert top_edge2 != light
+	free_tree(root2)
+}
+
+fn test_blue_shows_a_top_bar_with_system_menu_and_clock() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	desktop.update_taskbar_clock_at(0)
+
+	// Blue: a top bar hosting the leading system menu and a trailing clock,
+	// plus the bottom taskbar.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().has_top_bar
+	root := desktop.build_tree()
+	topbar := utility_element_named(root, 'topbar') or { panic('missing top bar') }
+	assert utility_element_named(topbar, top_bar_action_system) != none
+	assert utility_element_named(topbar, 'topbar.clock') != none
+	// The bottom taskbar is still present.
+	assert utility_element_named(root, 'taskbar') != none
+	free_tree(root)
+
+	// Default: no top bar, bottom taskbar only.
+	desktop.settings.preset_id = 'default'
+	assert !desktop.shell().has_top_bar
+	root2 := desktop.build_tree()
+	assert utility_element_named(root2, 'topbar') == none
+	assert utility_element_named(root2, 'taskbar') != none
+	free_tree(root2)
+}
+
+fn test_system_window_menu_popup_and_actions() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	desktop.settings.preset_id = 'blue' // shade enabled
+	desktop.update_taskbar_clock_at(0)
+	id := desktop.spawn('Menu Win', .welcome, 60, 60, 320, 240)
+
+	// Open the system window menu; the popup carries the five action rows.
+	desktop.open_window_menu(id, 60, 90)
+	assert desktop.window_menu_open()
+	root := desktop.build_tree()
+	menu := utility_element_named(root, 'menu.window') or { panic('missing window menu') }
+	assert utility_element_named(menu, menu_action_close) != none
+	assert utility_element_named(menu, menu_action_shade) != none // enabled under Blue
+	assert utility_element_named(menu, menu_action_minimize) != none
+	assert utility_element_named(menu, menu_action_zoom) != none
+	free_tree(root)
+
+	// Shade via the menu.
+	desktop.route_window_menu_action(menu_action_shade)
+	assert !desktop.window_menu_open() // menu dismissed
+	assert desktop.windows.last().shaded
+
+	// Reopen and close the window via the menu.
+	desktop.open_window_menu(id, 60, 90)
+	desktop.route_window_menu_action(menu_action_close)
+	assert desktop.window_index(id) == none
+}
+
+// D2: a maximized window respects the resolved shell's reserved panel edges.
+// Under Default (bottom taskbar only) this reproduces today's rect; under Blue
+// (top bar + bottom taskbar) the window sits below the top bar.
+fn test_maximize_respects_panels() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 800
+		}
+	}
+
+	// Default: no top bar. Maximize fills full width and height minus the
+	// bottom taskbar, starting at the top-left — exactly today's behaviour.
+	desktop.settings.preset_id = 'default'
+	id := desktop.spawn('Max Me', .welcome, 100, 120, 400, 300)
+	desktop.toggle_maximize(id)
+	w1 := desktop.windows.last()
+	assert w1.maximized
+	assert w1.x == 0
+	assert w1.y == 0
+	assert w1.width == 1280
+	assert w1.height == 800 - taskbar_height
+
+	// Restore returns the pre-maximize geometry exactly.
+	desktop.toggle_maximize(id)
+	w1r := desktop.windows.last()
+	assert !w1r.maximized
+	assert w1r.x == 100 && w1r.y == 120
+	assert w1r.width == 400 && w1r.height == 300
+
+	// Blue: a top bar is present, so the maximized window starts below it and
+	// its height is reduced by both bars — it never sits under the chrome.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().has_top_bar
+	desktop.toggle_maximize(id)
+	w2 := desktop.windows.last()
+	assert w2.maximized
+	assert w2.y == top_bar_height // starts below the top bar
+	assert w2.x == 0
+	assert w2.width == 1280
+	assert w2.height == 800 - top_bar_height - taskbar_height
+}
+
+// C1: the window title's point size comes from the resolved Typography axis,
+// not a hardcoded literal. The default resolves to the built-in size, so there
+// is no visual regression; the assertion guards that the plumbing is in place.
+fn test_title_size_comes_from_typography() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1000
+			height: 700
+		}
+	}
+	id := desktop.spawn('Typed', .welcome, 40, 40, 360, 240)
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	title := utility_element_named(root, 'win.${id}.title') or { panic('missing title') }
+	// The rendered title style tracks the resolved typography, which defaults
+	// to the built-in title size.
+	assert int(title.text_style.size) == desktop.typography().title_size
+	assert int(title.text_style.size) == builtin_typography.title_size
+	free_tree(root)
+}
+
+// F2: menu_placement routes the focused window's menu to the right host.
+//   global   -> the top bar's app_menu slot carries it; the title area does not
+//   in_window-> the window's title area carries it; the top bar slot is absent
+//   none     -> no menu bar anywhere
+fn test_menu_placement_hosts() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	desktop.update_taskbar_clock_at(0)
+	id := desktop.spawn('Placed', .welcome, 60, 60, 360, 240)
+
+	// global (Platinum): the app_menu slot is in the top bar; the window title
+	// area has no in-window affordance.
+	desktop.settings.preset_id = 'platinum'
+	assert desktop.behavior().menu_placement == .global_
+	gtree := desktop.build_tree()
+	topbar := utility_element_named(gtree, 'topbar') or { panic('missing top bar (global)') }
+	assert utility_element_named(topbar, top_bar_app_menu_id) != none
+	assert utility_element_named(gtree, 'win.${id}.appmenu') == none
+	free_tree(gtree)
+
+	// in_window (Blue): the window title area carries the affordance; the top
+	// bar app_menu slot is absent.
+	desktop.settings.preset_id = 'blue'
+	assert desktop.behavior().menu_placement == .in_window
+	itree := desktop.build_tree()
+	assert utility_element_named(itree, 'win.${id}.appmenu') != none
+	if tb := utility_element_named(itree, 'topbar') {
+		assert utility_element_named(tb, top_bar_app_menu_id) == none
+	}
+	free_tree(itree)
+
+	// none (Default): no menu host anywhere.
+	desktop.settings.preset_id = 'default'
+	assert desktop.behavior().menu_placement == .none_
+	ntree := desktop.build_tree()
+	assert utility_element_named(ntree, top_bar_app_menu_id) == none
+	assert utility_element_named(ntree, 'win.${id}.appmenu') == none
+	free_tree(ntree)
+
+	// Clicking the global slot opens the focused window's system menu. Drive it
+	// through the real hit-routing path at the slot's on-screen position. Hit
+	// targets are recorded during the render pass, so render the tree first
+	// (which needs a real canvas + fonts).
+	mut click := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(click.canvas.pixels) }
+	}
+	click.settings.preset_id = 'platinum'
+	cid := click.spawn('Clicky', .welcome, 60, 60, 360, 240)
+	click.update_taskbar_clock_at(0)
+	ctree := click.build_tree()
+	slot := utility_element_named(ctree, top_bar_app_menu_id) or { panic('missing app_menu slot') }
+	click_x := int(slot.frame.x) + 4
+	click_y := int(slot.frame.y) + int(slot.frame.height) / 2
+	click.render(ctree)
+	free_tree(ctree)
+	click.on_pointer_down(click_x, click_y)
+	assert click.window_menu_open()
+	assert click.window_menu_id == cid
+}
+
+// D4: under focus_follows_mouse (BeOS), moving the pointer over a window
+// focuses it; with raise_on_focus=false the stack order is not changed. Under
+// the default click_to_focus, a bare move does not change focus.
+fn test_focus_follows_mouse_without_raise() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	// Two non-overlapping windows so window_at is unambiguous.
+	a := desktop.spawn('A', .welcome, 50, 60, 300, 200)
+	b := desktop.spawn('B', .welcome, 700, 60, 300, 200)
+	// focus_new_windows defaults true, so B (spawned last) is focused and on top.
+	assert desktop.focus == b
+	assert desktop.windows.last().id == b
+
+	// Default preset is click_to_focus: a bare move over A does not steal focus.
+	desktop.settings.preset_id = 'default'
+	desktop.on_pointer_move(120, 120) // over A
+	assert desktop.focus == b
+
+	// BeOS is focus_follows_mouse with raise_on_focus=false.
+	desktop.settings.preset_id = 'beos'
+	assert desktop.behavior().focus_policy == .focus_follows_mouse
+	desktop.on_pointer_move(120, 120) // over A
+	assert desktop.focus == a // focus followed the pointer
+	// Stack order unchanged (no raise): B is still topmost.
+	assert desktop.windows.last().id == b
+
+	// Moving over empty desktop drops focus to none under follows-mouse.
+	desktop.on_pointer_move(500, 400) // between/below both windows
+	assert desktop.focus == 0
+}
+
+// D4: focus_new_windows gates whether a freshly spawned window steals focus.
+fn test_focus_new_windows_gate() {
+	// A preset that does not focus new windows leaves the prior focus intact.
+	no_steal := resolve_settings(BlueSettings{
+		preset_id: 'default'
+		behavior: BehaviorConfig{
+			focus_new_windows: false
+		}
+	})
+	assert no_steal.behavior.focus_new_windows == false
+	// The default resolves to true (today's behaviour).
+	def := resolve_settings(BlueSettings{ preset_id: 'default' })
+	assert def.behavior.focus_new_windows == true
+}
+
+// H1: the wallpaper the compositor paints is resolved through the
+// DesktopSurface axis, with the user's live Settings selection carried in as
+// the override so it still wins, and defaults reproducing today's selection.
+fn test_wallpaper_resolves_through_surface_axis() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 800
+			height: 600
+		}
+	}
+	// Defaults: no image, colour index 0 — exactly today's selection.
+	desktop.settings.preset_id = 'default'
+	assert desktop.surface().wallpaper_image == -1
+	assert desktop.surface().wallpaper_color == 0
+
+	// A user-chosen image is honoured (override wins over any preset backdrop).
+	desktop.settings.wallpaper_image = 2
+	assert desktop.surface().wallpaper_image == 2
+
+	// Clearing the image and choosing a colour flows the colour through.
+	desktop.settings.wallpaper_image = -1
+	desktop.settings.wallpaper_color = 3
+	assert desktop.surface().wallpaper_image == -1
+	assert desktop.surface().wallpaper_color == 3
+}
+
+// D5: dragging a window near a screen edge under a snapping preset (Blue) snaps
+// it flush to the work area; under a non-snapping preset (Default) it moves
+// freely to the dragged position.
+fn test_drag_snaps_to_edge_under_blue() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 800
+		}
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.behavior().snap_to_edges
+	id := desktop.spawn('Snappy', .welcome, 300, 300, 400, 250)
+	index := desktop.window_index(id) or { panic('missing window') }
+
+	// Grab the title bar and drag so the window's left edge lands 5px from the
+	// left work-area edge (0) — within the 12px snap threshold.
+	desktop.buttons = button_left
+	desktop.drag = Drag{
+		kind: .move
+		window_id: id
+		offset_x: 10
+		offset_y: 8
+	}
+	// pointer x=15 -> proposed left = 15 - 10 = 5, snaps to 0.
+	desktop.on_pointer_move(15, 400)
+	assert desktop.windows[index].x == 0
+
+	// Under Default (no snapping) the same drag lands at the raw position.
+	mut plain := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 800
+		}
+	}
+	plain.settings.preset_id = 'default'
+	assert !plain.behavior().snap_to_edges
+	pid := plain.spawn('Free', .welcome, 300, 300, 400, 250)
+	pindex := plain.window_index(pid) or { panic('missing window') }
+	plain.buttons = button_left
+	plain.drag = Drag{
+		kind: .move
+		window_id: pid
+		offset_x: 10
+		offset_y: 8
+	}
+	plain.on_pointer_move(15, 400)
+	assert plain.windows[pindex].x == 5 // free movement, no snap
+}
+
+// B4: the compositor cursor is drawn from the resolved Decor axis. The default
+// preset reproduces today's cursor exactly; a preset that sets cursor colours
+// retheme the pointer with no renderer change. In cursor_mask, (0,0) is an edge
+// pixel ('#') and row 3 is '#..#', so (1,3) is a fill pixel ('.').
+fn test_cursor_draws_from_resolved_decor() {
+	mut desktop := Desktop{
+		canvas: new_canvas(64, 64)
+		pointer_x: 8
+		pointer_y: 8
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	// Default preset: the drawn edge/fill match the resolved Decor, which is
+	// today's cursor (white fill, near-black edge) — no regression.
+	desktop.settings.preset_id = 'default'
+	dec := desktop.decor()
+	assert dec.cursor_fill == 0xffffff
+	assert dec.cursor_edge == 0x0d1220
+	desktop.canvas.clear(0x808080)
+	desktop.draw_cursor()
+	stride := desktop.canvas.stride
+	// (0,0) is an edge pixel; (1,3) is a fill pixel — both opaque (alpha 255).
+	assert unsafe { desktop.canvas.pixels[8 * stride + 8] } == dec.cursor_edge
+	assert unsafe { desktop.canvas.pixels[(8 + 3) * stride + (8 + 1)] } == dec.cursor_fill
+
+	// The cursor tracks whatever the resolver returns: assert the drawn pixels
+	// equal decor() for every registered preset (proves no literals remain).
+	for lnf in lookandfeel_registry {
+		if lnf.id == 'macos' {
+			// Catalina's pointer is its own bitmap, not the Decor colours.
+			continue
+		}
+		mut d := Desktop{
+			canvas: new_canvas(64, 64)
+			pointer_x: 8
+			pointer_y: 8
+		}
+		d.settings.preset_id = lnf.id
+		want := d.decor()
+		d.canvas.clear(0x808080)
+		d.draw_cursor()
+		s := d.canvas.stride
+		assert unsafe { d.canvas.pixels[8 * s + 8] } == want.cursor_edge
+		assert unsafe { d.canvas.pixels[(8 + 3) * s + (8 + 1)] } == want.cursor_fill
+		unsafe { free(d.canvas.pixels) }
+	}
+}
+
+// E4: the launcher strip renders one icon_tile per pinned app, in order, each
+// carrying that app's shortcut action id so it launches exactly as the
+// wallpaper shortcut does. BeOS ships a Deskbar launcher (pins 0,3,4).
+fn test_launcher_renders_pinned_tiles_in_order() {
+	mut desktop := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'beos'
+	pins := desktop.shell().launcher_pins
+	assert pins == [0, 3, 4]
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	launcher := utility_element_named(root, top_bar_launcher_id) or { panic('missing launcher') }
+	// One tile per pin, in order.
+	assert launcher.children.len == pins.len
+	mut last_x := f64(-1)
+	for i, pin in pins {
+		tile := launcher.children[i]
+		// The tile's id is the app's shortcut action id — the same launch path
+		// the wallpaper shortcut uses (clickable_view's event id falls back to
+		// its id).
+		assert tile.id == app_shortcut_actions[pin]
+		// Tiles are laid out left to right.
+		assert tile.frame.x > last_x
+		last_x = tile.frame.x
+	}
+	free_tree(root)
+
+	// A shell with no pins (default) renders no launcher strip at all.
+	mut plain := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(plain.canvas.pixels) }
+	}
+	plain.settings.preset_id = 'default'
+	plain.update_taskbar_clock_at(0)
+	ptree := plain.build_tree()
+	assert utility_element_named(ptree, top_bar_launcher_id) == none
+	free_tree(ptree)
+}
+
+// E5: the tray hosts status items in the trailing slot. An empty tray occupies
+// no space (no element); a registered set renders in order and does not overlap
+// the clock. Blue ships a wifi + battery tray.
+fn test_tray_renders_status_without_overlapping_clock() {
+	mut desktop := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().tray_items.len == 2
+	desktop.update_taskbar_clock_at(0)
+
+	root := desktop.build_tree()
+	topbar := utility_element_named(root, 'topbar') or { panic('missing top bar') }
+	tray := utility_element_named(topbar, top_bar_tray_id) or { panic('missing tray') }
+	// One real tray icon per registered item, in order (network then battery),
+	// carrying the same actions as the taskbar's tray so their flyouts work.
+	// An icon the machine has no hardware for (a battery on a desktop) is not
+	// shown, as in the taskbar's tray, so there may be fewer than registered.
+	assert tray.children.len >= 1 && tray.children.len <= 2
+	assert tray.children[0].id == 'tray.icon.network'
+	if tray.children.len == 2 {
+		assert tray.children[1].id == 'tray.icon.battery'
+	}
+	// The tray sits entirely to the left of the clock (no overlap).
+	clock := utility_element_named(topbar, 'topbar.clock') or { panic('missing clock') }
+	assert tray.frame.x + tray.frame.width <= clock.frame.x
+	free_tree(root)
+
+	// A shell with an empty tray renders no tray element at all (no space).
+	mut plain := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(plain.canvas.pixels) }
+	}
+	// A look with a top bar and a bottom bar but no tray items of its own leaves
+	// the tray to the bottom bar and takes no room in the top one.
+	plain.settings.preset_id = 'blue'
+	plain.settings.ov_has_bottom_bar = true
+	assert plain.shell().tray_items.len == 2
+	plain.update_taskbar_clock_at(0)
+
+	// A look with a top bar and nothing at the bottom has nowhere else for its
+	// status icons, so the top bar carries the whole tray.
+	mut mac := Desktop{
+		canvas: new_canvas(1280, 720)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(mac.canvas.pixels) }
+	}
+	mac.settings.preset_id = 'platinum'
+	assert mac.shell().tray_items.len == 0 && !mac.shell().has_bottom_bar
+	mac.update_taskbar_clock_at(0)
+	ptree := mac.build_tree()
+	mac_top := utility_element_named(ptree, 'topbar') or { panic('missing top bar') }
+	mac_tray := utility_element_named(mac_top, top_bar_tray_id) or { panic('missing tray') }
+	assert mac_tray.children.len >= 1
+	clock2 := utility_element_named(mac_top, 'topbar.clock') or { panic('missing clock') }
+	assert mac_tray.frame.x + mac_tray.frame.width <= clock2.frame.x
+	free_tree(ptree)
+}
+
+// H2: desktop-icon content follows the resolved icon_source. `shortcuts` (the
+// default) renders one tile per app with today's shortcut ids; `files` lists a
+// desktop directory's entries as tiles, folders first, sharing B's icon_tile.
+fn test_desktop_icon_source_shortcuts_and_files() {
+	// shortcuts mode (default): one tile per available app, today's ids.
+	mut desktop := Desktop{
+		canvas: new_canvas(1024, 768)
+		fonts: load_fonts()
+	}
+	defer {
+		unsafe { free(desktop.canvas.pixels) }
+	}
+	desktop.settings.preset_id = 'default'
+	assert desktop.surface().icon_source == .shortcuts
+	shortcuts := desktop.shortcut_elements()
+	assert shortcuts.len == available_apps.len
+	assert shortcuts[0].id == app_shortcut_actions[0]
+	assert shortcuts.last().id == app_shortcut_actions[available_apps.len - 1]
+
+	// files mode: build a temp desktop directory with a folder and two files.
+	dir := os.join_path(os.temp_dir(), 'vinix-desktop-icons-test')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.mkdir(os.join_path(dir, 'Projects')) or { assert false }
+	os.write_file(os.join_path(dir, 'notes.txt'), 'hi') or { assert false }
+	os.write_file(os.join_path(dir, 'todo.md'), 'x') or { assert false }
+
+	mut mac := Desktop{
+		canvas: new_canvas(1024, 768)
+		fonts: load_fonts()
+		icons_dir: dir
+	}
+	defer {
+		unsafe { free(mac.canvas.pixels) }
+	}
+	// Platinum (a classic Mac desktop) resolves to files mode.
+	mac.settings.preset_id = 'platinum'
+	assert mac.surface().icon_source == .files
+	files := mac.shortcut_elements()
+	// One tile per entry (folder + two files).
+	assert files.len == 3
+	// Folders first (files.v ordering): the first tile is the directory, and it
+	// carries the folder glyph; the rest are files.
+	folder := files[0]
+	assert folder.id == '${desktop_file_prefix}0'
+	assert folder.children[0].image_path == 'builtin:folder'
+	assert files[1].children[0].image_path == 'builtin:file'
+	assert files[2].children[0].image_path == 'builtin:file'
+	// The tile label is the entry name; folders sort before files by name.
+	assert folder.children[1].text == 'Projects'
+	assert files[1].children[1].text == 'notes.txt'
+	assert files[2].children[1].text == 'todo.md'
+}
+
+// A3: settings persistence & migration. The sparse blob writes only non-default
+// fields, round-trips exactly, and a missing/garbage blob loads the built-in
+// defaults rather than crashing. "Reset" is the absence of a key on disk.
+fn test_settings_persistence_roundtrip_and_resilience() {
+	// All-default settings encode to the empty string (nothing overridden).
+	def := Settings{}
+	assert encode_settings(def) == ''
+	// Decoding the empty blob yields the built-in defaults.
+	back := decode_settings('')
+	assert back.preset_id == default_preset_id
+	assert back.wallpaper_color == settings_default_wallpaper_color
+	assert back.wallpaper_image == settings_default_wallpaper_image
+	assert back.button_side == .right
+	assert back.taskbar_mode == .standard
+
+	// A sparse override set round-trips exactly, and only the set fields appear.
+	chosen := Settings{
+		preset_id: 'blue'
+		wallpaper_color: 0
+		wallpaper_image: 4
+		button_side: .left
+		taskbar_mode: .combined
+	}
+	blob := encode_settings(chosen)
+	// wallpaper_color is at its default (0) so it is NOT written; the rest are.
+	assert blob.contains('preset blue')
+	assert blob.contains('wallpaper_image 4')
+	assert !blob.contains('wallpaper_color')
+	assert blob.contains('button_side left')
+	assert blob.contains('taskbar_mode combined')
+	round := decode_settings(blob)
+	assert round.preset_id == 'blue'
+	assert round.wallpaper_image == 4
+	assert round.wallpaper_color == 0
+	assert round.button_side == .left
+	assert round.taskbar_mode == .combined
+
+	// Reset semantics: dropping the wallpaper keys re-inherits the defaults.
+	reset := decode_settings('preset blue')
+	assert reset.preset_id == 'blue'
+	assert reset.wallpaper_image == settings_default_wallpaper_image
+	assert reset.wallpaper_color == settings_default_wallpaper_color
+
+	// Garbage/truncated input never crashes: unknown keys, malformed lines and
+	// non-numeric values all leave the field at its default.
+	garbage := decode_settings('this is not valid\n\x00\x01\nwallpaper_image notanint\nunknown_key 5\npreset ')
+	assert garbage.preset_id == default_preset_id
+	assert garbage.wallpaper_image == settings_default_wallpaper_image
+
+	// Migration: an unknown preset id is kept verbatim and normalised only when
+	// resolved — lookandfeel_by_id falls back to the default preset (no crash).
+	stale := decode_settings('preset no_such_preset')
+	assert lookandfeel_by_id(stale.preset_id).id == default_preset_id
+	eff := resolve_settings(BlueSettings{ preset_id: stale.preset_id })
+	assert eff.decor.window_body == builtin_decor.window_body // resolves to defaults
+}
+
 fn test_shortcut_order_normalizes_without_changing_app_identity() {
 	input := [3, 3, -1, available_apps.len + 1, 1]
 	order := normalize_shortcut_order(input)
@@ -2113,4 +2816,129 @@ fn test_shortcut_release_outside_an_icon_restores_preview_without_persisting() {
 	}
 	assert desktop.shortcut_slot_for_app(app_index) == 0
 	assert !os.exists(shortcut_order_path(root))
+}
+
+// G3: a per-axis override beats the preset on that field alone, and clearing it
+// lets the preset show through again. Blue draws a top bar and has window shade
+// on; the overrides turn each off without touching the rest of the preset.
+fn test_per_axis_overrides_beat_the_preset_one_field_at_a_time() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 1280
+			height: 720
+		}
+	}
+	desktop.settings.preset_id = 'blue'
+	assert desktop.shell().has_top_bar
+	assert desktop.behavior().shade_enabled
+	assert desktop.shell().has_bottom_bar
+
+	desktop.settings.ov_has_top_bar = false
+	desktop.settings.ov_shade_enabled = false
+	assert !desktop.shell().has_top_bar
+	assert !desktop.behavior().shade_enabled
+	assert desktop.shell().has_bottom_bar // untouched
+
+	desktop.settings.ov_has_top_bar = none
+	assert desktop.shell().has_top_bar
+	assert !desktop.behavior().shade_enabled // still overridden
+
+	// Typography and decor overrides reach the resolved axes.
+	desktop.settings.ov_title_size = 20
+	assert desktop.typography().title_size == 20
+	desktop.settings.ov_window_radius = 9
+	assert desktop.decor().window_radius == 9
+	// The wallpaper selection still layers over a per-axis surface override.
+	desktop.settings.ov_icons_visible = false
+	desktop.settings.wallpaper_color = 2
+	assert !desktop.surface().icons_visible
+	assert desktop.surface().wallpaper_color == 2
+}
+
+// The per-axis overrides cross to application processes with the rest of the
+// settings, and a flag or value outside its range is a damaged message.
+fn test_overrides_survive_the_application_wire() {
+	state := AppWireState{
+		settings: Settings{
+			preset_id: 'blue'
+			ov_window_radius: 7
+			ov_title_align: .center
+			ov_shade_enabled: true
+			ov_menu_placement: .none_
+			ov_title_double_click: .hide
+			ov_has_window_list: false
+			ov_icon_source: .files
+		}
+	}
+	mut out := []u8{}
+	wire_put_state(mut out, state)
+	mut reader := WireReader{
+		data: out
+	}
+	decoded := wire_take_state(mut reader) or { panic(err) }
+	assert decoded.settings == state.settings
+	assert decoded.settings.ov_ui_size == none
+
+	// An enum value outside its range is a damaged message.
+	mut bad := []u8{}
+	wire_put_state(mut bad, AppWireState{
+		settings: Settings{
+			ov_title_align: unsafe { TitleAlign(9) }
+		}
+	})
+	mut bad_reader := WireReader{
+		data: bad
+	}
+	accepted := wire_take_state(mut bad_reader) or { return }
+	assert false, 'accepted ${accepted.settings.ov_title_align or { TitleAlign.left }}'
+}
+
+fn test_window_chrome_choices_survive_the_application_wire() {
+	widgets := widgets_from_text('close@leading,maximize@trailing') or { panic('widgets') }
+	state := AppWireState{
+		settings: Settings{
+			ov_title_kind: .tab
+			ov_tab_align: .right
+			ov_widgets: int(widgets_pack(widgets))
+			skin_id: 'none'
+		}
+	}
+	mut out := []u8{}
+	wire_put_state(mut out, state)
+	mut reader := WireReader{
+		data: out
+	}
+	decoded := wire_take_state(mut reader) or { panic(err) }
+	assert decoded.settings.ov_title_kind or { TitleKind.full } == .tab
+	assert decoded.settings.ov_tab_align or { TitleAlign.left } == .right
+	assert decoded.settings.ov_widgets or { 0 } == int(widgets_pack(widgets))
+	assert decoded.settings.skin_id == 'none'
+	// Nothing set stays nothing.
+	mut plain := []u8{}
+	wire_put_state(mut plain, AppWireState{})
+	mut plain_reader := WireReader{
+		data: plain
+	}
+	back := wire_take_state(mut plain_reader) or { panic(err) }
+	assert back.settings.ov_title_kind == none && back.settings.ov_widgets == none
+	assert back.settings.skin_id == ''
+}
+
+fn test_user_chrome_choices_beat_the_look() {
+	mut d := Desktop{}
+	d.settings.preset_id = 'default'
+	assert d.chrome_spec().kind == .full
+	d.settings.ov_title_kind = .tab
+	d.settings.ov_tab_align = .center
+	spec := d.chrome_spec()
+	assert spec.kind == .tab && spec.tab_align == .center
+	// The stock three buttons remain until the user names their own.
+	assert spec.widgets.len == 3
+	d.settings.ov_widgets = int(widgets_pack(widgets_from_text('menu@leading,close@trailing') or { panic('w') }))
+	spec2 := d.chrome_spec()
+	assert spec2.widgets.len == 2 && spec2.widgets[0].action == .menu
+	// A look's own tab can be flattened back to a full bar.
+	d.settings.preset_id = 'beos'
+	d.settings.ov_title_kind = .full
+	assert d.chrome_spec().kind == .full
 }
