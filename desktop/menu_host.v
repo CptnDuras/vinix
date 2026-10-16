@@ -10,10 +10,10 @@ module main
 
 import ui2
 
-const menu_row_height = 24
-const menu_separator_height = 7
-const menu_width = 180
-const menu_pad = 4
+const window_menu_row_height = 24
+const window_menu_separator_height = 7
+const window_menu_width = 180
+const window_menu_pad = 4
 
 // window_menu_open reports whether the system window menu is showing.
 fn (d &Desktop) window_menu_open() bool {
@@ -58,14 +58,14 @@ fn (d &Desktop) window_menu_element() ui2.Element {
 	menu := system_window_menu(title, d.behavior().shade_enabled)
 
 	mut children := frame_elements(menu.items.len)
-	mut y := menu_pad
+	mut y := window_menu_pad
 	for item in menu.items {
 		if item.separator {
-			children << ui2.view('', ui2.rect(f64(menu_pad), f64(y + menu_separator_height / 2),
-				f64(menu_width - 2 * menu_pad), 1), ui2.BoxStyle{
+			children << ui2.view('', ui2.rect(f64(window_menu_pad), f64(y + window_menu_separator_height / 2),
+				f64(window_menu_width - 2 * window_menu_pad), 1), ui2.BoxStyle{
 				bg: theme.title_divider
 			}, [])
-			y += menu_separator_height
+			y += window_menu_separator_height
 			continue
 		}
 		hovered := d.hover == item.action
@@ -77,8 +77,8 @@ fn (d &Desktop) window_menu_element() ui2.Element {
 		bg := if hovered && item.enabled { theme.accent_dim } else { u32(0) }
 		// A disabled item carries no action id, so it cannot be clicked.
 		action_id := if item.enabled { item.action } else { '' }
-		children << ui2.button(action_id, item.label, ui2.rect(f64(menu_pad), f64(y),
-			f64(menu_width - 2 * menu_pad), f64(menu_row_height)), ui2.BoxStyle{
+		children << ui2.button(action_id, item.label, ui2.rect(f64(window_menu_pad), f64(y),
+			f64(window_menu_width - 2 * window_menu_pad), f64(window_menu_row_height)), ui2.BoxStyle{
 			bg: bg
 			transparent: bg == 0
 			radius: 3
@@ -87,20 +87,20 @@ fn (d &Desktop) window_menu_element() ui2.Element {
 			size: 13
 			align: .left
 		})
-		y += menu_row_height
+		y += window_menu_row_height
 	}
 
-	total_h := y + menu_pad
+	total_h := y + window_menu_pad
 	// Keep the popup on-screen.
 	mut px := d.window_menu_x
 	mut py := d.window_menu_y
-	if px + menu_width > d.canvas.width {
-		px = d.canvas.width - menu_width
+	if px + window_menu_width > d.canvas.width {
+		px = d.canvas.width - window_menu_width
 	}
 	if py + total_h > d.canvas.height {
 		py = d.canvas.height - total_h
 	}
-	return ui2.view('menu.window', ui2.rect(f64(px), f64(py), f64(menu_width), f64(total_h)),
+	return ui2.view('menu.window', ui2.rect(f64(px), f64(py), f64(window_menu_width), f64(total_h)),
 		ui2.BoxStyle{
 		bg: theme.window_body
 		radius: 6
