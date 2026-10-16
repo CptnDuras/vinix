@@ -409,7 +409,7 @@ fn wire_theme_valid(value int) bool {
 // app_extended_luna.
 fn app_theme_hidden(preset_id string, peer_features u8, peer_extended u32) bool {
 	return (preset_id == 'windows7' && peer_features & app_feature_glass == 0)
-		|| (preset_id == 'windows_xp' && peer_extended & app_extended_luna == 0)
+		|| (preset_id == 'windowsxp' && peer_extended & app_extended_luna == 0)
 }
 
 // Strip theme and taskbar fields a peer cannot read while keeping the same

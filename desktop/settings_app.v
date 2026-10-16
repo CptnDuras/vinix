@@ -18,7 +18,6 @@ import desktop.sessioncore
 
 enum SettingsCategory {
 	appearance
-	windows
 	date_time
 	language
 	theme
@@ -43,6 +42,9 @@ enum SettingsCategory {
 	shortcuts
 	gestures
 	taskbar
+	// Added last so every earlier category keeps its number: running desktops
+	// send these selectors to a newer Settings process.
+	windows
 }
 
 // Category IDs remain stable when the sidebar gains a page: running desktops
@@ -52,8 +54,8 @@ const settings_categories = [SettingsCategory.appearance, .date_time, .language,
 	.users, .network, .privacy, .storage, .updates, .accessibility, .clock, .session, .shortcuts, .gestures, .taskbar,
 	.windows]
 
-const settings_sidebar_categories = [SettingsCategory.appearance, .windows, .taskbar, .date_time, .language,
-	.theme, .wallpaper, .wifi, .display, .battery, .power, .keyboard, .about, .sound, .bluetooth,
+const settings_sidebar_categories = [SettingsCategory.appearance, .taskbar, .date_time, .language,
+	.theme, .wallpaper, .wifi, .display, .battery, .power, .keyboard, .windows, .about, .sound, .bluetooth,
 	.printers, .users, .network, .privacy, .storage, .updates, .accessibility, .clock, .session,
 	.shortcuts, .gestures]
 

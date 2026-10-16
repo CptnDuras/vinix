@@ -13,7 +13,7 @@ struct SettingsSearchEntry {
 const settings_search_limit = 128
 // Room for every entry below to match at once: SettingsApp keeps the indices
 // of its results inline. An entry added here needs one more.
-const settings_search_capacity = 48
+const settings_search_capacity = 51
 const settings_search_entries = [
 	SettingsSearchEntry{.taskbar, 'settings.appearance.overview', [
 		'desktop.overview.title', '', '', '', '', '',
@@ -298,6 +298,30 @@ const settings_search_entries = [
 	SettingsSearchEntry{.session,'Session',['startup','services','workspaces','restore','','']!},
 	SettingsSearchEntry{.shortcuts,'Shortcuts',['keyboard','customize','bindings','','','']!},
 	SettingsSearchEntry{.gestures,'Gestures',['corners','pointer','swipe','','','']!},
+	SettingsSearchEntry{.windows, 'settings.windows.titlebar', [
+		'settings.windows.titlebar_note',
+		'settings.windows.bar',
+		'settings.windows.tab',
+		'settings.windows.tab_position',
+		'settings.windows.pos_left',
+		'settings.windows.pos_center',
+	]!},
+	SettingsSearchEntry{.windows, 'settings.windows.widgets', [
+		'settings.windows.widgets_note',
+		'settings.windows.action.close',
+		'settings.windows.action.minimize',
+		'settings.windows.action.maximize',
+		'settings.windows.action.shade',
+		'settings.windows.action.menu',
+	]!},
+	SettingsSearchEntry{.windows, 'settings.windows.skin', [
+		'settings.windows.skin_note',
+		'settings.windows.skin_none',
+		'settings.windows.follow',
+		'settings.windows.reset',
+		'',
+		'',
+	]!},
 ]!
 
 const settings_category_actions = ['settings.category.0', 'settings.category.1', 'settings.category.2',
@@ -306,7 +330,7 @@ const settings_category_actions = ['settings.category.0', 'settings.category.1',
 	'settings.category.11','settings.category.12','settings.category.13','settings.category.14',
 	'settings.category.15','settings.category.16','settings.category.17','settings.category.18',
 	'settings.category.19','settings.category.20','settings.category.21','settings.category.22','settings.category.23',
-	'settings.category.24']!
+	'settings.category.24','settings.category.25']!
 const settings_search_actions = ['settings.search.result.0', 'settings.search.result.1',
 	'settings.search.result.2', 'settings.search.result.3', 'settings.search.result.4',
 	'settings.search.result.5', 'settings.search.result.6', 'settings.search.result.7',

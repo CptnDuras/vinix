@@ -997,21 +997,22 @@ fn test_selecting_windows_xp_theme_puts_controls_on_right() {
 	}
 	begin_frame_elements()
 	pane := app.theme_pane(480)
-	// Four themes in one row, each as wide as the next, inside the pane.
+	// Every look the desktop can draw is offered, two to a row, each as wide
+	// as the next and inside the pane.
 	mut choices := 0
-	mut last_right := 0
+	mut first_width := 0
 	for element in pane {
 		if element.id.starts_with(settings_action_theme) {
-			assert int(element.frame.x) >= last_right
-			if choices > 0 {
-				assert int(element.frame.width) == int(pane[2].frame.width)
+			if choices == 0 {
+				first_width = int(element.frame.width)
 			}
-			last_right = int(element.frame.x + element.frame.width)
+			assert int(element.frame.width) == first_width
+			assert int(element.frame.x) >= settings_padding
+			assert int(element.frame.x + element.frame.width) <= 480 - settings_padding
 			choices++
 		}
 	}
-	assert choices == 4
-	assert last_right <= 480 - settings_padding
+	assert choices == lookandfeel_registry.len
 	app.handle('${settings_action_theme}${registry_index_of('windowsxp')}') or { panic(err) }
 	assert desktop.settings.preset_id == 'windowsxp'
 	assert desktop.settings.button_side == .right
