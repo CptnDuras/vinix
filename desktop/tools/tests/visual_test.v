@@ -191,9 +191,19 @@ fn test_a_bitmap_skin_paints_its_bar_and_orbs() {
 	bar := pixel_at(&d, 250, 76)
 	assert (bar & 0xff) > (bar >> 16) & 0xff
 	// The close orb is red where the default look has only a glyph on white.
-	orb := pixel_at(&d, 60 + 8 + 8, 70 + 17)
-	assert (orb >> 16) & 0xff > 0xb0 && (orb & 0xff) < 0x90
+	// Where it sits follows the bar's height, so look along the bar's leading
+	// end for it rather than at one pixel.
 	maybe_dump(&d, 'glass')
+	mut orb_found := false
+	for y in 70 .. 70 + d.theme().title_height {
+		for x in 60 .. 60 + 96 {
+			px := pixel_at(&d, x, y)
+			if (px >> 16) & 0xff > 0xb0 && (px & 0xff) < 0x90 {
+				orb_found = true
+			}
+		}
+	}
+	assert orb_found
 }
 
 fn test_choosing_none_removes_a_looks_own_skin() {
