@@ -156,6 +156,11 @@ MAIN_PKGS=(
     fontconfig fontconfig-dev
     libffi libffi-dev
     nettle nettle-dev
+    # Runtime dependencies of the libraries above that no other required
+    # layer carries: libhogweed needs libgmp, and libXdmcp, which libxcb and
+    # so every X client loads, needs libbsd and its libmd.
+    gmp
+    libbsd libmd
     libxau libxau-dev
     libxdmcp libxdmcp-dev
     libxcb libxcb-dev
@@ -197,6 +202,8 @@ MAIN_PKGS=(
     mesa-osmesa
     mesa-xatracker
     mesa-dri-gallium
+    # libEGL's client-side Wayland dependency.
+    wayland-libs-client
     elfutils
     libxml2
     zstd-libs
@@ -228,12 +235,12 @@ COMMUNITY_PKGS=(
     mesa-utils
 )
 
-if [ "$VINIX_ARCH" = x86_64 ]; then
-    # x86 Mesa's DRI megadriver also carries the Intel and Radeon drivers.
-    # They link libdrm_intel, which needs libpciaccess, and libelf; without
-    # both swrast_dri.so fails to dlopen.
-    MAIN_PKGS+=(libpciaccess libelf)
-fi
+# Mesa's DRI megadriver carries the Radeon drivers (and on x86 the Intel ones,
+# through libdrm_intel and its libpciaccess), which link libelf: without them
+# swrast_dri.so fails to dlopen, and Xorg and Xvfb lose GLX. libSM, which
+# libXt and so the classic X clients load, needs libuuid. No other layer an
+# image always carries provides these.
+MAIN_PKGS+=(libpciaccess libelf libuuid)
 
 echo "--- Downloading main packages ---"
 for pkg in "${MAIN_PKGS[@]}"; do
@@ -522,10 +529,15 @@ install -m755 "$SCRIPT_DIR/build-support/xorg-server/startx" "$STAGING/usr/bin/s
 # Vinix exposes its pointer as one small absolute-coordinate packet and its
 # keyboard through the console. Translate both into XTEST events rather than
 # importing Linux's evdev/udev input stack just to run X11 applications.
+# The V bridge generator names architectures arm64 and amd64.
+V_ARCH=arm64
+[ "$VINIX_ARCH" != x86_64 ] || V_ARCH=amd64
 echo "  Building Vinix X11 input bridge..."
 "$SCRIPT_DIR/build-support/xorg-server/compile-v-host" xinputcore \
-    "$BUILD_DIR/vinix-xinput-core.c" --arch arm64
-$CC -std=gnu11 -O2 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-parameter \
+    "$BUILD_DIR/vinix-xinput-core.c" --arch "$V_ARCH"
+# $CC carries -static-libgcc for links; this step only compiles.
+$CC -std=gnu11 -O2 -Wall -Wextra -Werror -Wno-unused-command-line-argument \
+    -Wno-unused-function -Wno-unused-parameter \
     -ffreestanding -fno-builtin -fwrapv -fno-strict-aliasing \
     -I"$SCRIPT_DIR/build-support/xorg-server" -I"$SYSROOT/usr/include" \
     -c "$BUILD_DIR/vinix-xinput-core.c" -o "$BUILD_DIR/vinix-xinput-core.o"
@@ -540,7 +552,7 @@ $CC -O2 -Wall -Wextra -Werror -D__vinix__ -I"$SYSROOT/usr/include" \
 # input records into XTEST events; it never opens the physical input devices.
 echo "  Building Vinix embedded Wine host..."
 "$SCRIPT_DIR/build-support/xorg-server/compile-v-host" winehost \
-    "$BUILD_DIR/vinix-wine-host-core.c" --arch arm64
+    "$BUILD_DIR/vinix-wine-host-core.c" --arch "$V_ARCH"
 $CC -O2 -Wall -Wextra -Werror -D__vinix__ -I"$SYSROOT/usr/include" \
     -I"$SCRIPT_DIR/build-support/xorg-server" \
     "$BUILD_DIR/vinix-wine-host-core.c" \

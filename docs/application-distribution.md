@@ -4,7 +4,24 @@ Vinix has a native V application package service, `vinix-package`, and a
 **Software** desktop application. They manage signed repositories and immutable
 application generations on AArch64 and x86_64. The desktop security-tools stage
 installs the service, sandbox launcher, Software process link and XDG registration
-directory. It preserves existing configuration; a fresh image enrolls no keys.
+directory. It preserves existing configuration; a fresh image enrolls no keys
+unless its builder supplies an explicit reviewed release configuration.
+
+Release image staging accepts `--config FILE` or `VINIX_PACKAGE_IMAGE_CONFIG` to
+seed the normal repository keys, policy and launch account before first boot.
+It captures and validates the input before compiling, checks new publisher keys,
+and publishes configuration exclusively without changing existing configuration
+or package state. Missing configuration beside retained state requires recovery.
+The desktop cache tracks the selected input and its contents. See
+[the image contract](../tools/packages/SDK.md#release-image-configuration) and
+[clean-image native catalog qualification](../tests/packages/image-configuration-check.md).
+
+[Ordinary Software image qualification](../tests/packages/software-image-check.md)
+now joins that staged trust with the real administrator and isolated-launch
+services. Both target guests exercise Software's actual controller and UI trees,
+native windows under separate user accounts, updates, rollback and cached
+reinstall. Graphical login/presentation and persistent-device acceptance remain
+separate release gates.
 
 Configuration, cached catalogs, trust histories, installed state and publisher
 documents share a bounded metadata reader. It captures a nonblocking descriptor,
@@ -1968,3 +1985,8 @@ that retires partially decoded fields. Completion receipts release hash state
 and scratch, retaining their canonical bytes and reviewed-operation limits.
 Malformed requests receive bounded protocol diagnostics. See
 [administrator envelope qualification](../tests/packages/admin-envelope-check.md).
+
+The administrator client also retires its owned authentication frames, nonce
+and listener storage, explicitly erases password scratch and keeps refusal
+diagnostics alive after reply cleanup. See
+[administrator client qualification](../tests/packages/admin-client-check.md).

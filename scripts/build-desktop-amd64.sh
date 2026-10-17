@@ -5,11 +5,14 @@
 # and GCC come from official Alpine packages.
 #
 # The image carries the same package layers as the arm64 desktop; build them
-# first with ./scripts/build-x11-amd64.sh, ./scripts/build-firefox-amd64.sh,
-# ./scripts/build-network-tools-amd64.sh, ./scripts/build-python-amd64.sh and
-# ./scripts/build-v-amd64.sh.
+# first with ./scripts/build-x11-amd64.sh, ./scripts/build-network-tools-amd64.sh,
+# ./scripts/build-python-amd64.sh and ./scripts/build-v-amd64.sh.
 #
-# Usage: ./scripts/build-desktop-amd64.sh [--no-iso]
+# Usage: ./scripts/build-desktop-amd64.sh [--no-iso] [--with-firefox]
+#
+#   --with-firefox  also stage Firefox and its GTK/media runtime from
+#                   ./scripts/build-firefox-amd64.sh; otherwise the first-run
+#                   app page offers the browser through pkg
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,10 +22,12 @@ SYSROOT="${VINIX_AMD64_SYSROOT:-$USERLAND_DIR/staging}"
 KERNEL_BUILD_DIR="${VINIX_AMD64_BUILD_DIR:-$SCRIPT_DIR/build-amd64-kernel}"
 OUTPUT_ISO="${VINIX_AMD64_DESKTOP_ISO:-$SCRIPT_DIR/vinix-desktop-amd64.iso}"
 MAKE_ISO=1
+WITH_FIREFOX=0
 
 for arg in "$@"; do
     case "$arg" in
         --no-iso) MAKE_ISO=0 ;;
+        --with-firefox) WITH_FIREFOX=1 ;;
         --help|-h)
             sed -n '2,/^set -/s/^# \{0,1\}//p' "$0"
             exit 0
@@ -47,17 +52,20 @@ else
     UI2_SOURCE="$SCRIPT_DIR/third_party/ui2"
 fi
 
-# X.org with Mesa and LLVM; GTK with its fonts and media codecs, which come
-# from the Firefox layer without Firefox itself (the first-run app page offers
-# the browser through pkg); pkg with apk, curl and git; Python; V with TCC.
+# X.org with Mesa and LLVM; pkg with apk, curl and git; Python; V with TCC.
+# Firefox, with its GTK and media runtime, only on request.
 X11_STAGING="${VINIX_AMD64_X11_STAGING:-$SCRIPT_DIR/build-amd64-x11/staging}"
 FIREFOX_STAGING="${VINIX_AMD64_FIREFOX_STAGING:-$SCRIPT_DIR/build-amd64-firefox/staging}"
 NETWORK_TOOLS_STAGING="${VINIX_AMD64_NETWORK_TOOLS_STAGING:-$SCRIPT_DIR/build-amd64-network-tools/staging}"
 PYTHON_STAGING="${VINIX_AMD64_PYTHON_STAGING:-$SCRIPT_DIR/build-amd64-python/staging}"
 VLANG_STAGING="${VINIX_AMD64_VLANG_STAGING:-$SCRIPT_DIR/build-amd64-v/staging}"
-for layer in "$X11_STAGING:scripts/build-x11-amd64.sh" "$FIREFOX_STAGING:scripts/build-firefox-amd64.sh" \
-    "$NETWORK_TOOLS_STAGING:scripts/build-network-tools-amd64.sh" \
-    "$PYTHON_STAGING:scripts/build-python-amd64.sh" "$VLANG_STAGING:scripts/build-v-amd64.sh"; do
+LAYERS=("$X11_STAGING:scripts/build-x11-amd64.sh"
+    "$NETWORK_TOOLS_STAGING:scripts/build-network-tools-amd64.sh"
+    "$PYTHON_STAGING:scripts/build-python-amd64.sh" "$VLANG_STAGING:scripts/build-v-amd64.sh")
+if [ "$WITH_FIREFOX" -eq 1 ]; then
+    LAYERS+=("$FIREFOX_STAGING:scripts/build-firefox-amd64.sh")
+fi
+for layer in "${LAYERS[@]}"; do
     if [ ! -d "${layer%%:*}/usr" ]; then
         echo "ERROR: missing package layer ${layer%%:*}; run ./${layer##*:} first" >&2
         exit 1
@@ -140,7 +148,7 @@ BUILD_STAMP="${VINIX_BUILD_STAMP:-$(date '+%m-%d %H:%M')}"
     -gc none -d glibc -manualfree -enable-globals -prod \
     -d ui2_headless \
     -d "vinix_build_stamp=$BUILD_STAMP" \
-    -path "@vlib|$UI2_MODULES|@vmodules|$SCRIPT_DIR|$SCRIPT_DIR/third_party" \
+    -path "@vlib|$UI2_MODULES|@vmodules|$SCRIPT_DIR|$SCRIPT_DIR/third_party|$SCRIPT_DIR/tools/accounts" \
     -o "$BUILD_DIR/desktop.c" "$APP_SRC"
 
 echo "==> Compiling for x86_64-linux-musl..."
@@ -175,18 +183,41 @@ merge_staging_tree() {
     done < <(find "$overlay" -mindepth 1 -print0)
     cp -a "$overlay/." "$STAGING/"
 }
-for layer in "$X11_STAGING" "$FIREFOX_STAGING" "$NETWORK_TOOLS_STAGING" \
-    "$PYTHON_STAGING" "$VLANG_STAGING"; do
+# Firefox goes between X11 and the package tools, as on arm64.
+MERGE=("$X11_STAGING")
+if [ "$WITH_FIREFOX" -eq 1 ]; then
+    MERGE+=("$FIREFOX_STAGING")
+fi
+MERGE+=("$NETWORK_TOOLS_STAGING" "$PYTHON_STAGING" "$VLANG_STAGING")
+for layer in "${MERGE[@]}"; do
     echo "    merging $layer"
     merge_staging_tree "$layer"
 done
-rm -rf "$STAGING/usr/lib/firefox-esr" "$STAGING/usr/lib/firefox" \
-    "$STAGING/usr/bin/firefox-esr" "$STAGING/usr/bin/firefox" \
-    "$STAGING"/usr/share/applications/firefox*.desktop \
-    "$STAGING"/usr/share/icons/hicolor/*/apps/firefox* \
-    "$STAGING"/usr/share/metainfo/*firefox*
 rm -f "$STAGING/.PKGINFO" "$STAGING/.INSTALL" "$STAGING"/.SIGN.* \
     "$STAGING"/.pre-* "$STAGING"/.post-* "$STAGING"/.trigger*
+# What the image leaves out of the layers above, as the arm64 compact image
+# does: Vim (vi is BusyBox's); GCC's C++ and link-time-optimisation compilers
+# with the C++ headers and static libraries (C and its LTO linker plugin stay);
+# V's own test suites; and Mesa libraries nothing here can load, since they
+# need the Mesa 24.2 Gallium and LLVM 19 that the X11 layer leaves out.
+echo "    trimming Vim, C++ compilers, V tests and unloadable Mesa libraries"
+for vim_link in ex rvim view vimdiff rvimdiff vimtutor; do
+    if [ "$(readlink "$STAGING/usr/bin/$vim_link" 2>/dev/null)" = vim ]; then
+        rm -f "$STAGING/usr/bin/$vim_link"
+    fi
+done
+rm -rf "$STAGING/usr/bin/vim" "$STAGING/usr/share/vim" "$STAGING/etc/vim"
+rm -f "$STAGING/usr/bin/lto-dump" "$STAGING/usr/bin/g++" "$STAGING/usr/bin/c++" \
+    "$STAGING/usr/bin/x86_64-alpine-linux-musl-g++" "$STAGING/usr/bin/x86_64-alpine-linux-musl-c++" \
+    "$STAGING"/usr/libexec/gcc/*/*/cc1plus "$STAGING"/usr/libexec/gcc/*/*/lto1 \
+    "$STAGING"/usr/libexec/gcc/*/*/lto-wrapper \
+    "$STAGING/usr/lib/libstdc++.a" "$STAGING/usr/lib/libsupc++.a"
+rm -rf "$STAGING/usr/include/c++"
+find "$STAGING/usr/lib/vlang" -type d \( -name tests -o -name slow_tests -o -name testdata \) \
+    -prune -exec rm -rf {} +
+find "$STAGING/usr/lib/vlang" -type f \( -name '*_test.v' -o -name '*_test.*.v' \) -delete
+rm -f "$STAGING"/usr/lib/libOSMesa.so* "$STAGING"/usr/lib/libGLU.so* \
+    "$STAGING"/usr/lib/libxatracker.so*
 mkdir -p "$STAGING/usr/bin" "$STAGING/usr/share/vinix/wallpapers" \
     "$STAGING/usr/share/vinix/icons" "$STAGING/root/desktop" "$STAGING/run"
 install -m755 "$BUILD_DIR/vinix-desktop" "$STAGING/usr/bin/vinix-desktop"
@@ -264,13 +295,21 @@ for command_path in bin/zsh usr/bin/python3 usr/bin/v usr/bin/tcc usr/bin/pkg sb
         exit 1
     fi
 done
-for runtime_path in usr/lib/libgtk-3.so.0 usr/lib/libavcodec.so.60 \
-    usr/lib/xorg/modules/dri/swrast_dri.so usr/share/fonts; do
+runtime_paths=(usr/lib/xorg/modules/dri/swrast_dri.so usr/share/fonts)
+if [ "$WITH_FIREFOX" -eq 1 ]; then
+    runtime_paths+=(usr/lib/libgtk-3.so.0 usr/lib/libavcodec.so.60)
+fi
+for runtime_path in "${runtime_paths[@]}"; do
     if [ ! -e "$STAGING/$runtime_path" ]; then
         echo "ERROR: desktop image is missing /$runtime_path" >&2
         exit 1
     fi
 done
+if [ "$WITH_FIREFOX" -eq 0 ] &&
+   { [ -e "$STAGING/usr/lib/firefox-esr" ] || [ -e "$STAGING/usr/lib/firefox" ]; }; then
+    echo "ERROR: desktop image has Firefox without --with-firefox" >&2
+    exit 1
+fi
 
 # One immutable multicall image, with the same per-application process names as
 # the aarch64 desktop image.
@@ -285,8 +324,7 @@ for app_name in vinix-files vinix-calculator vinix-terminal vinix-settings vinix
     ln -sf vinix-desktop "$STAGING/usr/bin/$app_name"
 done
 
-"$SCRIPT_DIR/build-support/dictionary/prepare" \
-    --destination "$STAGING/usr/share/vinix/dictionary"
+# Images carry no dictionary data (29 MiB); the Dictionary app says so.
 
 echo "==> Wallpapers..."
 "$SCRIPT_DIR/desktop/tools/fetch_wallpapers" "$BUILD_DIR/wallpapers" \
