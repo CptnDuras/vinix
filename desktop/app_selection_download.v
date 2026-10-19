@@ -45,9 +45,13 @@ fn first_run_download(url string, destination string) ! {
 	if !url.starts_with('https://') { return error('setup downloads require HTTPS') }
 	println('Downloading ${url}')
 	// Follow only HTTPS redirects; never run a vendor installation script.
+	// Retry whatever failed: curl retries only timeouts and server errors by
+	// itself, and one refused connection among the two hundred packages of a
+	// vendor app's runtime then failed the whole install.
 	first_run_tool(['/usr/bin/curl', '--fail', '--location', '--proto', '=https', '--proto-redir',
-		'=https', '--retry', '3', '--connect-timeout', '20', '--speed-limit', '1024', '--speed-time',
-		'60', '--silent', '--show-error', '--output', destination, url])!
+		'=https', '--retry', '5', '--retry-all-errors', '--retry-delay', '3', '--connect-timeout',
+		'20', '--speed-limit', '1024', '--speed-time', '60', '--silent', '--show-error', '--output',
+		destination, url])!
 }
 
 fn first_run_file_hash(path string) !string {
@@ -237,7 +241,14 @@ fn first_run_stage_vendor(download FirstRunDownload, archive string, payload str
 	first_run_unpack(archive, payload, download.deb)!
 	if steam {
 		first_run_unpack(payload + '/' + download.binary, payload + '/client', false)!
-		first_run_elf_arch(payload + '/client/linux32/steam', 'i386')!
+		// Valve's bootstrap moved the 32-bit client from linux32/, which now
+		// holds only the error reporter, to ubuntu12_32/.
+		client := if os.exists(payload + '/client/ubuntu12_32/steam') {
+			payload + '/client/ubuntu12_32/steam'
+		} else {
+			payload + '/client/linux32/steam'
+		}
+		first_run_elf_arch(client, 'i386')!
 	} else {
 		first_run_elf_arch(payload + '/' + download.binary, download.arch)!
 	}
@@ -316,7 +327,9 @@ fn first_run_install_vendor(name string) ! {
 		first_run_tool(['pkg', 'install', name])!
 		return
 	}
-	first_run_tool(['pkg', 'install', 'libarchive-tools', 'font-dejavu', 'bash'])!
+	// Vendor Linux applications are X11 clients the desktop hosts on Xvfb, and
+	// unlike Alpine's they do not bring X11 through apk.
+	first_run_tool(['pkg', 'install', 'libarchive-tools', 'font-dejavu', 'bash', 'x11'])!
 	os.mkdir_all('/var/cache/vinix-setup')!
 	work := '/var/cache/vinix-setup/${name}-${os.getpid()}'
 	os.mkdir(work)!
@@ -326,8 +339,8 @@ fn first_run_install_vendor(name string) ! {
 	first_run_download(download.url, archive)!
 	payload := work + '/payload'
 	first_run_stage_vendor(download, archive, payload, name == 'steam')!
-	first_run_install_linux_runtime(download.arch, work)!
-	if name == 'steam' { first_run_install_linux_runtime('x86_64', work)! }
+	first_run_install_runtime_process(download.arch)!
+	if name == 'steam' { first_run_install_runtime_process('x86_64')! }
 	first_run_publish_vendor(name, download, payload, '')!
 	if os.is_executable('/usr/libexec/vinix-persist-packages') {
 		first_run_tool(['/usr/libexec/vinix-persist-packages', 'save'])!

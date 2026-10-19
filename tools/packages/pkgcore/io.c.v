@@ -60,8 +60,10 @@ pub fn replace_path(source string, destination string) ! {
 fn ordinary_file(path string) bool {
 	// This compiler's os.is_file only excludes directories, so it accepts
 	// FIFOs/devices. Inspect the file type before any potentially blocking read.
-	info := os.lstat(path) or { return false }
-	return info.mode & 0o170000 == 0o100000
+	// A missing resume target is normal. Avoid allocating an os.Stat record
+	// and an unretired error merely to answer this predicate.
+	mut info := C.stat{}
+	return C.lstat(path.str, unsafe { &info }) == 0 && info.st_mode & 0o170000 == 0o100000
 }
 
 pub fn copy_file(source string, target string, offset u64, maximum u64) ! {
@@ -76,7 +78,9 @@ pub fn fetch(url string, destination string, maximum u64, resume bool, offline b
 // server can refuse ranges, requiring a bounded fresh transfer instead.
 fn fetch_progress(url string, destination string, maximum u64, resume bool, offline bool, event pkgprotocol.Progress, report fn (pkgprotocol.Progress)) !bool {
 	if url.starts_with('file:///') {
-		return fetch_file_progress(url[7..], destination, maximum, resume, event, report)
+		source := url[7..]
+		defer { unsafe { source.free() } }
+		return fetch_file_progress(source, destination, maximum, resume, event, report)
 	}
 	return fetch_https_with(url, destination, maximum, resume, offline, event, report, HttpsOutputOptions{})
 }
@@ -85,7 +89,7 @@ pub fn free_bytes(path string) !u64 {
 	// Read statvfs directly: this V's os.disk_usage frees its borrowed path,
 	// which corrupts the transaction's state-directory string with -gc none.
 	mut usage := C.statvfs{}
-	if C.statvfs(path.str, &usage) != 0 {
+	if C.statvfs(path.str, unsafe { &usage }) != 0 {
 		return error('cannot determine available disk space: ${path}')
 	}
 	// Block counts use fundamental allocation units, not the preferred I/O
@@ -100,8 +104,10 @@ pub fn free_bytes(path string) !u64 {
 }
 
 pub fn disk_check(available u64, needed u64, reserve u64) ! {
-	if needed > ~u64(0) - reserve || available < needed + reserve {
-		return error('insufficient disk space: ${available} bytes free, ${needed} needed plus ${reserve} reserved; remove unused generations or use a larger disk')
+	if !pkgprotocol.disk_budget(available, needed, reserve).fits() {
+		free_text := available.str(); needed_text := needed.str(); reserve_text := reserve.str()
+		defer { unsafe { free_text.free(); needed_text.free(); reserve_text.free() } }
+		return error('insufficient disk space: ' + free_text + ' bytes free, ' + needed_text + ' needed plus ' + reserve_text + ' reserved; remove unused generations or use a larger disk')
 	}
 }
 
@@ -163,7 +169,7 @@ pub fn owned_directory(path string, mode int) ! {
 	mut info := C.stat{}
 	if C.lstat(path.str, unsafe { &info }) != 0 {
 		if C.errno != C.ENOENT { return error('cannot inspect package state directory: ' + path) }
-		os.mkdir_all(path, mode: mode)!
+		make_package_directories(path, u32(mode))!
 		if C.lstat(path.str, unsafe { &info }) != 0 { return error('cannot inspect created package state directory: ' + path) }
 	}
 	if info.st_mode & 0o170000 != 0o040000 {

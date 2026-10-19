@@ -625,21 +625,329 @@ The [ordinary Software image check](tests/packages/software-image-check.md)
 joins the real UI controller with staged trust, authenticated maintenance and
 isolated native launches under administrator/standard accounts on both targets.
 It covers separate private data, updates, rollback and cached reinstall; full
-graphical login/presentation and persistent installed-system acceptance remain
-open.
+graphical login/presentation and full installed-system acceptance remain open.
+
+The [Software cold-boot check](tests/packages/software-persistence-check.md)
+retains package state, replay history, trust, accounts and native application data
+on one ext2 volume across four boots. Ordinary Software installs, reopens,
+upgrades, rolls back, removes and reinstalls the native catalog from cache.
+Installed OS boot, graphical presentation and broader device/crash acceptance
+remain open.
+
+The [installed-system Software check](tests/packages/software-installed-check.md)
+uses the real blank-disk installer and reboots the installed VJFS root to maintain
+the native SDK catalog. It checks staged tools, accounts, trust, package state
+and private data across install, upgrade, rollback, removal and cached reinstall.
+Autonomous firmware boot, graphical presentation, production catalog migration
+and broader runtime/device acceptance remain open.
+
+Release image builders can now [bundle signed offline repositories](tools/packages/SDK.md#offline-repository-bundles-in-release-images)
+through the production staging tool. The bundle retains the reviewed publisher
+and target URLs, checks complete closures and organization/license/firmware policy,
+and publishes atomically without initializing consumer state. The
+[bundle check](tests/packages/image-repositories-check.md) covers both target
+architectures; broader release/catalog/runtime acceptance remains open.
 
 - [ ] Harden the existing package frontend with trusted repositories, dependency
   resolution, reproducible metadata and consistent architecture support.
+  - [x] [Captured catalog publication](tests/packages/catalog-export-check.md)
+    protects workspace construction and strict/selected-host composition with
+    checked staging identities, bounded cleanup and captured-parent publication.
+    Replacement recovery, source pins, canonical retry, saved-output failures
+    and signed offline consumption have explicit regression checks.
+  - [x] [Captured publisher profile staging](tests/packages/profile-export-check.md)
+    protects native SDK, SQLite, FFmpeg, Wine and Apple inventories and locks.
+    Root/child/parent replacements retain recovery data; exclusive publication
+    keeps canonical output after directory flush or private cleanup failure.
+  - [x] [Owned native profile metadata](tests/packages/native-profile-ownership-check.md)
+    retires templates, partial packed inventories and canonicalization scratch,
+    returns an independently closeable reply and preserves canonical locks.
+    [Complete native builder ownership](tests/packages/native-builder-check.md)
+    also covers source/ELF preflight, disk budgeting, all six partial imports,
+    publication, retirement and reply/error disposal after JSON metadata
+    initialization, with zero retained tracked V allocations across 256 calls.
+    Other complete profile/catalog/release builders remain separate boundaries.
+  - [x] [Owned complete SQLite profile construction](tests/packages/sqlite-builder-check.md)
+    retires templates, partial imports, canonicalization, filesystem budgets,
+    wrapped errors and independently closeable replies. After JSON metadata
+    initialization, 256 complete calls and 896 metadata cycles retain zero
+    tracked allocations while preserving canonical locks, compatible runtime
+    updates and saved-output/recovery diagnostics. Other complete publisher,
+    catalog/release and broader graphical/runtime acceptance remain open.
+  - [x] [Owned FFmpeg profile construction](tests/packages/ffmpeg-owner-check.md)
+    retires templates, six partial inventories, canonicalization, filesystem
+    budgets and independently closeable replies. After JSON initialization,
+    76 host calls and 1,152 metadata cycles retain zero tracked allocations;
+    both guests check metadata and eight selected complete-call cases using
+    the full reviewed source archive. Source pins, canonical locks and explicit
+    licenses/runtime bounds are preserved. Other profile/catalog/release owners
+    and broader graphical/runtime acceptance remain open.
+  - [x] [Owned Wine profile construction](tests/packages/wine-owner-check.md)
+    retires decoded declarations, PE/native launcher preflight, partial imports,
+    comparison/canonicalization scratch and independently closeable replies.
+    After JSON initialization, 368 host calls and 896 metadata cycles retain
+    zero tracked allocations; both guests check metadata and twelve selected
+    complete-call cases. Captured declarations, licenses/runtime bounds and
+    canonical retries survive; real Wine/translation execution, other complete
+    publishers and broader catalog/graphical acceptance remain open.
+  - [x] [Owned Apple profile construction](tests/packages/apple-owner-check.md)
+    retires captured declarations, partial imports, canonicalization, filesystem
+    budgets and independently closeable replies. After JSON initialization,
+    384 complete host calls, 640 metadata cycles and 1,920 Mach-O/XML/binary
+    bundle-admission cycles retain zero tracked allocations. Both guests check
+    metadata, admission and twelve selected complete-call cases, preserving
+    canonical retries, explicit runtime/license bounds and recovery data.
+    Broader catalog/release ownership, graphical acceptance and real application
+    compatibility remain separate; section 14 stays open.
+  - [x] [Owned complete catalog construction](tests/packages/catalog-builder-check.md)
+    retires temporary paths, partial imports, manifest verification names,
+    object-map key copies and wrapped errors. After JSON initialization,
+    280 host calls across 35 cases, 192 recursive flush cycles and 1,792 planning
+    attempts retain zero tracked allocations. Both guests check ten selected
+    complete-call cases, preserving canonical locks, deduplicated objects and
+    saved/recovery data. Release builder ownership is qualified separately below;
+    production catalog migration and broader graphical/application acceptance
+    remain open.
+  - [x] [Owned signed release publication](tests/packages/release-owner-check.md)
+    retires decoded manifests, canonicalization buffers, signing/index scratch,
+    stage paths and wrapped errors; replies own independently closeable metadata.
+    After JSON initialization, 304 host calls across 38 cases and 448 canonical
+    index cycles retain zero tracked allocations. Both guests check twelve
+    selected complete-call cases and canonicalization, preserving exact signed
+    retries, captured seeds, reserved sequence floors and recovery data. Production
+    publisher/catalog migration and graphical/runtime acceptance remain open.
+  - [x] [Owned offline release-image inputs](tests/packages/image-owner-check.md)
+    retire configuration encoding, capture/copy paths, directory creation,
+    filesystem queries and cleanup diagnostics. After JSON initialization,
+    264 host calls across 33 modes and both architecture declarations retain
+    zero tracked allocations. Both guests check ten selected modes, preserving
+    exact application locks, policy refusals, replacements and recovery data.
+    Production publisher/catalog migration and graphical/runtime acceptance
+    remain open.
+  - [x] [Captured image tool builds](tests/packages/image-tools-check.md)
+    compile and validate all three static target tools before replacing prior
+    versions. Private workspaces and destination temporaries preserve unrelated
+    aliases and report replacement/flush recovery. Host and native guest checks
+    cover both architectures; complete image publication remains per-file, and
+    production catalog/graphical/runtime acceptance remains open.
+  - [x] [Captured image integration](tests/packages/image-integration-check.md)
+    binds license/action bytes before compilation and publishes notices,
+    Software/registration links and default actions through controlled image
+    directories. Atomic leaf replacement preserves outside targets, existing
+    administrator overrides and private state-directory permissions. Host and
+    native checks cover both architectures; complete image distribution and
+    production catalog/graphical/runtime acceptance remain open.
+  - [x] [Owned packing inventories and replies](tests/packages/pack-ownership-check.md)
+    retire discarded template inventories, partial walked files and copy scratch
+    across cold/cache success and late refusal. Independently closeable pack/root
+    replies preserve manifest bytes; digest-slot directories refuse publication
+    without losing recovery data.
+  - [x] [Owned publisher filesystem checks](tests/packages/publisher-io-ownership-check.md)
+    retire workspace admission, containment, lock and durability scratch across
+    success and refusal. Cached packing in an initialized workspace releases all
+    measured call storage after reply close; complete prepared-root/profile
+    construction remains a separate ownership boundary.
+  - [x] [Owned first workspace creation](tests/packages/workspace-creation-ownership-check.md)
+    retires export-parent, recursive directory and fresh workspace construction
+    scratch, including cold first packing and late refusal. Parent aliases,
+    filesystem dotdot, umask, existing modes and partial-parent retry are checked;
+    complete prepared-root/profile construction remains a separate boundary.
+  - [x] [Explicit catalog host selection](tests/packages/composition-target-check.md)
+    combines complete single-host and dual-host profiles for a declared target,
+    preserving shared packages, pinned declarations and full-input provenance.
+    Unsupported hosts and invalid omitted variants refuse publication.
+  - [x] [Advertised image application requirements](tests/packages/image-applications-check.md)
+    gate check and normal staging on jointly installable target applications
+    from the selected signed bundle. Reports include exact deployment locks;
+    missing hosts, nonapplication substitutes and conflicting runtimes refuse
+    before compilation or publication. Production catalog migration remains open.
+    [Reviewed requirements files](tests/packages/image-requirements-check.md)
+    carry that set through desktop staging, retaining exact source digests and
+    invalidating cached images when the selected file or its contents change.
+    [Explicit deployment export](tests/packages/image-export-check.md) saves the
+    resolved lock atomically outside the image for normal reviewed deployment,
+    retaining output digests and preserving existing/concurrent files.
+    [Image catalog declarations](tests/packages/image-catalog-check.md) carry the
+    exact lock into normal staging. Software discovers it for a full-set review
+    with separate confirmation; matching trust and signed offline bundles remain
+    mandatory, and existing declarations are preserved or refused.
+    [Installed release audits](tests/packages/release-audit-check.md) compare
+    that baseline without administrator approval. Both targets retain the exact
+    declaration through blank-disk installation and four installed-root boots,
+    reporting missing/matching apps and update drift through rollback and
+    cached reinstall. Production catalog and graphical acceptance remain open.
+  - [x] [Bounded prepared-root materialization](tests/packages/import-limits-check.md)
+    checks aggregate entries across selectors/aliases and output directory depth
+    during import, including empty-directory trees and nested selector parents.
+    Failure cleanup and retry preserve the source and canonical metadata.
+  - [x] [Prepared-root source consistency](tests/packages/import-capture-check.md)
+    rechecks file/directory identity, size, executable bits and directory names
+    in the captured guest namespace. Unpinned hash/copy comparison and pinned
+    inventory checks reject changed payloads before packing, with cleanup/retry.
+    [Owned lookups and rechecks](tests/packages/import-lookup-check.md) retire
+    temporary path storage on success, parent/link restart and late refusal.
+    [Owned materialization](tests/packages/import-materialization-ownership-check.md)
+    retires ancestry, parent creation and file-opening scratch across complete
+    copies, recursive aliases and late/native refusals, preserving modes and
+    exact retry.
+  - [x] [Captured, owned private import workspaces](tests/packages/import-workspace-check.md)
+    retire complete cold/pinned/refused imports after JSON metadata initialization,
+    preserving canonical retries under a 32-descriptor limit. Captured roots,
+    payloads and manifests reject substitutions and retain unadmitted recovery
+    data with explicit diagnostics, including failure after package publication.
+    Complete profile construction is qualified separately for the native SDK
+    builder above; other profiles and broader release/runtime acceptance remain open.
 - [ ] Add transactional install/remove/upgrade, rollback, disk-space checks,
   interrupted-download recovery and coherent persistent package state.
+  - [x] [Space-aware Software confirmation](tests/packages/software-space-check.md)
+    reports exact shortfalls before approval, preserves readable/cancellable
+    proposals and blocks known insufficient or overflowing budgets. Shared and
+    separate offline export caches retain service accounting and no-op
+    exemptions; the service repeats its final disk check before changes.
+  - [x] [Owned review construction](tests/packages/review-construction-check.md)
+    retires counter scans, failed presentation rows and ordinary/deployment
+    fingerprint encoding/comparison storage. Returned fingerprints are
+    independent, with unchanged approval identities; measured construction and
+    refusal loops are qualified independently of request preparation below.
+  - [x] [Owned complete review requests](tests/packages/review-request-check.md)
+    retire configuration, active/rollback states, deployment documents,
+    authenticated catalogs and solver buffers on success/refusal. Both public
+    review entry points preserve independent replies, lock ordering, signed
+    state and approval identities across 64 calls in each of 43 cases per
+    architecture declaration. Other complete service operations and broader
+    production/catalog, graphical and runtime release gates remain open.
+  - [x] [Owned public plan observations](tests/packages/plan-observation-check.md)
+    return independently closeable roots, publisher identities and complete
+    nested manifests, retiring request configuration/state/catalog/solver storage
+    on success/refusal. Both public APIs preserve exact plan JSON, installed
+    preference and signed state across 64 calls in each of 48 cases per
+    architecture declaration; 1,000 nested-copy cycles retain independent
+    fields. Resolver/transaction plans and broader release gates remain separate.
+  - [x] [Owned complete collection requests](tests/packages/collection-request-check.md)
+    retire service configuration and cache enumeration, partial-name, removal
+    and durability scratch on success/refusal. Both public APIs preserve
+    active/rollback payloads, busy leases, recovery preflight and borrowed
+    configuration across 64 host calls in each of 24 cases per architecture
+    declaration. [Full native repetition](tests/packages/collection-stress-check.md)
+    also measures 64 calls per case with eight warmups and settled creator
+    reservations between fixtures, covering all six retirement controls.
+    Broader release gates remain open.
+  - [x] [Owned catalog refresh requests](tests/packages/refresh-request-check.md)
+    return independently closeable publisher identities and nested manifests,
+    retiring configuration, fetched metadata, paths and captured workspace
+    inventories on success/refusal. Both APIs preserve signed cache/history and
+    writer-lock ordering across 64 calls in each of 72 file-repository/offline
+    cases. Late publication failures retire decoded replies; abandoned nested
+    work retires without following aliases or shared writable roots.
+    Guest TLS and broader release acceptance remain separate.
+  - [x] [Owned activation, rollback and deployment requests](tests/packages/activation-request-check.md)
+    return independent complete states retired with `State.close()`, including
+    no-ops. Configuration, source states, prepared plans, deployment documents,
+    staging paths and file-download scratch retire on success/refusal. Repeated
+    requests preserve writer-lock ordering, stale-review and disk preflight,
+    interrupted stages and retained failed publications. Guest TLS,
+    production catalog migration and broader graphical/runtime gates remain open.
+  - [x] [Owned complete HTTPS acquisition](tests/packages/https-owner-check.md)
+    retires argument construction and Range-fallback messages across complete
+    success, transport failure and captured-output refusal paths. Repeated
+    process cases check child/descriptor retirement on both native targets;
+    host TLS repetition checks public fetch, signed refresh and installation,
+    certificate/hostname refusal, bounded recovery and independent replies.
+    Guest TLS, public repositories/proxy fleets and broader release gates remain open.
 - [ ] Provide a graphical software manager with search, descriptions, provenance,
   permissions, progress, uninstall, updates and useful failure diagnostics.
+  - [x] [Reviewed permission changes](tests/packages/review-permissions-check.md)
+    compare frozen installed and target declarations across dependencies,
+    updates, repair, rollback and removal. Format 2 carries owned prior facts;
+    full/compact readers preserve approval state and explicit legacy uncertainty.
+    [Action/version validation](tests/packages/review-actions-check.md) refuses
+    contradictory installed-state claims in both formats and nested exports
+    before confirmation; unavailable history stays explicitly unknown.
+  - [x] [Owned live progress rejection](tests/packages/software-progress-memory-check.md)
+    retires ignored decoder errors, preserving admitted progress, bounded stream
+    recovery and human diagnostics. Fragmented valid/invalid/oversized streams
+    and rendering have repeated allocation and sanitizer checks.
+  - [x] [Owned catalog observations](tests/packages/software-view-owner-check.md)
+    give V callers independently closeable rows and nested metadata, retiring
+    configuration, catalogs, installed state and resolution scratch. Tracked
+    public reads and refusal paths preserve locks, activation and stored bytes;
+    CLI and native checks retain existing presentation and maintenance behavior.
+  - [x] [Actionable HTTPS failures](tests/packages/https-diagnostics-check.md)
+    preserve transport status and add recovery guidance for connection, DNS,
+    proxy, timeout, interruption, HTTP/TLS, size-limit and missing-tool errors.
+    Service replies retain the explanation without depending on daemon stderr;
+    existing partial recovery and retry rules remain enforced. Host TLS and
+    native output checks qualify the change; broader release gates stay open.
+  - [x] [Installed dependency inspection](tests/packages/software-dependencies-check.md)
+    shows installed requirements, version bounds and actual versions separately
+    from update previews. A bounded graph walk names a requiring requested app
+    through shared dependencies/cycles; older services report incomplete facts.
+    Inspection preserves review/approval state. Full graphical-session and
+    production catalog/runtime acceptance remain open.
+  - [x] [Installed publisher provenance](tests/packages/software-provenance-check.md)
+    keeps the installed generation's repository/key separate from a displayed
+    update, including key rotation, revocation and unavailable catalogs. Complete
+    and compact details show both identities or explicit legacy unavailability;
+    malformed replies preserve the previous view. Graphical-session and broader
+    catalog/runtime release acceptance remain open.
+  - [x] [Deployment file selection](tests/packages/software-deployment-chooser-check.md)
+    uses the session file dialog for organization manifests and exported locks,
+    preserves drafts on cancellation/failure, and discards late selections after
+    editing, navigation or review. Selection requires a separate review and
+    confirmation; full graphical-session acceptance remains open.
+    [Compact Deployment forms](tests/packages/software-deployment-form-check.md)
+    retain literal editing and paged file/release/management actions at 320×240,
+    complete help and diagnostics, with approval on the full reviewed plan.
 - [ ] Package native, Linux, Windows and Apple-compatible apps with isolated
   runtimes, launcher/association registration and clean uninstall behavior.
+  - [x] [A Win64 publisher profile](tools/packages/SDK.md#wine-win64-publisher-profile)
+    pins publisher-supplied application/runtime closures for both hosts, checks
+    PE32+ payloads and native launchers, and retains explicit licensing and
+    runtime bounds. [Publisher lifecycle checks](tests/packages/wine-profile-check.md)
+    cover signed offline install, registration, removal and rollback.
+  - [ ] Qualified isolated Wine/translation and Apple runtime catalogs, including
+    ordinary-user graphical execution and their required IPC/device services.
+  - [x] [An AArch64 iOS publisher profile](tools/packages/SDK.md#apple-ios-arm64-publisher-profile)
+    validates thin Mach-O headers/maps, XML/binary bundle identity, static native
+    launchers and explicit licensed runtime closures before pinning a catalog.
+    [Publisher checks](tests/packages/apple-profile-check.md) cover host refusals
+    and signed guest maintenance; broader catalog qualification remains open.
+  - [x] [An AArch64 Apple package launch/container boundary](tests/packages/apple-runtime-check.md)
+    executes ARM64 iOS Mach-O instructions through a signed static runtime in
+    the real sandbox. Private Documents/keychain overrides, user separation,
+    upgrade, rollback, tamper refusal and cached reinstall are checked. The
+    Mach-O also exercises Foundation container paths/file writes and Security
+    generic-password persistence, CRUD errors and access-group refusal. Wider
+    Apple framework/application and graphical coverage remain open.
 - [ ] Establish a supported application SDK/protocol, stable public interfaces,
   package format, signing/publishing process and developer documentation.
 - [ ] Support offline repositories/caches and organization-managed deployment;
   keep firmware, proprietary payload licensing and runtime updates explicit.
+  - [x] [Installed payload disclosure](tests/packages/software-payload-check.md)
+    separates installed licenses, proprietary/firmware declarations and runtime
+    IDs from update previews, including policy/trust failures and legacy replies.
+    Full and compact inspectors retain complete version-labelled facts;
+    reviewed targets retain their scope. Production catalog and graphical/runtime
+    acceptance remain open.
+  - [x] [Owned image repository captures](tests/packages/image-capture-check.md)
+    bind preparation, preflight, application declarations and publication to
+    captured directories. Checked retirement preserves replaced recovery trees,
+    closes metadata/descriptors and reports refusal; export flush errors retain
+    saved bundles, and fresh captures permit explicit retry.
+  - [x] [Captured mirror/release staging](tests/packages/export-retirement-check.md)
+    preserves replaced roots/parents during failed-export cleanup, inventories
+    owned trees without alias traversal and publishes through the captured
+    parent. Checkpoint substitutions, retained publisher reservations, cached
+    retry and saved output after flush failure have explicit regression checks.
+  - [x] [Owned offline mirror preparation](tests/packages/mirror-ownership-check.md)
+    retires catalog/snapshot/plan/path/hash scratch and preserves independent
+    reviews, exact ordinary/deployment fingerprints and signed offline retries.
+    Tracked components and both target suites qualify the cleanup; complete
+    service allocation freedom and broader release acceptance remain open.
+  - [x] [Release-image package preflight](tests/packages/image-input-check.md)
+    validates selected trust/policy and signed bundles without changing the
+    image or requiring target compilers. Reproducible reports include provenance,
+    architecture/licensing counts, deduplicated bytes and publish/preserve decisions.
 
 Acceptance: a clean installed system can acquire and maintain the advertised
 application catalog without host-side image rebuilds or manual runtime surgery.

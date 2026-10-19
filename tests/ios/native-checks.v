@@ -113,6 +113,48 @@ fn native_fixture_source(item string) string {
 		'corehaptics-constants-checks' { 'corehaptics_constants_test.v' }
 		'media-time-checks' { 'quartzcore_time_test.v' }
 		'video-decode-checks' { 'video_decode_test.v' }
+		'storefront-checks' { 'storefront_test.v' }
+		'storefront-current-checks' { 'storefront_current_test.v' }
+		'storefront-metadata-checks' { 'storefront_metadata_test.v' }
+		'refund-checks' { 'refund_test.v' }
+		'storekit-constants-checks' { 'storekit_constants_test.v' }
+		'zlib-checksum-checks' { 'zlib_checksum_test.v' }
+		'zlib-compress-checks' { 'zlib_compress_test.v' }
+		'zlib-bound-checks' { 'zlib_bound_test.v' }
+		'resolver-query-checks' { 'resolver_query_test.v' }
+		'pbkdf-checks' { 'pbkdf_test.v' }
+		'ndr-record-checks' { 'ndr_record_test.v' }
+		'immediate-exit-checks' { 'immediate_exit_test.v' }
+		'crt-environ-checks' { 'crt_environ_test.v' }
+		'executable-path-checks' { 'executable_path_test.v' }
+		'dispatch-timer-type-checks' { 'dispatch_timer_type_test.v' }
+		'dyld-images-checks' { 'dyld_images_test.v' }
+		'dyld-callbacks-checks' { 'dyld_callbacks_test.v' }
+		'tlv-atexit-checks' { 'tlv_atexit_test.v' }
+		'inverse-hyperbolic-checks' { 'inverse_hyperbolic_test.v' }
+		'arc4random-checks' { 'arc4random_test.v' }
+		'asl-checks' { 'asl_test.v' }
+		'backtrace-checks' { 'backtrace_test.v' }
+		'dispatch-data-checks' { 'dispatch_data_test.v' }
+		'dispatch-specific-checks' { 'dispatch_specific_test.v' }
+		'dispatch-group-checks' { 'dispatch_group_test.v' }
+		'dispatch-source-checks' { 'dispatch_source_test.v' }
+		'dispatch-semaphore-checks' { 'dispatch_semaphore_test.v' }
+		'division-checks' { 'integer_division_test.v' }
+		'mach-exception-checks' { 'mach_exception_test.v' }
+		'flock-checks' { 'flock_test.v' }
+		'progname-checks' { 'progname_test.v' }
+		'host-page-size-checks' { 'host_page_size_test.v' }
+		'host-statistics-checks' { 'host_statistics_test.v' }
+		'logb-checks' { 'logb_test.v' }
+		'memory-entry-checks' { 'mach_memory_entry_test.v' }
+		'mach-message-checks' { 'mach_message_test.v' }
+		'mach-port-set-checks' { 'mach_port_set_test.v' }
+		'mach-notification-checks' { 'mach_notification_test.v' }
+		'madvise-checks' { 'madvise_test.v' }
+		'malloc-zone-checks' { 'malloc_zone_test.v' }
+		'mkstemp-checks' { 'mkstemp_test.v' }
+		'nextafter-checks' { 'nextafter_test.v' }
 		'nslogv-checks' { 'ns_logv_test.v' }
 		'protocol-lookup-checks' { 'objc_protocols_test.v' }
 		'uncaught-handler-checks' { 'ns_uncaught_handler_test.v' }
@@ -265,7 +307,7 @@ fn build(root string, out string, only string) {
 	if only == 'video-decode-checks' || only == '' {
 		assert video_enabled(root), 'build-video SDK required: set VINIX_IOS_VIDEO_SDK (see docs/ios.md)'
 	}
-	for item in ['run-ios', 'run-ios-gles', 'objc-constant-dictionary-checks', 'layout-constraint-checks', 'json-serialization-checks', 'condition-checks', 'cookie-checks', 'webkit-configuration-checks', 'user-script-checks', 'webview-checks', 'request-checks', 'value-checks', 'response-checks', 'alert-checks', 'set-checks', 'thread-checks', 'auth-session-checks', 'image-view-checks', 'keyboard-checks', 'nsuuid-checks', 'filemanager-checks', 'home-directory-checks', 'temp-directory-checks', 'url-error-checks', 'session-constants-checks', 'foundation-keys-checks', 'audio-services-checks', 'avfoundation-constants-checks', 'corevideo-checks', 'pixel-allocation-checks', 'metal-cache-checks', 'media-format-checks', 'block-buffer-checks', 'sample-buffer-checks', 'cm-time-checks', 'h264-format-checks', 'hevc-format-checks', 'cg-font-checks', 'reachability-checks', 'devicecheck-checks', 'network-path-checks', 'corehaptics-constants-checks', 'media-time-checks', 'video-decode-checks', 'nslogv-checks', 'protocol-lookup-checks', 'uncaught-handler-checks', 'protocol-name-checks', 'autopool-checks', 'processinfo-checks', 'date-checks', 'inputstream-checks', 'connection-checks', 'type-encoding-checks', 'dispatch-queue-class-checks', 'oslog-checks', 'secure-memory-checks', 'select-checks', 'semaphore-checks', 'signal-checks',
+	for item in ['run-ios', 'run-ios-gles', 'objc-constant-dictionary-checks', 'layout-constraint-checks', 'json-serialization-checks', 'condition-checks', 'cookie-checks', 'webkit-configuration-checks', 'user-script-checks', 'webview-checks', 'request-checks', 'value-checks', 'response-checks', 'alert-checks', 'set-checks', 'thread-checks', 'auth-session-checks', 'image-view-checks', 'keyboard-checks', 'nsuuid-checks', 'filemanager-checks', 'home-directory-checks', 'temp-directory-checks', 'url-error-checks', 'session-constants-checks', 'foundation-keys-checks', 'audio-services-checks', 'avfoundation-constants-checks', 'corevideo-checks', 'pixel-allocation-checks', 'metal-cache-checks', 'media-format-checks', 'block-buffer-checks', 'sample-buffer-checks', 'cm-time-checks', 'h264-format-checks', 'hevc-format-checks', 'cg-font-checks', 'reachability-checks', 'devicecheck-checks', 'network-path-checks', 'corehaptics-constants-checks', 'media-time-checks', 'video-decode-checks', 'storefront-checks', 'storefront-current-checks', 'storefront-metadata-checks', 'refund-checks', 'storekit-constants-checks', 'zlib-checksum-checks', 'zlib-compress-checks', 'zlib-bound-checks', 'resolver-query-checks', 'pbkdf-checks', 'ndr-record-checks', 'immediate-exit-checks', 'crt-environ-checks', 'executable-path-checks', 'dispatch-timer-type-checks', 'dyld-images-checks', 'dyld-callbacks-checks', 'tlv-atexit-checks', 'inverse-hyperbolic-checks', 'arc4random-checks', 'asl-checks', 'backtrace-checks', 'dispatch-data-checks', 'dispatch-specific-checks', 'dispatch-group-checks', 'dispatch-source-checks', 'dispatch-semaphore-checks', 'division-checks', 'mach-exception-checks', 'flock-checks', 'progname-checks', 'host-page-size-checks', 'host-statistics-checks', 'logb-checks', 'memory-entry-checks', 'mach-message-checks', 'mach-port-set-checks', 'mach-notification-checks', 'madvise-checks', 'malloc-zone-checks', 'mkstemp-checks', 'nextafter-checks', 'nslogv-checks', 'protocol-lookup-checks', 'uncaught-handler-checks', 'protocol-name-checks', 'autopool-checks', 'processinfo-checks', 'date-checks', 'inputstream-checks', 'connection-checks', 'type-encoding-checks', 'dispatch-queue-class-checks', 'oslog-checks', 'secure-memory-checks', 'select-checks', 'semaphore-checks', 'signal-checks',
 		'error-checks', 'sysctl-checks', 'terminal-checks', 'thread-policy-checks', 'file-time-checks', 'uuid-checks', 'audio-session-checks', 'cf-dictionary-checks', 'objc-storage-checks', 'objc-associated-checks', 'objc-property-checks', 'objc-sync-checks', 'swift-unknown-value-checks', 'swift-string-checks', 'swift-empty-string-checks', 'swift-describing-checks', 'swift-cstring-checks', 'swift-foreign-count-checks', 'swift-foreign-index-checks', 'swift-foreign-offset-checks', 'swift-foreign-subscript-checks', 'swift-utf16-offset-checks', 'swift-sequence-checks', 'swift-array-sequence-checks', 'swift-collection-checks', 'swift-set-checks', 'swift-metadata-checks', 'swift-protocol-checks', 'swift-hash-checks', 'swift-hasher-checks', 'swift-raw-representable-checks', 'swift-array-checks', 'swift-integer-checks', 'swift-integer-hash-checks', 'swift-fatal-checks', 'swift-interpolation-checks', 'swift-array-storage-checks', 'swift-vararg-checks', 'swift-void-checks', 'swift-version-checks', 'swift-initializer-checks', 'swift-empty-array-checks', 'swift-any-checks', 'swift-byte-metadata-checks', 'swift-raw-equality-checks', 'swift-array-class-checks', 'swift-shared-utf8-checks', 'swift-string-guts-checks', 'swift-foreign-copy-checks', 'swift-set-algebra-checks', 'swift-raw-copy-checks', 'swift-pointer-alloc-checks', 'swift-pointer-deinit-checks', 'swift-raw-alloc-checks', 'swift-dispatch-async-checks', 'swift-dispatch-main-checks', 'swift-dispatch-scheduler-checks', 'swift-dispatch-qos-checks', 'swift-dispatch-algebra-checks', 'swift-dispatch-flags-checks', 'swift-stack-checks', 'swift-heap-checks', 'swift-string-replace-checks', 'swift-array-unbridge-checks', 'swift-dictionary-bridge-checks','swift-calendar-case-checks', 'swift-locale-checks', 'swift-date-checks', 'swift-data-write-checks', 'swift-data-unbridge-checks', 'swift-data-base64-checks', 'swift-data-bridge-checks', 'swift-data-checks', 'swift-url-metadata-checks', 'swift-url-path-checks', 'swift-url-bridge-checks', 'swift-error-bridge-checks', 'swift-error-checks', 'swift-error-value-checks', 'swift-dynamic-cast-checks', 'swift-objc-cast-checks', 'swift-foreign-metadata-checks', 'swift-object-type-checks', 'swift-mangled-state-checks', 'swift-mangled-checks', 'swift-witness-checks', 'swift-once-checks', 'swift-set-bridge-checks', 'swift-logger-checks', 'swift-main-actor-witness-checks', 'swift-main-actor-checks', 'swift-nsobject-hashable-checks', 'swift-objc-bool-metadata-checks', 'swift-objc-bool-checks', 'swift-actor-executor-checks', 'swift-task-priority-checks', 'swift-task-alloc-checks', 'swift-task-create-checks', 'swift-task-switch-checks', 'swift-json-encoder-initializer-checks', 'swift-json-encoder-dispatch-checks', 'swift-json-encoder-date-dispatch-checks', 'swift-json-date-strategy-checks', 'swift-json-encoder-date-case-checks', 'swift-json-decoder-initializer-checks', 'swift-json-decoder-dispatch-checks', 'swift-cocoa-error-protocol-checks', 'swift-cocoa-error-code-checks', 'swift-nslog-checks', 'swift-string-unbridge-checks', 'swift-cocoa-match-checks', 'swift-localized-error-checks', 'swift-error-description-checks', 'module-lookup-checks', 'native-init'] {
 		if only != '' && item != only { continue }
 		generated := out + '/' + item + '.c'
@@ -278,7 +320,7 @@ fn build(root string, out string, only string) {
 				'@vlib|' + root + '/compat/ios|@vmodules', '-o', generated]
 			if item.ends_with('-checks') { args = args.filter(it != '-prod') }
 			if video_enabled(root) { args << ['-d', 'ios_video'] }
-			if item == 'run-ios-gles' { args << ['-d', 'ios_gles', '-d', 'ios_text'] }
+			if item in ['run-ios-gles', 'zlib-bound-checks']! { args << ['-d', 'ios_gles', '-d', 'ios_text'] }
 			args << root + if item.ends_with('-checks') {
 				'/compat/ios/runner/' + native_fixture_source(item)
 			} else {
@@ -286,7 +328,7 @@ fn build(root string, out string, only string) {
 			}
 			checked(args)
 		}
-		compile_c(root, generated, out + '/' + item, item == 'run-ios-gles')
+		compile_c(root, generated, out + '/' + item, item in ['run-ios-gles', 'zlib-bound-checks']!)
 		if item == 'module-lookup-checks' {
 			checked(['v', '-nocache', '-cc', 'clang', '-cflags', '-O2', '-path',
 				'@vlib|' + root + '/compat/ios|@vmodules', '-o', out + '/weak-lookup-native',
@@ -431,6 +473,48 @@ fn regression_root(root string, out string, fs string) {
 	copy_file(out + '/corehaptics-constants-checks', fs + '/opt/ios/corehaptics-constants-checks')
 	copy_file(out + '/media-time-checks', fs + '/opt/ios/media-time-checks')
 	copy_file(out + '/video-decode-checks', fs + '/opt/ios/video-decode-checks')
+	copy_file(out + '/storefront-checks', fs + '/opt/ios/storefront-checks')
+	copy_file(out + '/storefront-current-checks', fs + '/opt/ios/storefront-current-checks')
+	copy_file(out + '/storefront-metadata-checks', fs + '/opt/ios/storefront-metadata-checks')
+	copy_file(out + '/refund-checks', fs + '/opt/ios/refund-checks')
+	copy_file(out + '/storekit-constants-checks', fs + '/opt/ios/storekit-constants-checks')
+	copy_file(out + '/zlib-checksum-checks', fs + '/opt/ios/zlib-checksum-checks')
+	copy_file(out + '/zlib-compress-checks', fs + '/opt/ios/zlib-compress-checks')
+	copy_file(out + '/zlib-bound-checks', fs + '/opt/ios/zlib-bound-checks')
+	copy_file(out + '/resolver-query-checks', fs + '/opt/ios/resolver-query-checks')
+	copy_file(out + '/pbkdf-checks', fs + '/opt/ios/pbkdf-checks')
+	copy_file(out + '/ndr-record-checks', fs + '/opt/ios/ndr-record-checks')
+	copy_file(out + '/immediate-exit-checks', fs + '/opt/ios/immediate-exit-checks')
+	copy_file(out + '/crt-environ-checks', fs + '/opt/ios/crt-environ-checks')
+	copy_file(out + '/executable-path-checks', fs + '/opt/ios/executable-path-checks')
+	copy_file(out + '/dispatch-timer-type-checks', fs + '/opt/ios/dispatch-timer-type-checks')
+	copy_file(out + '/dyld-images-checks', fs + '/opt/ios/dyld-images-checks')
+	copy_file(out + '/dyld-callbacks-checks', fs + '/opt/ios/dyld-callbacks-checks')
+	copy_file(out + '/tlv-atexit-checks', fs + '/opt/ios/tlv-atexit-checks')
+	copy_file(out + '/inverse-hyperbolic-checks', fs + '/opt/ios/inverse-hyperbolic-checks')
+	copy_file(out + '/arc4random-checks', fs + '/opt/ios/arc4random-checks')
+	copy_file(out + '/asl-checks', fs + '/opt/ios/asl-checks')
+	copy_file(out + '/backtrace-checks', fs + '/opt/ios/backtrace-checks')
+	copy_file(out + '/dispatch-data-checks', fs + '/opt/ios/dispatch-data-checks')
+	copy_file(out + '/dispatch-specific-checks', fs + '/opt/ios/dispatch-specific-checks')
+	copy_file(out + '/dispatch-group-checks', fs + '/opt/ios/dispatch-group-checks')
+	copy_file(out + '/dispatch-source-checks', fs + '/opt/ios/dispatch-source-checks')
+	copy_file(out + '/dispatch-semaphore-checks', fs + '/opt/ios/dispatch-semaphore-checks')
+	copy_file(out + '/division-checks', fs + '/opt/ios/division-checks')
+	copy_file(out + '/mach-exception-checks', fs + '/opt/ios/mach-exception-checks')
+	copy_file(out + '/flock-checks', fs + '/opt/ios/flock-checks')
+	copy_file(out + '/progname-checks', fs + '/opt/ios/progname-checks')
+	copy_file(out + '/host-page-size-checks', fs + '/opt/ios/host-page-size-checks')
+	copy_file(out + '/host-statistics-checks', fs + '/opt/ios/host-statistics-checks')
+	copy_file(out + '/logb-checks', fs + '/opt/ios/logb-checks')
+	copy_file(out + '/memory-entry-checks', fs + '/opt/ios/memory-entry-checks')
+	copy_file(out + '/mach-message-checks', fs + '/opt/ios/mach-message-checks')
+	copy_file(out + '/mach-port-set-checks', fs + '/opt/ios/mach-port-set-checks')
+	copy_file(out + '/mach-notification-checks', fs + '/opt/ios/mach-notification-checks')
+	copy_file(out + '/madvise-checks', fs + '/opt/ios/madvise-checks')
+	copy_file(out + '/malloc-zone-checks', fs + '/opt/ios/malloc-zone-checks')
+	copy_file(out + '/mkstemp-checks', fs + '/opt/ios/mkstemp-checks')
+	copy_file(out + '/nextafter-checks', fs + '/opt/ios/nextafter-checks')
 	copy_file(out + '/nslogv-checks', fs + '/opt/ios/nslogv-checks')
 	copy_file(out + '/protocol-lookup-checks', fs + '/opt/ios/protocol-lookup-checks')
 	copy_file(out + '/uncaught-handler-checks', fs + '/opt/ios/uncaught-handler-checks')
@@ -617,9 +701,10 @@ fn vm(root string, out string, mode string) {
 	} else if mode == 'objc' {
 		for directory in ['sbin', 'proc', 'sys', 'dev', 'tmp', 'opt/ios'] { os.mkdir_all(fs + '/' + directory) or { panic(err) } }
 		copy_file(root + '/build/ios/fortnite/local/Payload/FortniteClient-IOS-Shipping.app/Frameworks/EOSSDK.framework/EOSSDK', fs + '/opt/ios/constant-dictionary-image')
-		for name in ['objc-constant-dictionary', 'layout-constraint', 'json-serialization', 'condition', 'cookie', 'webkit-configuration', 'user-script', 'webview', 'request', 'value', 'response', 'alert', 'set', 'thread', 'auth-session', 'image-view', 'keyboard', 'nsuuid', 'filemanager', 'home-directory', 'temp-directory', 'url-error', 'session-constants', 'foundation-keys', 'audio-services', 'avfoundation-constants', 'corevideo', 'pixel-allocation', 'metal-cache', 'media-format', 'block-buffer', 'sample-buffer', 'cm-time', 'h264-format', 'hevc-format', 'cg-font', 'reachability', 'devicecheck', 'network-path', 'corehaptics-constants', 'media-time', 'video-decode', 'nslogv', 'protocol-lookup', 'uncaught-handler', 'protocol-name', 'autopool', 'processinfo', 'date', 'inputstream', 'connection', 'type-encoding', 'oslog', 'secure-memory', 'cf-dictionary', 'objc-storage', 'objc-associated', 'objc-property', 'objc-sync'] {
+		for name in ['objc-constant-dictionary', 'layout-constraint', 'json-serialization', 'condition', 'cookie', 'webkit-configuration', 'user-script', 'webview', 'request', 'value', 'response', 'alert', 'set', 'thread', 'auth-session', 'image-view', 'keyboard', 'nsuuid', 'filemanager', 'home-directory', 'temp-directory', 'url-error', 'session-constants', 'foundation-keys', 'audio-services', 'avfoundation-constants', 'corevideo', 'pixel-allocation', 'metal-cache', 'media-format', 'block-buffer', 'sample-buffer', 'cm-time', 'h264-format', 'hevc-format', 'cg-font', 'reachability', 'devicecheck', 'network-path', 'corehaptics-constants', 'media-time', 'video-decode', 'storefront', 'storefront-current', 'storefront-metadata', 'refund', 'storekit-constants', 'zlib-checksum', 'zlib-compress', 'zlib-bound', 'resolver-query', 'pbkdf', 'ndr-record', 'immediate-exit', 'crt-environ', 'executable-path', 'dispatch-timer-type', 'dyld-images', 'dyld-callbacks', 'tlv-atexit', 'inverse-hyperbolic', 'arc4random', 'asl', 'backtrace', 'dispatch-data', 'dispatch-specific', 'dispatch-group', 'dispatch-source', 'dispatch-semaphore', 'division', 'mach-exception', 'flock', 'progname', 'host-page-size', 'host-statistics', 'logb', 'memory-entry', 'mach-message', 'mach-port-set', 'mach-notification', 'madvise', 'malloc-zone', 'mkstemp', 'nextafter', 'nslogv', 'protocol-lookup', 'uncaught-handler', 'protocol-name', 'autopool', 'processinfo', 'date', 'inputstream', 'connection', 'type-encoding', 'oslog', 'secure-memory', 'cf-dictionary', 'objc-storage', 'objc-associated', 'objc-property', 'objc-sync'] {
 			copy_file(out + '/' + name + '-checks', fs + '/opt/ios/' + name + '-checks')
 		}
+		tree(root + '/build/ios/fortnite/staging/usr/lib/vinix/ios-gles', fs + '/usr/lib/vinix/ios-gles')
 	} else if mode == 'swift' {
 		copy_lookup_fixtures(out, fs)
 		copy_file(out + '/module-lookup-checks', fs + '/opt/ios/module-lookup-checks')
@@ -638,6 +723,10 @@ fn vm(root string, out string, mode string) {
 		tree(root + '/build/ios/fortnite/staging/usr/lib/vinix/ios-gles', fs + '/usr/lib/vinix/ios-gles')
 	}
 	copy_file(out + '/native-init', fs + '/sbin/init')
+	if mode in ['regression', 'swift', 'objc'] {
+		os.mkdir_all(fs + '/etc') or { panic(err) }
+		os.write_file(fs + '/etc/resolv.conf', 'nameserver 127.0.0.1\noptions timeout:1 attempts:1\n') or { panic(err) }
+	}
 	os.write_file(fs + '/opt/ios/check-mode', if mode.contains('audit') { 'audit' } else { mode }) or { panic(err) }
 	archive := state + '/initramfs.tar.gz'
 	if mode in ['probe', 'audit', 'static-audit'] {
@@ -704,7 +793,7 @@ fn vm(root string, out string, mode string) {
 
 fn main() {
 	if os.args.len < 2 {
-		panic('usage: native-checks build|build-init|build-select|build-semaphore|build-signal|build-error|build-sysctl|build-terminal|build-thread-policy|build-file-time|build-uuid|build-audio-session|build-cf-dictionary|build-objc-storage|build-objc-associated|build-objc-property|build-objc-sync|build-objc-constant-dictionary|build-layout-constraint|build-json-serialization|build-condition|build-cookie|build-webkit-configuration|build-user-script|build-webview|build-request|build-value|build-response|build-alert|build-set|build-thread|build-auth-session|build-image-view|build-keyboard|build-nsuuid|build-filemanager|build-temp-directory|build-url-error|build-session-constants|build-foundation-keys|build-audio-services|build-avfoundation-constants|build-corevideo|build-pixel-allocation|build-metal-cache|build-media-format|build-block-buffer|build-sample-buffer|build-cm-time|build-h264-format|build-hevc-format|build-cg-font|build-reachability|build-devicecheck|build-network-path|build-corehaptics-constants|build-media-time|build-video-decode|build-nslogv|build-protocol-lookup|build-uncaught-handler|build-protocol-name|build-autopool|build-processinfo|build-date|build-inputstream|build-connection|build-type-encoding|build-dispatch-queue-class|build-oslog|build-secure-memory|build-swift-unknown-value|build-swift-string|build-swift-empty-string|build-swift-describing|build-swift-cstring|build-swift-foreign-count|build-swift-foreign-index|build-swift-foreign-offset|build-swift-foreign-subscript|build-swift-utf16-offset|build-swift-sequence|build-swift-array-sequence|build-swift-collection|build-swift-set|build-swift-metadata|build-swift-protocol|build-swift-hash|build-swift-hasher|build-swift-raw-representable|build-swift-array|build-swift-integer|build-swift-integer-hash|build-swift-fatal|build-swift-interpolation|build-swift-array-storage|build-swift-vararg|build-swift-void|build-swift-version|build-swift-initializer|build-swift-empty-array|build-swift-any|build-swift-byte-metadata|build-swift-raw-equality|build-swift-array-class|build-swift-shared-utf8|build-swift-string-guts|build-swift-foreign-copy|build-swift-set-algebra|build-swift-raw-copy|build-swift-pointer-alloc|build-swift-pointer-deinit|build-swift-raw-alloc|build-swift-dispatch-async|build-swift-dispatch-main|build-swift-dispatch-scheduler|build-swift-dispatch-qos|build-swift-dispatch-algebra|build-swift-dispatch-flags|build-swift-stack|build-swift-heap|build-swift-calendar-case|build-swift-locale|build-swift-date|build-swift-data-write|build-swift-data-unbridge|build-swift-data-base64|build-swift-data-bridge|build-swift-data|build-swift-url-metadata|build-swift-url-path|build-swift-url-bridge|build-swift-error-bridge|build-swift-error|build-swift-error-value|build-swift-dynamic-cast|build-swift-objc-cast|build-swift-foreign-metadata|build-swift-object-type|build-swift-mangled-state|build-swift-mangled|build-swift-witness|build-swift-once|build-swift-set-bridge|build-swift-logger|build-swift-main-actor-witness|build-swift-main-actor|build-swift-nsobject-hashable|build-swift-objc-bool-metadata|build-swift-objc-bool|build-swift-actor-executor|build-swift-task-priority|build-swift-task-alloc|build-swift-task-create|build-swift-task-switch|build-swift-json-encoder-initializer|build-swift-json-encoder-dispatch|build-swift-json-encoder-date-dispatch|build-swift-json-date-strategy|build-swift-json-encoder-date-case|build-swift-json-decoder-initializer|build-swift-json-decoder-dispatch|build-swift-cocoa-error-protocol|build-swift-cocoa-error-code|build-swift-nslog|build-swift-string-unbridge|build-swift-localized-error|build-swift-error-description|build-module-lookup|verify-monitor|regression|swift|objc|probe|audit|static-audit|hash FILE')
+		panic('usage: native-checks build|build-init|build-select|build-semaphore|build-signal|build-error|build-sysctl|build-terminal|build-thread-policy|build-file-time|build-uuid|build-audio-session|build-cf-dictionary|build-objc-storage|build-objc-associated|build-objc-property|build-objc-sync|build-objc-constant-dictionary|build-layout-constraint|build-json-serialization|build-condition|build-cookie|build-webkit-configuration|build-user-script|build-webview|build-request|build-value|build-response|build-alert|build-set|build-thread|build-auth-session|build-image-view|build-keyboard|build-nsuuid|build-filemanager|build-temp-directory|build-url-error|build-session-constants|build-foundation-keys|build-audio-services|build-avfoundation-constants|build-corevideo|build-pixel-allocation|build-metal-cache|build-media-format|build-block-buffer|build-sample-buffer|build-cm-time|build-h264-format|build-hevc-format|build-cg-font|build-reachability|build-devicecheck|build-network-path|build-corehaptics-constants|build-media-time|build-video-decode|build-storefront|build-storefront-current|build-storefront-metadata|build-refund|build-storekit-constants|build-zlib-checksum|build-zlib-compress|build-zlib-bound|build-resolver-query|build-pbkdf|build-ndr-record|build-immediate-exit|build-crt-environ|build-executable-path|build-dispatch-timer-type|build-dyld-images|build-dyld-callbacks|build-tlv-atexit|build-inverse-hyperbolic|build-arc4random|build-asl|build-backtrace|build-dispatch-data|build-dispatch-specific|build-dispatch-group|build-dispatch-source|build-dispatch-semaphore|build-division|build-mach-exception|build-flock|build-progname|build-host-page-size|build-host-statistics|build-logb|build-memory-entry|build-mach-message|build-mach-port-set|build-mach-notification|build-madvise|build-malloc-zone|build-mkstemp|build-nextafter|build-nslogv|build-protocol-lookup|build-uncaught-handler|build-protocol-name|build-autopool|build-processinfo|build-date|build-inputstream|build-connection|build-type-encoding|build-dispatch-queue-class|build-oslog|build-secure-memory|build-swift-unknown-value|build-swift-string|build-swift-empty-string|build-swift-describing|build-swift-cstring|build-swift-foreign-count|build-swift-foreign-index|build-swift-foreign-offset|build-swift-foreign-subscript|build-swift-utf16-offset|build-swift-sequence|build-swift-array-sequence|build-swift-collection|build-swift-set|build-swift-metadata|build-swift-protocol|build-swift-hash|build-swift-hasher|build-swift-raw-representable|build-swift-array|build-swift-integer|build-swift-integer-hash|build-swift-fatal|build-swift-interpolation|build-swift-array-storage|build-swift-vararg|build-swift-void|build-swift-version|build-swift-initializer|build-swift-empty-array|build-swift-any|build-swift-byte-metadata|build-swift-raw-equality|build-swift-array-class|build-swift-shared-utf8|build-swift-string-guts|build-swift-foreign-copy|build-swift-set-algebra|build-swift-raw-copy|build-swift-pointer-alloc|build-swift-pointer-deinit|build-swift-raw-alloc|build-swift-dispatch-async|build-swift-dispatch-main|build-swift-dispatch-scheduler|build-swift-dispatch-qos|build-swift-dispatch-algebra|build-swift-dispatch-flags|build-swift-stack|build-swift-heap|build-swift-calendar-case|build-swift-locale|build-swift-date|build-swift-data-write|build-swift-data-unbridge|build-swift-data-base64|build-swift-data-bridge|build-swift-data|build-swift-url-metadata|build-swift-url-path|build-swift-url-bridge|build-swift-error-bridge|build-swift-error|build-swift-error-value|build-swift-dynamic-cast|build-swift-objc-cast|build-swift-foreign-metadata|build-swift-object-type|build-swift-mangled-state|build-swift-mangled|build-swift-witness|build-swift-once|build-swift-set-bridge|build-swift-logger|build-swift-main-actor-witness|build-swift-main-actor|build-swift-nsobject-hashable|build-swift-objc-bool-metadata|build-swift-objc-bool|build-swift-actor-executor|build-swift-task-priority|build-swift-task-alloc|build-swift-task-create|build-swift-task-switch|build-swift-json-encoder-initializer|build-swift-json-encoder-dispatch|build-swift-json-encoder-date-dispatch|build-swift-json-date-strategy|build-swift-json-encoder-date-case|build-swift-json-decoder-initializer|build-swift-json-decoder-dispatch|build-swift-cocoa-error-protocol|build-swift-cocoa-error-code|build-swift-nslog|build-swift-string-unbridge|build-swift-localized-error|build-swift-error-description|build-module-lookup|verify-monitor|regression|swift|objc|probe|audit|static-audit|hash FILE')
 	}
 	root := os.real_path(os.getwd())
 	requested := os.getenv('VINIX_IOS_CHECK_NAME')
@@ -784,6 +873,62 @@ fn main() {
 		build(root, out, 'temp-directory-checks')
 	} else if mode == 'build-media-time' {
 		build(root,out,'media-time-checks')
+	} else if mode == 'build-division' {
+		build(root, out, 'division-checks')
+	} else if mode == 'build-dispatch-semaphore' {
+		build(root, out, 'dispatch-semaphore-checks')
+	} else if mode == 'build-dispatch-source' {
+		build(root, out, 'dispatch-source-checks')
+	} else if mode == 'build-dispatch-group' {
+		build(root, out, 'dispatch-group-checks')
+	} else if mode == 'build-dispatch-specific' {
+		build(root, out, 'dispatch-specific-checks')
+	} else if mode == 'build-dispatch-data' {
+		build(root, out, 'dispatch-data-checks')
+	} else if mode == 'build-backtrace' {
+		build(root, out, 'backtrace-checks')
+	} else if mode == 'build-asl' {
+		build(root, out, 'asl-checks')
+	} else if mode == 'build-arc4random' {
+		build(root, out, 'arc4random-checks')
+	} else if mode == 'build-inverse-hyperbolic' {
+		build(root, out, 'inverse-hyperbolic-checks')
+	} else if mode == 'build-tlv-atexit' {
+		build(root, out, 'tlv-atexit-checks')
+	} else if mode == 'build-dyld-callbacks' {
+		build(root, out, 'dyld-callbacks-checks')
+	} else if mode == 'build-dyld-images' {
+		build(root, out, 'dyld-images-checks')
+	} else if mode == 'build-dispatch-timer-type' {
+		build(root,out,'dispatch-timer-type-checks')
+	} else if mode == 'build-executable-path' {
+		build(root,out,'executable-path-checks')
+	} else if mode == 'build-crt-environ' {
+		build(root,out,'crt-environ-checks')
+	} else if mode == 'build-immediate-exit' {
+		build(root,out,'immediate-exit-checks')
+	} else if mode == 'build-ndr-record' {
+		build(root,out,'ndr-record-checks')
+	} else if mode == 'build-pbkdf' {
+		build(root,out,'pbkdf-checks')
+	} else if mode == 'build-resolver-query' {
+		build(root,out,'resolver-query-checks')
+	} else if mode == 'build-zlib-bound' {
+		build(root,out,'zlib-bound-checks')
+	} else if mode == 'build-zlib-compress' {
+		build(root,out,'zlib-compress-checks')
+	} else if mode == 'build-zlib-checksum' {
+		build(root,out,'zlib-checksum-checks')
+	} else if mode == 'build-storekit-constants' {
+		build(root,out,'storekit-constants-checks')
+	} else if mode == 'build-refund' {
+		build(root,out,'refund-checks')
+	} else if mode == 'build-storefront-metadata' {
+		build(root,out,'storefront-metadata-checks')
+	} else if mode == 'build-storefront-current' {
+		build(root,out,'storefront-current-checks')
+	} else if mode == 'build-storefront' {
+		build(root,out,'storefront-checks')
 	} else if mode == 'build-video-decode' {
 		build(root,out,'video-decode-checks')
 	} else if mode == 'build-corehaptics-constants' {
@@ -1066,6 +1211,12 @@ fn main() {
 		build(root, out, 'swift-objc-bool-checks')
 	} else if mode == 'build-swift-once' {
 		build(root, out, 'swift-once-checks')
+	} else if mode.starts_with('build-') {
+		// New fixtures already register their source and build-list entry.
+		// Route their individual build commands without another dispatch entry.
+		fixture := mode[6..] + '-checks'
+		native_fixture_source(fixture)
+		build(root, out, fixture)
 	} else if mode == 'verify-monitor' {
 		verify_monitor(out)
 	} else if mode == 'hash' {

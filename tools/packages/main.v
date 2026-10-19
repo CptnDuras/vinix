@@ -35,11 +35,25 @@ const usage = 'usage: vinix-package [--root DIR] [--offline] [--json] [--progres
 	'  pack-root RECIPE.json PREPARED_GUEST_ROOT REPOSITORY_DIR\n' +
 	'  pack-catalog CATALOG.json PREPARED_ROOTS NEW_WORKSPACE\n' +
 	'  compose-catalog NEW_LOCK_DIRECTORY PROFILE CATALOG.json [PROFILE CATALOG.json...]\n' +
+	'  compose-catalog-for ARCH NEW_LOCK_DIRECTORY PROFILE CATALOG.json [PROFILE CATALOG.json...]\n' +
 	'  native-catalog VERSION PREPARED_ROOTS NEW_LOCK_DIRECTORY\n' +
 	'  sqlite-catalog SQLITE_VERSION RUNTIME_VERSION PREPARED_ROOTS NEW_LOCK_DIRECTORY\n' +
 	'  ffmpeg-catalog RUNTIME_VERSION PREPARED_ROOTS NEW_LOCK_DIRECTORY\n' +
+	'  wine-catalog RECIPE_DIRECTORY PREPARED_ROOTS NEW_LOCK_DIRECTORY\n' +
+	'  apple-catalog RECIPE_DIRECTORY PREPARED_ROOTS NEW_LOCK_DIRECTORY\n' +
 	'  publish REPOSITORY_DIR REPOSITORY_ID SEED_FILE SEQUENCE EXPIRES_UNIX\n' +
 	'  publish-release REPOSITORY_DIR REPOSITORY_ID SEED_FILE SEQUENCE EXPIRES_UNIX NEW_DIRECTORY\n'
+
+fn publisher_reply[T](mut info T) {
+	defer { info.close() }
+	mut bytes := []u8{cap: 2048}
+	unsafe { bytes.flags |= .noslices }
+	defer { unsafe { bytes.free() } }
+	json2.encode_append(info, mut bytes)
+	text := bytes.bytestr()
+	defer { unsafe { text.free() } }
+	println(text)
+}
 
 fn checked(arguments []string) !int {
 	mut args := arguments.clone()
@@ -110,17 +124,20 @@ fn checked(arguments []string) !int {
 			if names.len != 3 {
 				return error('pack requires a manifest, payload directory and repository directory')
 			}
-			println(json2.encode(pkgcore.pack(names[0], names[1], names[2])!))
+			mut info := pkgcore.pack(names[0], names[1], names[2])!
+			publisher_reply(mut info)
 			return 0
 		}
 		'pack-root' {
 			if names.len != 3 { return error('pack-root requires a recipe, prepared guest root and repository directory') }
-			println(json2.encode(pkgcore.pack_root(names[0], names[1], names[2])!))
+			mut info := pkgcore.pack_root(names[0], names[1], names[2])!
+			publisher_reply(mut info)
 			return 0
 		}
 		'pack-catalog' {
 			if names.len != 3 { return error('pack-catalog requires a catalog recipe, prepared roots and a new workspace directory') }
-			println(json2.encode(pkgcore.pack_catalog(names[0], names[1], names[2])!))
+			mut info := pkgcore.pack_catalog(names[0], names[1], names[2])!
+			publisher_reply(mut info)
 			return 0
 		}
 		'compose-catalog' {
@@ -128,23 +145,51 @@ fn checked(arguments []string) !int {
 				return error('compose-catalog requires a new lock directory and 1 to 64 PROFILE CATALOG.json pairs')
 			}
 			mut sources := []pkgcore.CatalogSource{}
+			defer { unsafe { (&array(&sources)).free() } }
 			for i := 1; i < names.len; i += 2 { sources << pkgcore.CatalogSource{ id: names[i], catalog: names[i + 1] } }
-			println(json2.encode(pkgcore.compose_catalog(sources, names[0])!))
+			mut info := pkgcore.compose_catalog(sources, names[0])!
+			publisher_reply(mut info)
+			return 0
+		}
+		'compose-catalog-for' {
+			if names.len < 4 || names.len % 2 != 0 || names.len > 130 {
+				return error('compose-catalog-for requires aarch64 or x86_64, a new lock directory and 1 to 64 PROFILE CATALOG.json pairs')
+			}
+			mut sources := []pkgcore.CatalogSource{}
+			defer { unsafe { (&array(&sources)).free() } }
+			for i := 2; i < names.len; i += 2 { sources << pkgcore.CatalogSource{ id: names[i], catalog: names[i + 1] } }
+			mut info := pkgcore.compose_catalog_for(names[0], sources, names[1])!
+			publisher_reply(mut info)
 			return 0
 		}
 		'native-catalog' {
 			if names.len != 3 { return error('native-catalog requires version, prepared roots and a new lock directory') }
-			println(json2.encode(pkgcore.native_catalog(names[0], names[1], names[2])!))
+			mut info := pkgcore.native_catalog(names[0], names[1], names[2])!
+			publisher_reply(mut info)
 			return 0
 		}
 		'sqlite-catalog' {
 			if names.len != 4 { return error('sqlite-catalog requires SQLite version, runtime version, prepared roots and a new lock directory') }
-			println(json2.encode(pkgcore.sqlite_catalog(names[0], names[1], names[2], names[3])!))
+			mut info := pkgcore.sqlite_catalog(names[0], names[1], names[2], names[3])!
+			publisher_reply(mut info)
 			return 0
 		}
 		'ffmpeg-catalog' {
 			if names.len != 3 { return error('ffmpeg-catalog requires runtime version, prepared roots and a new lock directory') }
-			println(json2.encode(pkgcore.ffmpeg_catalog(names[0], names[1], names[2])!))
+			mut info := pkgcore.ffmpeg_catalog(names[0], names[1], names[2])!
+			publisher_reply(mut info)
+			return 0
+		}
+		'wine-catalog' {
+			if names.len != 3 { return error('wine-catalog requires a recipe directory, prepared roots and a new lock directory') }
+			mut info := pkgcore.wine_catalog(names[0], names[1], names[2])!
+			publisher_reply(mut info)
+			return 0
+		}
+		'apple-catalog' {
+			if names.len != 3 { return error('apple-catalog requires a recipe directory, prepared roots and a new lock directory') }
+			mut info := pkgcore.apple_catalog(names[0], names[1], names[2])!
+			publisher_reply(mut info)
 			return 0
 		}
 		'publish', 'publish-release' {
@@ -158,7 +203,8 @@ fn checked(arguments []string) !int {
 			if command == 'publish' {
 				pkgcore.publish(names[0], names[1], names[2], sequence, expires)!
 			} else {
-				println(json2.encode(pkgcore.publish_release(names[0], names[1], names[2], sequence, expires, names[5])!))
+				mut info := pkgcore.publish_release(names[0], names[1], names[2], sequence, expires, names[5])!
+				publisher_reply(mut info)
 			}
 			return 0
 		}
@@ -199,14 +245,19 @@ fn checked(arguments []string) !int {
 				document.close()
 				encoded
 			} else {
-				json2.encode(service.review_deployment(names[0])!)
+				mut review := service.review_deployment(names[0])!
+				encoded := json2.encode(review)
+				review.close()
+				encoded
 			}
+			defer { unsafe { text.free() } }
 			if text.len > pkgcore.max_metadata { return error('deployment document/review exceeds metadata limit') }
 			println(text)
 		}
 		'deployment-apply' {
 			if names.len != 2 { return error('deployment-apply requires a review fingerprint and deployment document') }
-			service.apply_deployment(names[1], names[0])!
+			mut state := service.apply_deployment(names[1], names[0])!
+			state.close()
 		}
 		'policy' {
 			if names.len != 0 { return error('policy takes no arguments') }
@@ -291,12 +342,15 @@ fn checked(arguments []string) !int {
 		}
 		'update' {
 			if names.len != 0 { return error('update takes no package IDs') }
-			service.refresh()!
+			mut catalog := service.refresh()!
+			catalog.close()
 		}
 		'view', 'search', 'info', 'updates' {
-			view := pkgcore.software_view(root, offline)!
+			mut view := pkgcore.software_view(root, offline)!
+			defer { view.close() }
 			if command == 'view' {
 				text := json2.encode(view)
+				defer { unsafe { text.free() } }
 				if text.len > pkgcore.max_metadata { return error('software catalog exceeds metadata limit') }
 				println(text)
 				return 0
@@ -321,8 +375,8 @@ fn checked(arguments []string) !int {
 				}
 			}
 			if command == 'info' && !found { return error('package not found: ${query}') }
-			if view.catalog_error != '' { return error(view.catalog_error) }
-			if command == 'updates' && view.update_error != '' { return error(view.update_error) }
+			if view.catalog_error != '' { return error(view.catalog_error.clone()) }
+			if command == 'updates' && view.update_error != '' { return error(view.update_error.clone()) }
 		}
 		'status', 'list', 'verify' {
 			mut state := if command == 'verify' { service.verify()! } else { service.state()! }
@@ -351,15 +405,23 @@ fn checked(arguments []string) !int {
 			}
 		}
 		'install', 'remove', 'upgrade', 'repair' {
-			service.transact(command, names, pkgcore.TransactionOptions{})!
+			mut state := service.transact(command, names, pkgcore.TransactionOptions{})!
+			state.close()
 		}
 		'plan' {
 			if names.len < 1 { return error('plan requires an operation') }
-			println(json2.encode(service.plan(names[0], names[1..])!))
+			mut plan := service.plan(names[0], names[1..])!
+			defer { plan.close() }
+			text := json2.encode(plan)
+			defer { unsafe { text.free() } }
+			println(text)
 		}
 		'review' {
 			if names.len < 1 { return error('review requires an operation') }
-			text := json2.encode(service.review(names[0], names[1..])!)
+			mut review := service.review(names[0], names[1..])!
+			defer { review.close() }
+			text := json2.encode(review)
+			defer { unsafe { text.free() } }
 			if text.len > pkgcore.max_metadata { return error('package review exceeds metadata limit') }
 			println(text)
 		}
@@ -369,18 +431,22 @@ fn checked(arguments []string) !int {
 			}
 			if names[1] == 'rollback' {
 				if names.len != 2 { return error('rollback takes no package IDs') }
-				service.rollback(names[0])!
+				mut state := service.rollback(names[0])!
+				state.close()
 			} else {
-				service.transact(names[1], names[2..], pkgcore.TransactionOptions{ expected_review: names[0] })!
+				mut state := service.transact(names[1], names[2..], pkgcore.TransactionOptions{ expected_review: names[0] })!
+				state.close()
 			}
 		}
 		'deploy' {
 			if names.len != 1 { return error('deploy requires a deployment manifest') }
-			service.deploy(names[0])!
+			mut state := service.deploy(names[0])!
+			state.close()
 		}
 		'rollback' {
 			if names.len != 0 { return error('rollback takes no arguments') }
-			service.rollback('')!
+			mut state := service.rollback('')!
+			state.close()
 		}
 		'gc' {
 			if names.len != 0 { return error('gc takes no arguments') }

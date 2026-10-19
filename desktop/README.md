@@ -307,6 +307,25 @@ and mapped-memory values for every app. The build uses `VINIX_UI2_SOURCE` when
 set, otherwise a sibling `../ui2` checkout when present, and finally
 `third_party/ui2`.
 
+The background services are separate static V executables:
+`vinix-session` owns session policy, notifications and service state;
+`vinix-timesync` synchronizes the system clock; and `vinix-service-runner`
+supervises each service and stops its process group when its broker lease closes.
+They share the `sessionipc` and `sessioncore` modules and contain no ui2,
+compositor, fonts or application artwork. ARM64 and x86-64 image builds compile
+and install all three. The desktop's older `--session-services` and
+`--time-service` commands exec the corresponding helper for compatibility;
+saved built-in clock service records migrate while preserving their policy.
+The session helper now requires the compositor's private inherited control
+socket; a public `attach` or a PID argument cannot grant administrative access.
+
+Run `V=/path/to/v v run desktop/tools/test-services.v` for the standalone
+authorization, persistence, restart, crash-cleanup and allocation checks.
+`v run desktop/tools/build-services.v --arch=arm64|amd64 --sysroot=DIR --output=DIR`
+cross-builds the helpers independently of the desktop. Native tests can select
+their helper directory with `VINIX_SESSION_BIN_DIR`; installed sessions use
+`/usr/bin`.
+
 VOffice is not built with the image. `../scripts/build-voffice-aarch64.sh` uses
 `tools/build_voffice` and `tools/ui2_vinix_backend.v` to cross-compile
 Writer and Calc as static musl applications from `VINIX_OFFICE_SOURCE`, a
@@ -365,15 +384,18 @@ LibreOffice installs the full Alpine suite together with its GTK plugin,
 English resources, document fonts and icon theme for Vinix's existing launcher.
 
 The **iOS runtime** option installs Vinix's own static ARM64 compatibility
-runner from an optional image payload. To supply that choice, include the
-already built runner before packing the image root:
+runner. It downloads the prebuilt runner that `scripts/deploy-iso.sh`
+publishes with each release, `vinix-ios-runtime-arm64` with its `.sha256`,
+from the release the image is (`/etc/vinix-release`), or from the newest
+release for an image that names none, and checks its checksum and that it is a
+static ARM64 executable. `scripts/build-ios-aarch64.sh --runner-only` builds
+it. An image can carry the runner instead, so that nothing is downloaded:
 
 ```sh
 v run build-support/ios/stage-setup-runtime.v build/ios/staging/usr/bin/run-ios /path/to/image/root
 ```
 
-Images that already include `/usr/bin/run-ios` show it as installed. Images
-without the optional payload build it from official Vinix sources on demand.
+Images that already include `/usr/bin/run-ios` show it as installed.
 The runtime executes compatible, unencrypted ARM64 iOS Mach-O apps directly, without CPU emulation;
 its supported API subset and limitations are documented in [iOS compatibility](../docs/ios.md).
 It is not a general App Store runtime. The optional payload is a Vinix binary,
@@ -425,11 +447,12 @@ Firefox is an upstream GTK/X11 application rather than a native ui2 client. It
 runs on a private Xvfb display whose live XWD framebuffer is composited into a
 normal movable Vinix window. Pointer and keyboard events cross the same compact
 input bridge used by the other hosted X11 applications, so the native desktop
-and taskbar remain active while Firefox runs. The desktop image builder includes
-Xvfb, the input bridge, the direct `startx` launcher, and Firefox's Vinix policy
-files, but not the browser itself: the first-run app page and `pkg install
-firefox` install it (`--with-firefox` builds it into an image). A native error
-window remains as a runtime fallback when the browser or X11 layer is missing.
+and taskbar remain active while Firefox runs. Images carry Firefox's Vinix
+policy files but neither the browser nor X11: the first-run app page and `pkg
+install firefox` install the browser, and pkg brings Xvfb, the input bridge and
+the direct `startx` launcher with it (`--with-firefox` builds both into an
+image). A native error window remains as a runtime fallback when the browser or
+X11 is missing.
 The direct launcher writes Firefox's upstream graphics and GTK diagnostics to
 `/var/log/firefox.log`. On an M1 image with the Asahi runtime, direct Xorg can
 enable glamor/DRI3 and Firefox WebRender over X11 EGL. The embedded window uses

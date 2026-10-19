@@ -25,6 +25,10 @@
 #   vinix-amd64.iso   boots through BIOS or UEFI, from a CD or a disk
 #   vinix-arm64.iso   boots through UEFI
 #   SHA256SUMS
+#   vinix-x11-ARCH.tar.gz(.sha256)  the X11 that pkg installs with the first
+#                     graphical application; the images leave it out
+#   vinix-ios-runtime-arm64(.sha256)  the static iOS runtime the first-run app
+#                     page installs on arm64 (desktop/app_selection_runtime.v)
 #   RELEASE_NOTES.md  what the release page says
 #   test/             serial logs and screenshots from scripts/test-iso.sh
 #
@@ -190,10 +194,15 @@ unset PROD
 export V
 # Each image records the release it is as /etc/vinix-release. At boot it asks
 # vinix-os.org/version for the newest one and, when that is newer, the desktop
-# tells the user to download it (build-support/vinix-version-check).
-export VINIX_RELEASE="$TAG"
+# tells the user to download it (build-support/vinix-version-check). A test
+# build that is not to be published can set VINIX_RELEASE= (empty) to make
+# development images instead, which take X11 and the iOS runtime from the newest
+# release rather than from a tag that will never have them.
+export VINIX_RELEASE="${VINIX_RELEASE-$TAG}"
 
 IMAGES=()
+# The X11 bundles and their checksum files, uploaded beside the images.
+BUNDLES=()
 
 # ── amd64 ──────────────────────────────────────────────────────────────────
 
@@ -210,7 +219,7 @@ check_layer() {
 
 if [ "$BUILD_AMD64" -eq 1 ]; then
     step "Building the amd64 image"
-    for layer in x11 network-tools python v; do
+    for layer in x11 network-tools; do
         check_layer "$SCRIPT_DIR/build-amd64-$layer/staging" "./build-$layer-amd64.sh"
     done
     [ "$layer_missing" -eq 0 ] || die "build the missing layers in $SCRIPT_DIR first"
@@ -218,15 +227,16 @@ if [ "$BUILD_AMD64" -eq 1 ]; then
     VINIX_UI2_SOURCE="$UI2_SOURCE" \
     VINIX_AMD64_X11_STAGING="$SCRIPT_DIR/build-amd64-x11/staging" \
     VINIX_AMD64_NETWORK_TOOLS_STAGING="$SCRIPT_DIR/build-amd64-network-tools/staging" \
-    VINIX_AMD64_PYTHON_STAGING="$SCRIPT_DIR/build-amd64-python/staging" \
-    VINIX_AMD64_VLANG_STAGING="$SCRIPT_DIR/build-amd64-v/staging" \
     VINIX_AMD64_DESKTOP_BUILD_DIR="$WORK/amd64-desktop" \
     VINIX_AMD64_USERLAND_BUILD_DIR="$CACHE/amd64-userland" \
     VINIX_AMD64_BUILD_DIR="$SRC/build-amd64-kernel" \
     VINIX_AMD64_DESKTOP_ISO="$OUT/vinix-amd64.iso" \
+    VINIX_AMD64_X11_BUNDLE="$OUT/vinix-x11-amd64.tar.gz" \
         "$SRC/scripts/build-desktop-amd64.sh"
     [ -f "$OUT/vinix-amd64.iso" ] || die "the amd64 build made no ISO"
+    [ -s "$OUT/vinix-x11-amd64.tar.gz.sha256" ] || die "the amd64 build made no X11 bundle"
     IMAGES+=("$OUT/vinix-amd64.iso")
+    BUNDLES+=("$OUT/vinix-x11-amd64.tar.gz" "$OUT/vinix-x11-amd64.tar.gz.sha256")
 fi
 
 # ── arm64 ──────────────────────────────────────────────────────────────────
@@ -237,8 +247,6 @@ if [ "$BUILD_ARM64" -eq 1 ]; then
     check_layer "$SCRIPT_DIR/build-aarch64-userland/staging" ./scripts/build-aarch64.sh
     check_layer "$SCRIPT_DIR/build-aarch64-x11/staging" ./scripts/build-x11-aarch64.sh
     check_layer "$SCRIPT_DIR/build-aarch64-network-tools/staging" ./scripts/build-network-tools-aarch64.sh
-    check_layer "$SCRIPT_DIR/build-aarch64-python/staging" ./scripts/build-python-aarch64.sh
-    check_layer "$SCRIPT_DIR/build-aarch64-v/staging" ./scripts/build-v-aarch64.sh
     [ "$layer_missing" -eq 0 ] || die "build the missing layers in $SCRIPT_DIR first"
 
     mkdir -p "$SRC/build-support/init-aarch64"
@@ -253,13 +261,30 @@ if [ "$BUILD_ARM64" -eq 1 ]; then
     VINIX_UI2_SOURCE="$UI2_SOURCE" \
     VINIX_AARCH64_USERLAND_BUILD_DIR="$SCRIPT_DIR/build-aarch64-userland" \
     VINIX_AARCH64_APP_CACHE="$CACHE/arm64-desktop-apps" \
-    VINIX_PYTHON_STAGING="$SCRIPT_DIR/build-aarch64-python/staging" \
     VINIX_NETWORK_TOOLS_STAGING="$SCRIPT_DIR/build-aarch64-network-tools/staging" \
-    VINIX_VLANG_STAGING="$SCRIPT_DIR/build-aarch64-v/staging" \
     VINIX_X11_STAGING="$SCRIPT_DIR/build-aarch64-x11/staging" \
     VINIX_GPU_SYSROOT="$SCRIPT_DIR/build-aarch64-x11/sysroot" \
     VINIX_DESKTOP_INITRAMFS="$WORK/arm64-initramfs-desktop.tar" \
+    VINIX_X11_BUNDLE="$OUT/vinix-x11-arm64.tar.gz" \
         "$SRC/scripts/build-desktop-aarch64.sh" --compact-initramfs
+    [ -s "$OUT/vinix-x11-arm64.tar.gz.sha256" ] || die "the arm64 build made no X11 bundle"
+    BUNDLES+=("$OUT/vinix-x11-arm64.tar.gz" "$OUT/vinix-x11-arm64.tar.gz.sha256")
+
+    # The iOS runtime the first-run app page offers, which machines download
+    # from their release rather than build: the images carry no V compiler.
+    VINIX_IOS_BUILD_DIR="$WORK/ios" \
+    VINIX_AARCH64_SYSROOT="$SCRIPT_DIR/build-aarch64-userland/staging" \
+        "$SRC/scripts/build-ios-aarch64.sh" --runner-only
+    IOS_RUNTIME="$OUT/vinix-ios-runtime-arm64"
+    install -m755 "$WORK/ios/staging/usr/bin/run-ios" "$IOS_RUNTIME"
+    file "$IOS_RUNTIME" | grep -q 'ARM aarch64.*statically linked' ||
+        die "the iOS runtime is not a static arm64 executable"
+    if command -v sha256sum >/dev/null 2>&1; then
+        (cd "$OUT" && sha256sum vinix-ios-runtime-arm64)
+    else
+        (cd "$OUT" && shasum -a 256 vinix-ios-runtime-arm64)
+    fi > "$IOS_RUNTIME.sha256"
+    BUNDLES+=("$IOS_RUNTIME" "$IOS_RUNTIME.sha256")
 
     rm -f "$OUT/vinix-arm64.iso"
     VINIX_AARCH64_KERNEL="$SRC/build-arm64-kernel/bin/vinix" \
@@ -364,7 +389,11 @@ describe_boot() {
     echo
     echo "Firefox, Chromium and the other optional apps are not on the image: the first"
     echo "launch offers them and \`pkg install\` downloads them, so give the VM a network"
-    echo "card (the commands above do). Vinix drives VirtIO and Intel e1000 cards."
+    echo "card (the commands above do). Vinix drives VirtIO and Intel e1000 cards. Nor is"
+    echo "X11: the first graphical Linux application brings it, from the"
+    echo "\`vinix-x11-*.tar.gz\` files of this release. Python is a \`pkg install python3\`"
+    echo "away; the V compiler and Oh My Zsh are left out too. The iOS runtime the first"
+    echo "launch offers on arm64 is \`vinix-ios-runtime-arm64\`, prebuilt."
     echo
     echo "### VirtualBox"
     echo
@@ -411,6 +440,9 @@ for image in "${IMAGES[@]}"; do
     echo "    $(basename "$image") ($(human_size "$(file_size "$image")"))"
 done
 echo "    SHA256SUMS"
+for bundle in ${BUNDLES[@]+"${BUNDLES[@]}"}; do
+    echo "    $(basename "$bundle") ($(human_size "$(file_size "$bundle")"))"
+done
 if [ "$ASSUME_YES" -ne 1 ]; then
     if [ ! -t 0 ]; then
         die "not a terminal; pass --yes to publish without asking"
@@ -426,7 +458,7 @@ create_args=(release create "$TAG" --repo "$REPO" --target "$COMMIT"
     --title "Vinix $TAG" --notes-file "$OUT/RELEASE_NOTES.md")
 [ "$DRAFT" -eq 1 ] && create_args+=(--draft)
 [ "$PRERELEASE" -eq 1 ] && create_args+=(--prerelease)
-gh "${create_args[@]}" "${IMAGES[@]}" "$OUT/SHA256SUMS"
+gh "${create_args[@]}" "${IMAGES[@]}" "$OUT/SHA256SUMS" ${BUNDLES[@]+"${BUNDLES[@]}"}
 
 step "Published"
 gh release view "$TAG" --repo "$REPO" --json url --jq .url

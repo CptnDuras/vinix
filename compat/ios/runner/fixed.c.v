@@ -195,6 +195,8 @@ fn fixed_symbol(symbol string) ?u64 {
 		'___sincos_stret' { u64(unsafe { voidptr(darwin_sincos_double) }) }
 		'_ldexp' { u64(unsafe { voidptr(C.ldexp) }) }
 		'_ldexpf' { u64(unsafe { voidptr(C.ldexpf) }) }
+		'_logbf' { u64(unsafe { voidptr(darwin_logbf) }) }
+		'_nextafterf' { u64(unsafe { voidptr(darwin_nextafterf) }) }
 		'_frexp' { u64(unsafe { voidptr(C.frexp) }) }
 		'_modf' { u64(unsafe { voidptr(C.modf) }) }
 		'_modff' { u64(unsafe { voidptr(C.modff) }) }
@@ -207,10 +209,10 @@ fn fixed_symbol(symbol string) ?u64 {
 		'_llrint' { u64(unsafe { voidptr(C.llrint) }) }
 		'_llrintf' { u64(unsafe { voidptr(C.llrintf) }) }
 		'_setlocale' { u64(unsafe { voidptr(darwin_setlocale) }) }
-        '_realloc' { u64(unsafe { voidptr(C.realloc) }) }
+        '_realloc' { u64(unsafe { voidptr(darwin_realloc) }) }
         '_strcpy' { u64(unsafe { voidptr(C.strcpy) }) }
         '_strncpy' { u64(unsafe { voidptr(C.strncpy) }) }
-        '_strdup' { u64(unsafe { voidptr(C.strdup) }) }
+        '_strdup' { u64(unsafe { voidptr(darwin_strdup) }) }
         '_strchr' { u64(unsafe { voidptr(C.strchr) }) }
         '_strrchr' { u64(unsafe { voidptr(C.strrchr) }) }
         '_strstr' { u64(unsafe { voidptr(C.strstr) }) }
@@ -282,7 +284,7 @@ fn fixed_symbol(symbol string) ?u64 {
         '_fmodf' { u64(unsafe { voidptr(C.fmodf) }) }
         '_atan2' { u64(unsafe { voidptr(C.atan2) }) }
         '_atan2f' { u64(unsafe { voidptr(C.atan2f) }) }
-        '_calloc' { u64(unsafe { voidptr(C.calloc) }) }
+        '_calloc' { u64(unsafe { voidptr(darwin_calloc) }) }
         '_floor' { u64(unsafe { voidptr(C.floor) }) }
         '_signal' { u64(unsafe { voidptr(darwin_signal) }) }
         '_mach_absolute_time' { u64(unsafe { voidptr(darwin_mach_absolute_time) }) }

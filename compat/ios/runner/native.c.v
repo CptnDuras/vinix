@@ -39,8 +39,18 @@ fn execute(image macho.Image, arguments []string) !int {
 	modules_start(image, layout, base, path, false)
 	defer {
 		dispatch_stop()
+		ns_threads_join()
+		swift_tasks_join()
+		nw_stop()
+		reachability_stop()
+		image_tls_require_current()
+		image_tls_finalize_current()
 		if image_runtime.started { image_cxa_finalize(0) }
+		image_tls_finalize_current()
 		signals_stop()
+		dyld_images_retire()
+		image_tls_require_current()
+		image_tls_finalize_current()
 		objc_stop()
 		$if ios_gles ? { gles_stop() }
 		image_runtime_stop()
@@ -52,6 +62,7 @@ fn execute(image macho.Image, arguments []string) !int {
 	image_atfork_start()!
 	ios_runtime.bundle = os.dir(path)
 	image_runtime.path = path.clone()
+	image_progname_start(arguments[0])
 	module_dependencies(0, 0)!
 	lazy_start()!
 	module_bind_all()!

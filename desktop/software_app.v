@@ -163,8 +163,14 @@ mut:
 	repository_result string
 	repository_worker SoftwareRepositoryWorker
 	deployment_mode bool
+	deployment_form_compact bool
+	deployment_action int
 	deployment_path []u8
 	deployment_pending string // frozen file path for deployment-review/apply
+	deployment_choice_pending bool
+	deployment_choice_current bool // intervening input/navigation invalidates a late selection
+	release_deployment_path string = pkgprotocol.image_applications_path
+	release_deployment_available bool
 	mirror_mode bool
 	mirror_path []u8
 	mirror_all bool
@@ -292,11 +298,17 @@ fn (mut a SoftwareApp) start(arguments []string, view bool) {
 
 fn software_free_row(row SoftwareRow) {
 	unsafe {
+		for dependency in row.installed_dependencies { dependency.id.free(); dependency.minimum.free(); dependency.before.free() }
+		(&array(&row.installed_dependencies)).free()
 		row.id.free()
 		row.name.free()
 		row.description.free()
 		row.version.free()
 		row.installed_version.free()
+		row.installed_repository.free()
+		row.installed_license.free()
+		row.installed_runtime.free()
+		row.installed_public_key.free()
 		row.installed_name.free()
 		row.installed_kind.free()
 		for permission in row.installed_permissions { permission.free() }
@@ -509,6 +521,12 @@ fn (mut a SoftwareApp) load_review() {
 		available.free()
 		reserve.free()
 	}
+	problem := a.review_space_problem()
+	if problem != '' {
+		a.set_status(problem)
+		unsafe { problem.free() }
+		return
+	}
 	if a.mirror_pending != '' {
 		a.set_status(if a.mirror_lock_pending != '' {
 			'Review the destination, deployment source and digest, then every application and dependency. Export preserves the exact locked versions and bundles _deployment.json.'
@@ -523,6 +541,12 @@ fn (mut a SoftwareApp) load_review() {
 		a.set_status('Rollback restores the previous package set in a new generation and retains the current set so you can undo it. Review every dependency and removal; personal data stays on disk.')
 	} else {
 		a.set_status('Review every application and dependency, including retained packages and removals. Personal data stays on disk. Confirm applies this exact package set.')
+	}
+	if a.review_snapshot.operation != 'mirror' {
+		notice := a.review_permission_notice()
+		message := a.status + '\n' + notice
+		a.set_status(message)
+		unsafe { notice.free(); message.free() }
 	}
 }
 
@@ -556,10 +580,11 @@ fn (mut a SoftwareApp) retire_worker() {
 }
 
 fn (mut a SoftwareApp) poll() bool {
-	if a.window_mode { return a.poll_window() }
-	if a.terminal_app != unsafe { nil } { return a.terminal_app.poll() }
-	if a.worker == unsafe { nil } { return false }
-	mut changed := false
+	choice_changed := a.poll_deployment_choice()
+	if a.window_mode { return a.poll_window() || choice_changed }
+	if a.terminal_app != unsafe { nil } { return a.terminal_app.poll() || choice_changed }
+	if a.worker == unsafe { nil } { return choice_changed }
+	mut changed := choice_changed
 	// Drain a bounded number of chunks per UI poll, including after exit.
 	for _ in 0 .. 16 {
 		chunk := a.worker.stdout_read()
@@ -777,6 +802,9 @@ fn (mut a SoftwareApp) run_requested() {
 fn (a &SoftwareApp) next_poll_ms() u64 { return 100 }
 
 fn (mut a SoftwareApp) handle(event_id string) ! {
+	if a.deployment_choice_pending && event_id != 'software.deployment.choose' {
+		a.deployment_choice_current = false
+	}
 	if a.admin_prompt { a.handle_admin(event_id); return }
 	if a.window_mode { a.handle_window(event_id); return }
 	if a.terminal_app != unsafe { nil } {
@@ -921,6 +949,7 @@ fn (mut a SoftwareApp) handle(event_id string) ! {
 		a.clear_review()
 		a.deployment_mode = true
 		a.initialize_deployment_field()
+		a.find_release_deployment()
 		a.focus = false
 		a.select_all = false
 		a.set_status('Enter an absolute deployment file path. Review the complete application set and removals before applying it.')
@@ -1044,6 +1073,11 @@ fn (mut a SoftwareApp) handle(event_id string) ! {
 		}
 		'software.confirm' {
 			if a.review_ready {
+				if !a.review_space_sufficient() {
+					problem := a.review_space_problem(); a.set_status(problem)
+					unsafe { problem.free() }
+					return
+				}
 				mirroring := a.mirror_pending != ''
 				a.start(if a.mirror_lock_pending != '' {
 					['mirror-deployment-apply', a.review_snapshot.fingerprint, a.mirror_pending, a.mirror_lock_pending]
@@ -1071,6 +1105,7 @@ fn (mut a SoftwareApp) handle(event_id string) ! {
 }
 
 fn (mut a SoftwareApp) key_input(input string) {
+	if input != '' { a.deployment_choice_current = false }
 	if a.admin_prompt { a.admin_key_input(input); return }
 	if a.window_mode { a.window_key_input(input); return }
 	if a.terminal_app != unsafe { nil } { a.terminal_app.key_input(input); return }
@@ -1123,6 +1158,7 @@ fn (mut a SoftwareApp) key_input(input string) {
 }
 
 fn (mut a SoftwareApp) paste_input(input string) {
+	if input != '' { a.deployment_choice_current = false }
 	if a.admin_prompt { a.admin_paste_input(input); return }
 	if a.window_mode { a.window_paste_input(input); return }
 	if a.terminal_app != unsafe { nil } { a.terminal_app.paste_input(input); return }
@@ -1381,7 +1417,7 @@ fn (mut a SoftwareApp) build(size ui2.Rect) !ui2.Element {
 		}
 	}
 	if a.review.len > 0 {
-		if a.review_ready {
+		if a.review_ready && a.review_space_sufficient() {
 			children << software_button('software.confirm', 'Confirm', 274, height - 138, 130)
 		}
 		children << software_button(if a.package_review_running() { 'software.review.stop' } else { 'software.cancel' },
@@ -1479,6 +1515,7 @@ fn (mut a SoftwareApp) close_app() {
 		a.repository_key.free()
 		a.repository_result.free()
 		a.deployment_path.free()
+		a.release_deployment_path.free()
 		a.mirror_path.free()
 		a.mirror_lock_path.free()
 	}

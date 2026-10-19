@@ -181,12 +181,20 @@ fn fetch_https_with(url string, destination string, maximum u64, resume bool, of
 	for attempt in 0 .. 2 {
 		offset := if resumed { output.bytes } else { u64(0) }
 		position := offset.str()
-		mut args := ['--disable', '--fail', '--show-error', '--silent', '--location', '--proto', '=https',
+		// Arguments borrow literals and this call's URL/numeric strings. Fixed
+		// stack lists avoid allocating abandoned temporary arrays on each append.
+		base := ['--disable', '--fail', '--show-error', '--silent', '--location', '--proto', '=https',
 			'--proto-redir', '=https', '--tlsv1.2', '--connect-timeout', '20', '--max-time', '1800',
-			'--retry', '0', '--max-filesize', limit, '--output', '-']
+			'--retry', '0', '--max-filesize', limit, '--output', '-']!
+		mut args := []string{cap: base.len + 4}
 		unsafe { args.flags |= .noslices }
-		if resumed { args << ['--continue-at', position] }
-		args << ['--', url]
+		unsafe { args.push_many(&base[0], base.len) }
+		if resumed {
+			range := ['--continue-at', position]!
+			unsafe { args.push_many(&range[0], range.len) }
+		}
+		target := ['--', url]!
+		unsafe { args.push_many(&target[0], target.len) }
 		code = pump_https_output(output, destination, maximum, offset, args, event, report, options) or {
 			unsafe { position.free(); (&array(&args)).free() }
 			return err
@@ -194,10 +202,11 @@ fn fetch_https_with(url string, destination string, maximum u64, resume bool, of
 		unsafe { position.free(); (&array(&args)).free() }
 		if code != 33 || !resumed || attempt != 0 { break }
 		label := if event.package == '' { 'download' } else { event.package + '/' + event.path }
-		println('Restarting ${label}: repository does not support byte ranges')
+		message := 'Restarting ${label}: repository does not support byte ranges'
+		println(message)
+		unsafe { label.free(); message.free() }
 		resumed = false
 	}
-	if code == 126 || code == 127 { return error('download failed (${code}): cannot start HTTPS transport ${options.program}; retained partial data for retry: ${url}') }
-	if code != 0 { return error('download failed (${code}); retained partial data for retry: ${url}') }
+	if code != 0 { return https_transport_failure(code, url, options.program) }
 	return resumed
 }

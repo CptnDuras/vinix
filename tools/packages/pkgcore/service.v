@@ -29,52 +29,74 @@ fn (service Service) configuration() !Config {
 
 pub fn (service Service) refresh() !Catalog {
 	directory := service.directory()!
+	defer { unsafe { directory.free() } }
 	guard := acquire(directory)!
 	defer { guard.release() }
-	return refresh_progress(service.configuration()!, directory, service.progress)
+	config := service.configuration()!
+	defer { close_decoded_configuration(config) }
+	return refresh_progress(config, directory, service.progress)
 }
 
 pub fn (service Service) transact(operation string, names []string, options TransactionOptions) !State {
 	directory := service.directory()!
+	defer { unsafe { directory.free() } }
 	guard := acquire(directory)!
 	defer { guard.release() }
-	return transact_locked(service.configuration()!, directory, operation, names,
+	config := service.configuration()!
+	defer { close_decoded_configuration(config) }
+	return transact_locked(config, directory, operation, names,
 		TransactionOptions{ ...options, progress: service.progress })
 }
 
+// The observation owns every field independently. Retire it with Plan.close().
 pub fn (service Service) plan(operation string, names []string) !Plan {
 	directory := service.directory()!
+	defer { unsafe { directory.free() } }
 	guard := acquire_reader(directory)!
 	defer { guard.release() }
-	return preview_plan_locked(service.configuration()!, directory, operation, names)
+	config := service.configuration()!
+	defer { close_decoded_configuration(config) }
+	return preview_plan_locked(config, directory, operation, names)
 }
 
 pub fn (service Service) review(operation string, names []string) !pkgprotocol.Review {
 	directory := service.directory()!
+	defer { unsafe { directory.free() } }
 	guard := acquire_reader(directory)!
 	defer { guard.release() }
-	return review_operation_locked(service.configuration()!, directory, operation, names)
+	config := service.configuration()!
+	defer { close_decoded_configuration(config) }
+	return review_operation_locked(config, directory, operation, names)
 }
 
 pub fn (service Service) rollback(expected string) !State {
 	directory := service.directory()!
+	defer { unsafe { directory.free() } }
 	guard := acquire(directory)!
 	defer { guard.release() }
-	return rollback_progress(service.configuration()!, directory, expected, service.progress)
+	config := service.configuration()!
+	defer { close_decoded_configuration(config) }
+	return rollback_progress(config, directory, expected, service.progress)
 }
 
 pub fn (service Service) collect() ! {
 	directory := service.directory()!
+	defer { unsafe { directory.free() } }
 	guard := acquire(directory)!
 	defer { guard.release() }
-	collect_locked(service.configuration()!, directory)!
+	config := service.configuration()!
+	defer { close_decoded_configuration(config) }
+	collect_locked(config, directory)!
 }
 
 pub fn (service Service) mirror(destination string, names []string) ! {
 	directory := service.directory()!
+	defer { unsafe { directory.free() } }
 	guard := acquire(directory)!
 	defer { guard.release() }
-	mirror_export(service.configuration()!, directory, destination, names, MirrorOptions{ progress: service.progress })!
+	config := service.configuration()!
+	defer { close_decoded_configuration(config) }
+	mirror_export(config, directory, destination, names, MirrorOptions{ progress: service.progress })!
 }
 
 fn (service Service) installed_locked(directory string, verify bool) !State {

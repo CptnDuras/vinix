@@ -16,12 +16,84 @@ The desktop cache tracks the selected input and its contents. See
 [the image contract](../tools/packages/SDK.md#release-image-configuration) and
 [clean-image native catalog qualification](../tests/packages/image-configuration-check.md).
 
+[Captured tool builds](../tests/packages/image-tools-check.md) compile and validate
+all three static package tools before replacing existing image tools. Private
+workspaces, captured outputs and destination descriptors preserve prior versions
+on compiler/validation refusal and retain replaced recovery trees. Final writes
+remain atomic per file; late publication failures report incomplete image staging.
+
 [Ordinary Software image qualification](../tests/packages/software-image-check.md)
 now joins that staged trust with the real administrator and isolated-launch
 services. Both target guests exercise Software's actual controller and UI trees,
 native windows under separate user accounts, updates, rollback and cached
 reinstall. Graphical login/presentation and persistent-device acceptance remain
 separate release gates.
+
+The [Software cold-boot check](../tests/packages/software-persistence-check.md)
+keeps the package store, configuration, account database and homes on the same
+ext2 disk across four guest boots. It checks exact retained bytes and ownership
+before maintenance, native app reopening, reviewed upgrade, rollback, uninstall
+and cached reinstall through the ordinary Software controller. Tools still boot
+from initramfs; installed OS boot and physical-device/crash acceptance remain
+separate work.
+
+The [installed-system check](../tests/packages/software-installed-check.md) adds
+the kernel's real blank-disk installer and three subsequent boots of the same
+installed VJFS root. Software maintains the native catalog with unchanged tool
+hashes and retained trust, accounts, package state and user data. Test boot media
+still supplies the kernel; graphical sessions, autonomous firmware boot and
+broader catalog/runtime/device acceptance remain separate gates.
+
+Release staging also accepts `--repositories DIRECTORY` or
+`VINIX_PACKAGE_IMAGE_REPOSITORIES` for a complete signed offline bundle. It
+captures reviewed publisher exports before compilation and publishes them at the
+configuration's fixed target URLs after signature, dependency, policy and payload
+verification. Existing bundles are preserved or refused, and consumer package
+state stays untouched until normal Refresh. See [the bundle contract](../tools/packages/SDK.md#offline-repository-bundles-in-release-images)
+and [qualification](../tests/packages/image-repositories-check.md).
+Private image captures and publication stages now retain directory identities.
+Replaced captures refuse preflight, declaration and publication; cleanup preserves
+replacement/recovery trees, and a saved bundle survives a final flush failure.
+The staging tool reports checked capture-retirement refusals before declaring
+success. See [capture checks](../tests/packages/image-capture-check.md).
+
+Release builders can also require their advertised app IDs with repeated
+`stage.v --require-app ID`. Preflight and normal staging reject missing host
+variants or incompatible combined dependency/runtime requirements before
+compilation or image writes. The report carries an exact signed-provenance
+deployment lock for normal reviewed offline installation. This adds a concrete
+catalog admission gate; production publisher/catalog migration and real graphical
+runtime acceptance remain open. See [qualification](../tests/packages/image-applications-check.md).
+
+Desktop builds can carry that advertised set in a reviewed format-1 deployment
+root manifest selected by `VINIX_PACKAGE_IMAGE_APPLICATIONS` or direct
+`--applications FILE`. The stager resolves those exact captured requirements
+before compiling or publishing, reports their source digest, and refuses exact
+format-2 locks rather than dropping their pins. The native desktop cache tracks
+the selection and contents. See [file/cache qualification](../tests/packages/image-requirements-check.md).
+
+Preflight can explicitly export its exact resolved deployment with
+`--export-deployment NEW_FILE`. The canonical lock is saved atomically to a new
+name outside the image and comes with a destination/digest receipt. It can be
+distributed for normal Software/CLI deployment review, where current trust,
+policy and changes are checked again. Existing output files and the target image
+remain intact. See [qualification](../tests/packages/image-export-check.md).
+
+Normal staging with advertised requirements now saves the exact resolved lock
+inside the image at `/usr/share/vinix-packages/applications.json`. Software's
+**Deployment → Review release apps** discovers it and reviews the full set
+without typing a filename or installing anything automatically. Confirmation
+and administrator approval still apply. The stager captures the lock before
+compilation, publishes it after matching trust/bundle publication, and preserves
+existing identical declarations. Check reports expose its path, action, byte
+count and digest. See [the contract](../tools/packages/SDK.md#declare-release-applications-in-an-image)
+and [qualification](../tests/packages/image-catalog-check.md).
+
+**Deployment → Check release apps** compares the installed generation with the
+image's declaration using the existing read-only deployment audit. Ordinary
+administrator and standard accounts can see missing apps, exact matches and
+version drift without approval or repository payload access. Updates preserve
+the original declaration. See [installed-release checks](../tests/packages/release-audit-check.md).
 
 Configuration, cached catalogs, trust histories, installed state and publisher
 documents share a bounded metadata reader. It captures a nonblocking descriptor,
@@ -186,12 +258,76 @@ enroll a publisher or accept proprietary/firmware terms for consumers.
 The [catalog qualification](../tests/packages/catalog-build-check.md) covers
 canonical release reproduction, refusal/cleanup and real Linux guest execution.
 
-Prepared-root imports, catalog builds and the three fixed publisher profiles
+The [Wine Win64 publisher profile](../tools/packages/SDK.md#wine-win64-publisher-profile)
+adds explicit application/runtime recipes for both hosts, structural PE32+
+admission and matching native static launchers. It preserves publisher-declared
+permissions, notices, proprietary licensing and bounded runtime updates in the
+normal signed catalog. It does not supply or qualify Wine itself. See
+[publisher checks](../tests/packages/wine-profile-check.md) for reproducible
+offline maintenance, policy and failure coverage.
+The [Wine ownership checks](../tests/packages/wine-owner-check.md) cover decoded
+declarations, PE/native launcher preflight, partial manifests, canonicalization
+and independently closeable replies. After JSON initialization, 368 host calls
+and 896 metadata cycles retain zero tracked allocations while preserving
+captured approvals, canonical locks and explicit licenses/runtime bounds.
+Both guests check metadata ownership and twelve selected complete-call cases;
+real Wine/translation and graphical execution remain separate.
+
+The [Apple iOS ARM64 publisher profile](../tools/packages/SDK.md#apple-ios-arm64-publisher-profile)
+adds a bounded thin-Mach-O header/map check, matching XML/binary bundle identity,
+a static native launcher and explicit licensed runtime closure. It creates only
+the AArch64 catalog it can represent, retaining normal signing, policy and
+offline maintenance. The [publisher checks](../tests/packages/apple-profile-check.md)
+cover reproducible locks and refusal paths; the real Apple package guest now
+builds both application/runtime versions through that profile before installation.
+Wider API, application and graphical qualification remain open.
+
+Prepared-root imports, catalog builds and fixed publisher profiles
 share source-root admission before creating destination parents. Empty/NUL
 paths and leaf directory aliases refuse even with trailing separators. Ordinary
 roots retain canonical metadata and a captured namespace that later pathname
 replacement cannot redirect. See
 [root admission qualification](../tests/packages/prepared-root-check.md).
+
+Prepared-root materialization now limits selected/traversed entries across all
+selectors and alias visits, and checks output depth including selector parents.
+Empty-directory trees refuse during import, before the later pack walk. The
+[traversal qualification](../tests/packages/import-limits-check.md) covers exact
+depth/entry boundaries, bounded enumeration, descriptor/private-workspace cleanup
+and retry, retaining ordinary alias resolution and canonical package metadata.
+
+Prepared-root imports also recheck source identity, size and executable bits
+through the captured guest namespace, then compare each directory's names after
+copying. Unpinned files are hashed before copying and compared with the
+materialized bytes; catalog imports retain their locked digest checks. Changed
+sources refuse before packing and private staging is removed for retry. This
+preserves guest-absolute links and captured-root behavior after a host rename.
+Publishers still need stable source contents rather than relying on an atomic
+snapshot. See [source consistency checks](../tests/packages/import-capture-check.md).
+
+The resolver now retires pending paths, split components, link targets and its
+borrowed prefix buffer on success, restart and refusal. Restart construction
+checks the 4096-byte limit before allocating output. Repeated lookup/recheck
+measurements retain zero tracked scratch while preserving independent returned
+descriptors, guest-root resolution and late refusal diagnostics. See
+[lookup ownership checks](../tests/packages/import-lookup-check.md); this does not
+measure complete import/packer retention.
+
+The [materialization ownership checks](../tests/packages/import-materialization-ownership-check.md)
+also retire recursion, parent-construction and file-opening scratch. Directory
+cycles use captured device/inode values, and native writes retain partial-write
+and interruption handling. Source rechecks, pinned digests, ordinary final modes
+and corrected retry remain covered.
+
+[Private import workspace ownership](../tests/packages/import-workspace-check.md)
+now covers complete cold, pinned and refused imports after one-time JSON metadata
+initialization. The importer captures its temporary parent, private root, payload
+directory and manifest, and checks them before publication and retirement.
+Replacements, rewritten manifests and unexpected root entries retain recovery
+data with its path in the diagnostic. Cleanup uses the held parent after a
+rename and preserves any package already published. Repeated checks reopen the
+directory to avoid sharing an exhausted enumeration cursor. Full publisher-profile
+construction remains a separate ownership boundary.
 
 The lower-level `pack` command also captures its source root and walks children
 through descriptors relative to their captured parents. Hashing and copying
@@ -250,9 +386,86 @@ combines independently prepared profiles into one publisher release while
 keeping their loaders and libraries in separate directories. It preserves every
 payload pin, permission and license disclosure, checks complete architecture and
 runtime coverage, and retains canonical source-lock provenance. The
+explicit `compose-catalog-for aarch64|x86_64` command selects a single host from
+complete profiles with different target sets, allowing an AArch64 Apple lock to
+join a dual-host native lock. Unsupported profiles refuse the operation; shared
+packages and all selected declarations retain their normal policy. Provenance
+binds complete input locks, including omitted variants. See
+[target selection checks](../tests/packages/composition-target-check.md). The
 [combined-catalog qualification](../tests/packages/composition-check.md) exercises
 SQLite, FFmpeg and FFprobe in one signed release, including a SQLite-only runtime
 update, rollback, offline cache reinstall and data-preserving uninstall.
+The composer retires each decoded input after selection and returns metadata
+independent of its arguments and temporary plan. Its explicit close operation,
+bounded planning and unchanged catalog/provenance bytes are covered by the
+[ownership qualification](../tests/packages/composition-ownership-check.md),
+including rebuilt CLI checks inside AArch64 and x86-64 guests.
+Catalog workspaces and both composition modes also retain their staging
+parent/root identities. Failed exports preserve replacement and recovery trees;
+publication uses the held parent and keeps saved output after flush or parent
+path failures. See [catalog export checks](../tests/packages/catalog-export-check.md).
+The five publisher profiles apply the same checks to their outer stage and its
+separate inventory/lock directories. Substituted children retain the complete
+private tree for inspection. Only the reviewed canonical lock is published
+through the held directories; later flush or inventory cleanup failure retains
+the saved lock and reports publication. See
+[publisher profile export checks](../tests/packages/profile-export-check.md).
+The native SDK profile also owns its templates, partial inventories and
+canonicalization metadata. Its public reply survives caller argument retirement
+and provides an idempotent close operation; the CLI releases that reply after
+encoding. [Native profile ownership checks](../tests/packages/native-profile-ownership-check.md)
+measure that metadata boundary. The subsequent
+[complete native builder checks](../tests/packages/native-builder-check.md)
+cover 256 complete successful/refused calls after JSON metadata initialization,
+including disk-space failures, all six partial imports and retained recovery or
+published output. All measured calls retain zero tracked V allocations and stable
+descriptors. Shared ELF checks also retire signature scratch on both targets;
+other complete publisher builders and broader release/runtime acceptance remain open.
+The [complete SQLite builder checks](../tests/packages/sqlite-builder-check.md)
+extend that ownership to the Linux CLI/runtime profile: 256 complete calls and
+896 metadata cycles retire template arguments/selectors, partial inventories,
+canonicalization and reply/error storage. `SqliteProfileInfo.close()` is
+idempotent, preserves the published lock and owns its data independently of
+caller arguments. The CLI releases it after encoding; compatible runtime-only
+updates keep the application metadata unchanged. First-call JSON metadata and
+other complete publisher/catalog/release owners remain separate boundaries.
+The [FFmpeg ownership checks](../tests/packages/ffmpeg-owner-check.md) extend
+this to FFmpeg/FFprobe and their shared runtime. Independently closeable replies,
+templates, partial imports and canonicalization retain no tracked allocations in
+76 host calls and 1,152 metadata cycles after initialization. Both guests check
+the metadata boundary and eight selected complete-call cases with the full
+reviewed source archive. Catalog bytes, notices, permissions and runtime-update
+semantics are preserved; first-call JSON metadata and broader acceptance remain separate.
+The workspace builder also owns its metadata/disk-budget plan and returns an
+independently closeable `CatalogInfo`. It finishes metadata admission and budgeting
+before touching prepared roots or destination parents, retaining the existing
+deduplication, scratch-space and reserve estimates. See
+[workspace planning checks](../tests/packages/catalog-plan-check.md).
+The [complete catalog builder checks](../tests/packages/catalog-builder-check.md)
+extend ownership through imports, staged manifest/object verification and
+publication. After JSON initialization, 280 calls across 35 cases retire all
+tracked V storage; recursive publisher flushing also retires names, paths and
+inspection scratch on success and refusal. Both guests exercise ten selected
+complete-call cases, preserving exact canonical retries, deduplication and
+saved/recovery data. Complete release builder ownership and broader catalog,
+graphical and application/runtime acceptance remain separate.
+Direct and prepared-root packing return independently closeable package metadata.
+Packing retires discarded template inventories and partial payload lists, moves
+owned file records without implicit clones, and releases encoding/copy scratch.
+A directory occupying an object digest slot now refuses publication while
+retaining its contents. [Packing ownership checks](../tests/packages/pack-ownership-check.md)
+cover cold/cache walks, late refusals, literal CLI replies and exact retry;
+[publisher filesystem ownership checks](../tests/packages/publisher-io-ownership-check.md)
+also retire admission, containment, lock and durability scratch. Complete cached
+packing into an initialized workspace retains zero measured bytes after reply close,
+including lock-checkpoint and late-walk refusals. Those measurements cover an
+initialized workspace; complete prepared-root/profile construction remains separate.
+[First workspace construction checks](../tests/packages/workspace-creation-ownership-check.md)
+also cover new export parents, publisher roots and private child directories.
+Cold first packing and late lock/hash/copy refusals release their measured call
+storage after result retirement. Tests initialize immutable JSON field metadata
+before measuring filesystem creation; full prepared-root/profile construction
+and broader installed-system acceptance remain separate boundaries.
 
 ## Trust and configuration
 
@@ -454,6 +667,11 @@ Prepared-root templates and catalog locks also reject ambiguous fields/types
 before import. Catalog composition requires complete pinned declarations and
 cannot normalize missing or null permissions into a publishable lock. See
 [publisher schema qualification](../tests/packages/publisher-schema-check.md).
+Catalog normalization now keeps one owned decoded result and explicitly retires
+normalization and structural dependency-check scratch on both success and
+refusal. The [allocation qualification](../tests/packages/catalog-normalize-check.md)
+covers repeated one/64-import validations, independent result lifetimes and
+unchanged publisher workflows under `-gc none`.
 A refused refresh or enrollment preserves the previous cached catalog, trust
 history, configuration and installed generation. See
 [signed metadata qualification](../tests/packages/index-schema-check.md).
@@ -476,6 +694,14 @@ rewind bytes already delivered; each service attempt has its own captured offset
 [Real TLS transport checks](../tests/packages/https-check.md)
 cover certificate/hostname trust, HTTPS-only redirects, authenticated size bounds,
 range recovery, progress and preserved activation/rollback.
+
+HTTPS failure replies now include a local explanation and relevant recovery
+steps for connection/DNS/proxy errors, timeouts, interrupted responses, HTTP
+refusal, TLS trust, response limits and unavailable transport tools. The status
+number and repository URL remain visible to CLI and administrator-service
+clients. Classification uses the local transport exit status; it does not
+guess an exact HTTP status or weaken verification and retry rules. See
+[diagnostic checks](../tests/packages/https-diagnostics-check.md).
 
 Dependency resolution uses an iterative worklist with bounded backtracking.
 Shared dependencies and cycles expand each selected identity once, and constraints
@@ -513,6 +739,80 @@ explicit upgrades retain newest-first selection. See
 [installed preference qualification](../tests/packages/resolver-preference-check.md).
 
 ## Install, maintenance and recovery
+
+Software reviews summarize added/removed permission declarations across all
+packages, including dependencies. **Package details → Permissions** compares
+the version-labelled installed set with the reviewed target and lists added,
+removed and unchanged declarations. Rollback compares with the active generation;
+uninstall removes the package's declarations. Older-service facts stay explicitly
+unavailable. Current policy and runtime isolation still govern access. Review
+format 2 carries the frozen history; deploy the updated Software and tools
+together. See [qualification](../tests/packages/review-permissions-check.md).
+Both formats require actions and installed versions to agree. New installs and
+exports have no installed version; updates identify one, and keep/remove rows
+retain it. Contradictions refuse before approval, including nested exports;
+missing history stays unknown for existing-package actions. See
+[action checks](../tests/packages/review-actions-check.md).
+The review builder also completes generation/disk observations before allocating
+rows and releases refused presentation metadata. Returned fingerprints are
+independent of preparation, while ordinary/deployment identity encoding and
+comparison scratch retire explicitly with unchanged identity bytes. See
+[construction ownership](../tests/packages/review-construction-check.md).
+[Complete review requests](../tests/packages/review-request-check.md) also retire
+configuration, decoded active/rollback states, deployment documents, authenticated
+catalogs and solver buffers on success/refusal, with independently owned replies.
+Other complete service operations and broader release acceptance remain open.
+Public plan observations now own their complete roots, publisher identities and
+nested manifests, with `Plan.close()` retirement after V/CLI use. Request
+configuration, state, catalogs and solver buffers retire on success/refusal;
+resolver/transaction plans retain their borrowed lifetime and JSON stays
+compatible. See [plan observation ownership](../tests/packages/plan-observation-check.md).
+
+Public refresh replies likewise own publisher identities and nested manifests;
+V clients retire them with `Catalog.close()`, and CLI `update` closes its reply.
+Service refresh retires configuration and temporary request storage on success
+and refusal. Its captured workspace cleanup refuses aliases and writable roots,
+preserving foreign files and retained signed metadata. Replay history still
+publishes before the cache, including when cache publication later fails. See
+[refresh request ownership](../tests/packages/refresh-request-check.md).
+
+Public activation, rollback and deployment replies own every field independently
+and retire with `State.close()`. Service configuration, decoded source states,
+prepared plans and deployment documents retire before returning; staging paths,
+payload acquisition and progress text have explicit lifetimes on success and
+refusal. The CLI closes successful replies. Internal activation keeps its
+borrowed plan contract. See
+[activation request ownership](../tests/packages/activation-request-check.md).
+
+HTTPS acquisition also retires argument construction and Range-fallback messages.
+Repeated local TLS fetch, signed refresh and installation requests check parent V
+storage through reply/error retirement, with preserved trust, byte bounds,
+recovery and activation. Both native targets exercise the shared process/output
+paths; real TLS repetition is host-qualified. See
+[HTTPS request ownership](../tests/packages/https-owner-check.md).
+
+Software keeps a proposal readable when its space estimate does not fit. Its
+status and plan/review readers identify the filesystem and exact additional
+bytes needed, including reserved space, and Confirm is unavailable. Free space,
+cancel the proposal and review again to read current availability. Overflowing
+requirements show a diagnostic instead of wrapping to a small total. The
+service still checks actual availability before making changes.
+
+Offline exports check the destination and a separate acquisition cache
+independently. A shared filesystem's destination requirement already includes
+acquisition; a fully cached separate export does not require additional cache
+space. Ordinary no-op package plans retain their reserve exemption. See
+[space review qualification](../tests/packages/software-space-check.md).
+
+In Software, **Details → License** shows separate displayed and installed
+licenses, proprietary/firmware declarations and runtime IDs, with each version
+identified. Installed facts come from persistent generation metadata, so a
+preview, revoked publisher or unavailable catalog cannot replace them. Older
+services explicitly report unavailable installed facts. The inspector retains
+complete values in small windows; reviewed package details describe the reviewed
+target. These declarations do not change license acceptance, firmware policy
+or the runtime-update approval process. See
+[installed payload qualification](../tests/packages/software-payload-check.md).
 
 ```sh
 vinix-package update
@@ -715,6 +1015,11 @@ payloads are hashed again before the
 generation can be published. HTTPS transfer monitoring reaps failed/oversized
 children, retains bounded partial downloads for retry, and enforces authenticated
 size bounds while the child runs.
+
+Software retires rejected progress-frame errors as well as replaced events.
+Malformed frames leave the last valid progress intact; oversized lines recover
+at the next newline, and human diagnostics remain available. See
+[stream allocation qualification](../tests/packages/software-progress-memory-check.md).
 
 The command service loads configuration after acquiring that lock, so a completed
 repository revocation, key replacement or policy change cannot be followed by a
@@ -1030,6 +1335,13 @@ inspect storage and restore an empty regular lease under the writer lock before
 retrying. Active and rollback generations and busy leases remain protected.
 See [collection retirement checks](../tests/packages/collection-retirement-check.md).
 
+Complete collection requests also retire service configuration, directory paths
+and cache enumeration/removal/flush scratch on success and refusal. Explicit
+configuration callers retain ownership of their inputs. Repeated tracked calls
+cover both architecture declarations, protected active/rollback payloads and
+live leases, malformed retained state, unsafe recovery roots, busy locks and
+cache-file removal failures. See [request ownership checks](../tests/packages/collection-request-check.md).
+
 Installed package verification now checks each complete `apps/ID` namespace too.
 Extra files, empty directories and FIFOs, directory aliases, hard-linked payloads,
 foreign ownership and changed directory permissions fail verification and produce
@@ -1051,6 +1363,7 @@ cannot become coordination files. A busy writer or exclusive generation holder
 returns a retry diagnostic instead of waiting indefinitely. Read-only status,
 Software views, trust and policy requests require a lock whenever durable
 catalog/history or active state exists; fresh-image reads still create no state.
+
 Refusal preserves malformed entries, retained metadata, payloads and abandoned
 stages. Stop package workers and application processes before repairing a lock
 or lease: replacing a file that is still held would separate its existing holders
@@ -1061,6 +1374,14 @@ inode before and after locking. Writers acquire exclusion before changing lock
 permissions. Launch, collection and data purge share the lease checks; malformed
 obsolete leases stop collection preflight before any generation/cache removal.
 See [identity qualification](../tests/packages/coordination-identity-check.md).
+
+V catalog observations from `pkgcore.software_view()` own their fields and
+support idempotent `.close()`. Configuration, authenticated catalog, installed
+state and planning scratch retire before the response returns; independent
+responses can be held and closed in any order. The CLI retires catalog responses
+after encoding or presentation. This lifetime contract preserves the existing
+wire fields, reader locking and read-only behavior. See
+[catalog observation ownership](../tests/packages/software-view-owner-check.md).
 
 Personal data under `~/.local/share/vinix-apps/ID` survives uninstall/rollback.
 Launch captures the account home and each data-parent directory without following
@@ -1187,6 +1508,14 @@ with confirmation available only in the full review. Approved transactions and
 repository refreshes keep running until completion. See
 [package navigation checks](../tests/packages/software-package-navigation-check.md).
 
+Compact Deployment forms now expose the path field and paged actions at
+320×240. **Previous**/**Next**, Left/Right and Page Up/Page Down reach file
+selection, review, installed checks, snapshots, policy and available release
+actions. Keyboard paging applies after leaving the filename field. Complete
+help, **Status** and retained failure details remain accessible. Paging and
+resizing preserve the draft; applying changes still requires the full review
+and separate approval. See [compact deployment checks](../tests/packages/software-deployment-form-check.md).
+
 The repository screen keeps Back, Stop, Cancel, status, progress and failure
 access in small windows. Stop or Escape can cancel a pending configuration list
 or trust review, reap the child and discard unaccepted output while preserving
@@ -1203,6 +1532,23 @@ Each section has **Previous**/**Next** pages, including long UTF-8 text. Control
 bytes appear as `\xHH`. Catalog and update details identify the displayed version
 separately from installed launch permissions and native-window protocol; older
 services report unavailable installed fields explicitly.
+
+The Publisher section also shows the installed version's repository and signing
+key separately from the displayed catalog/update publisher. A reviewed key
+rotation can advertise an update under a new key while the current generation
+still records the old key. Revocation and unavailable catalogs keep that
+historical source visible alongside the launch diagnostic. Missing installed
+provenance is shown as unavailable; it is never inferred from a candidate.
+Viewing these facts changes no trust or package state. See
+[installed provenance qualification](../tests/packages/software-provenance-check.md).
+
+**Details → Diagnostics** now explains installed dependencies: complete IDs,
+inclusive minimum/exclusive upper bounds and installed versions, separately from
+the displayed update. It names one requested application requiring the selection
+through the installed graph, including shared runtimes and cycles. Older service
+responses explicitly report unavailable or incomplete facts. Inspection starts
+no transaction; reviewed removal still decides which unused dependencies leave
+the generation. See [dependency inspection checks](../tests/packages/software-dependencies-check.md).
 
 In compact catalog windows, **Browse catalog** provides search, a button cycling
 Catalog/Installed/Updates, Previous/Next package and complete **Details** at
@@ -1554,6 +1900,14 @@ can reuse the same review if those bound inputs still match. `--progress` also
 works with `mirror` and `mirror-apply`. The direct `mirror` command remains useful
 for authorized automation.
 
+Mirror preparation explicitly owns and retires its catalog, decoded snapshots,
+plan storage, captured lock and path/hash scratch on success or refusal. Returned
+V reviews own their presentation fields independently and can be retired with
+`.close()`. Deployment roots survive retirement of the decoded lock document.
+The existing ordinary/deployment fingerprint bytes and export approval rules
+are preserved. See [mirror ownership checks](../tests/packages/mirror-ownership-check.md)
+for measured preparation components, signed export regressions and scope limits.
+
 Export requires a new destination. The service checks space for unique objects,
 metadata and policy reserves on the destination disk and for missing source-cache
 objects; when both paths share a disk it budgets both copies together. It builds
@@ -1568,6 +1922,13 @@ A retry builds fresh staging data from authenticated metadata and verified cache
 it never imports abandoned staging data or sweeps other exports. A directory-flush
 failure after publication reports that the complete mirror exists but its storage
 durability needs checking. Keep media attached until export finishes.
+Mirror and publisher release cleanup now uses a captured parent and staging-root
+identity. Replaced roots are retained with the original failure and cleanup
+diagnostic; a replaced parent cannot redirect deletion into its replacement.
+Cleanup inventories owned directories before unlinking and leaves outside alias
+and hard-link targets unchanged. Publication and its directory flush use the
+captured parent; a failure after rename keeps the saved output. See
+[export retirement checks](../tests/packages/export-retirement-check.md).
 Before flushing and after the final staging checkpoint, the service admits the
 complete export again: exact signed index/signature and deployment-lock bytes,
 the selected object set and its hashes, ordinary single-link files and readable
@@ -1725,8 +2086,14 @@ also cover owned filesystem paths and stack-based stat scratch; see
 [stored metadata qualification](../tests/packages/stored-decode-check.md) for
 the exact scope, malformed-input checks and allocation measurements.
 
-In **Software**, select **Deployment**, enter the absolute file path and choose
-**Review deployment**. The review shows the entire resulting set, including
+In **Software**, select **Deployment**, use **Choose file…** or enter the absolute
+file path, then choose **Review deployment**. The session file dialog accepts
+organization manifests, release locks and saved installed snapshots without
+requiring a particular filename extension. Selection only fills the path.
+Cancellation preserves the draft; editing, navigation or a started review
+discards any late selection. A missing/disconnected dialog leaves the manual
+path available. See [chooser qualification](../tests/packages/software-deployment-chooser-check.md).
+The review shows the entire resulting set, including
 dependencies, runtime updates, retained packages and removals, with publisher
 keys, permissions, licenses, firmware flags and disk requirements. Confirm uses
 the reviewed file path and deployment fingerprint through `deployment-apply`;
@@ -1800,6 +2167,15 @@ closure; no background updater is introduced.
 
 ## SDK and qualification
 
+Release builders can inspect the selected image package inputs with
+`stage.v --check`. Its reproducible JSON includes effective trust/organization
+policy, exact configuration and signed-index digests, bundled architecture and
+licensing counts, unique payload bytes, disk budget and publish/preserve decisions.
+It repeats captured/destination checks, leaves the image unchanged and requires
+no target compiler. The temporary authenticated capture is removed on exit.
+See [the contract](../tools/packages/SDK.md#check-release-image-package-inputs)
+and [qualification](../tests/packages/image-input-check.md).
+
 [SDK 1](../tools/packages/SDK.md) defines reproducible metadata, signing,
 publishing, format and launch interfaces. The
 [V fixtures](../tests/packages/distribution-check.v) exercise real filesystem
@@ -1859,6 +2235,22 @@ existing/raced destinations and interrupted publication with retained sequence
 history. CLI and both Linux guests install complete signed release output into
 clean offline stores. `publish-release` is the supported complete-release command;
 the legacy `publish` command still writes workspace metadata separately.
+The [release ownership checks](../tests/packages/release-owner-check.md) measure
+304 calls across 38 success/refusal cases and 448 canonical-index cycles after
+JSON initialization. Publication retires decoded manifests, signing and index
+scratch, stage paths and handled errors. Independently closeable `ReleaseInfo`
+replies preserve signed output and reserved sequence floors. Both guests check
+twelve selected complete-call cases and canonicalization, retaining exact signed
+retries, captured seed semantics and recovery data. Production publisher/catalog
+migration and broader graphical/runtime acceptance remain separate.
+The [offline image input ownership checks](../tests/packages/image-owner-check.md)
+extend this to configuration capture, authenticated repositories, reports,
+exports, application declaration publication and checked retirement. All 264
+measured host calls across 33 modes and both architecture declarations retain
+zero tracked allocations after JSON initialization. Both guests check ten
+selected modes, preserving exact locks, explicit license/firmware/permission
+policy, replacement directories and saved recovery data. Target compilation
+and the production/graphical/runtime release gates remain separate.
 The [accounts guest suite](../tests/accounts/README.md) adds a `packages` scenario
 for signed installation, the root-to-account handoff, literal documents,
 user-owned data, publisher revocation and uninstall. Its sandbox substitute
@@ -1916,6 +2308,25 @@ advertised native/Linux/Wine/Apple catalog, integrate ordinary-user graphical
 sessions, qualify wider filesystem/device crash windows and measure wider
 runtime sandbox profiles. Apple packaging does not provide general macOS/AppKit
 compatibility; Windows/Linux packaging does not expand runtime API coverage.
+
+The [Apple publisher ownership checks](../tests/packages/apple-owner-check.md)
+add complete-call retirement of captured templates, partial inventories,
+canonicalization and reply/error metadata. Repeated bundle admission also
+retires XML/binary plist parser storage. Canonical locks, compatible runtime
+updates, explicit license policy and recovery output retain their behavior.
+Broader catalog/release ownership and the release gates above remain open.
+
+The [Apple package boundary check](../tests/packages/apple-runtime-check.md)
+adds signed ARM64 iOS Mach-O execution through the real static compatibility
+runtime in the production sandbox. Apple launch plans now derive the runtime's
+Documents and keychain overrides from admitted private data. The fixture checks
+two ordinary users, explicit document grants, updates, rollback, tamper refusal,
+clean removal and cached reinstall. The Mach-O now calls Foundation home,
+Documents and temporary-directory APIs, writes files through their returned
+paths and maintains a Security generic-password counter across that lifecycle.
+Duplicate/delete/not-found and ungranted access-group refusal are exercised.
+Arbitrary Apple applications, wider frameworks, graphical sessions and x86-64
+translation remain unqualified.
 
 Literal launch-command requests now provide explicit ownership and repeatable
 cleanup. Parsing validates borrowed prefix paths and the complete request before

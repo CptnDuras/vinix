@@ -130,8 +130,12 @@ fn validate_state(state State, architecture string) ! {
 }
 
 fn next_generation(directory string) !u64 {
+	path := directory + '/generations'
+	defer { unsafe { path.free() } }
+	names := os.ls(path)!
+	defer { unsafe { for name in names { name.free() }; (&array(&names)).free() } }
 	mut maximum := u64(0)
-	for name in os.ls(directory + '/generations')! {
+	for name in names {
 		if numeric_generation_name(name) {
 			generation := generation_number(name)!
 			if generation > maximum { maximum = generation }
@@ -192,25 +196,37 @@ fn cached_payload(config Config, installed Installed, payload Payload, directory
 
 fn cached_payload_progress(config Config, installed Installed, payload Payload, directory string, report fn (pkgprotocol.Progress)) !string {
 	path := directory + '/objects/' + payload.sha256
-	if verified_file(path, payload) { return path }
+	mut accepted := false
+	defer { if !accepted { unsafe { path.free() } } }
+	if verified_file(path, payload) { accepted = true; return path }
 	if os.exists(path) { os.rm(path)! }
 	part := path + '.part'
-	if os.is_link(part) { os.rm(part)! }
-	if os.exists(part) || os.is_link(part) { validate_download_partial(part)! }
+	defer { unsafe { part.free() } }
+	mut info := C.stat{}
+	if C.lstat(part.str, unsafe { &info }) == 0 {
+		if info.st_mode & 0o170000 == 0o120000 { os.rm(part)! }
+		else { validate_download_partial(part)! }
+	} else if C.errno != C.ENOENT { return error('cannot inspect partial package payload') }
 	// A complete invalid partial cannot use a range request at EOF. Retire it
 	// before transport, including oversized data left by an interrupted child.
-	if os.is_file(part) && (os.file_size(part) > payload.bytes
-		|| (os.file_size(part) == payload.bytes && !verified_file(part, payload))) { os.rm(part)! }
+	if info.st_mode & 0o170000 == 0o100000 && (u64(info.st_size) > payload.bytes
+		|| (u64(info.st_size) == payload.bytes && !verified_file(part, payload))) { os.rm(part)! }
 	repositories := config.repositories.filter(it.id == installed.repository && it.public_key == installed.public_key)
+	defer { unsafe { (&array(&repositories)).free() } }
 	if repositories.len != 1 {
 		return error('${installed.package.id}: repository was revoked or its key changed')
 	}
-	url := repositories[0].url.trim_right('/') + '/objects/' + payload.sha256
+	prefix := repositories[0].url.trim_right('/')
+	url := prefix + '/objects/' + payload.sha256
+	defer { unsafe { prefix.free(); url.free() } }
 	mut resumed := false
 	event := pkgprotocol.Progress{ phase: 'download', package: installed.package.id,
 		repository: installed.repository, path: payload.path, total: payload.bytes }
 	if !verified_file(part, payload) {
-		println('Downloading ${installed.package.id}/${payload.path} (${payload.bytes} bytes)')
+		number := payload.bytes.str()
+		message := 'Downloading ${installed.package.id}/${payload.path} (${number} bytes)'
+		defer { unsafe { number.free(); message.free() } }
+		println(message)
 		resumed = fetch_progress(url, part, payload.bytes, true, config.policy.offline, event, report)!
 	}
 	report(pkgprotocol.Progress{ phase: 'verify', package: installed.package.id, repository: installed.repository, path: payload.path })
@@ -218,7 +234,9 @@ fn cached_payload_progress(config Config, installed Installed, payload Payload, 
 		os.rm(part)!
 		// Restart once with the same authenticated source/size. A failed fresh
 		// transfer retains its new partial; a second integrity failure stops.
-		println('Restarting ${installed.package.id}/${payload.path}: resumed payload failed verification')
+		message := 'Restarting ${installed.package.id}/${payload.path}: resumed payload failed verification'
+		defer { unsafe { message.free() } }
+		println(message)
 		fetch_progress(url, part, payload.bytes, false, config.policy.offline, event, report)!
 		report(pkgprotocol.Progress{ phase: 'verify', package: installed.package.id, repository: installed.repository, path: payload.path })
 	}
@@ -227,6 +245,7 @@ fn cached_payload_progress(config Config, installed Installed, payload Payload, 
 		return error('${installed.package.id}: payload checksum or size mismatch; partial data discarded, retry from the trusted repository')
 	}
 	promote_cached_payload(directory, payload)!
+	accepted = true
 	return path
 }
 
@@ -246,23 +265,50 @@ fn desktop_entry(p Package) string {
 	return text.str()
 }
 
+// Reuse the owned descriptor enumerator without the prepared-root payload
+// limit. os.ls allocates a result buffer before opening, leaking it on refusal
+// in manual-free programs. The caller owns every returned name and the buffer.
+fn publisher_flush_names(path string) ![]string {
+	fd := C.open(path.str, C.O_RDONLY | C.O_DIRECTORY | C.O_CLOEXEC)
+	if fd < 0 { return error('cannot enumerate package directory: ' + path) }
+	defer { C.close(fd) }
+	return import_names_limit(fd, 0x7fffffff)
+}
+
 fn flush_tree(path string) ! {
 	os.chmod(path, 0o755)!
-	for name in os.ls(path)! {
+	names := publisher_flush_names(path)!
+	defer { unsafe { names.free() } }
+	for name in names {
 		child := path + '/' + name
-		if os.is_dir(child) { flush_tree(child)! }
+		defer { unsafe { child.free() } }
+		mut info := C.stat{}
+		// Preserve stat's directory-following behavior without an allocated
+		// os.Stat output record or an unretired error for a missing child.
+		if C.fstatat(C.AT_FDCWD, child.str, unsafe { &info }, 0) == 0 && info.st_mode & 0o170000 == 0o040000 { flush_tree(child)! }
 	}
 	sync_directory(path)!
 }
 
 fn activate(directory string, generation u64) ! {
 	temporary := directory + '/activate.new'
-	if os.is_link(temporary) || os.exists(temporary) { os.rm(temporary)! }
-	os.symlink('generations/' + generation.str(), temporary)!
-	replace_path(temporary, directory + '/current')!
+	current := directory + '/current'
+	number := generation.str()
+	target := 'generations/' + number
+	defer { unsafe { temporary.free(); current.free(); number.free(); target.free() } }
+	mut info := C.stat{}
+	if C.lstat(temporary.str, unsafe { &info }) == 0 { os.rm(temporary)! }
+	else if C.errno != C.ENOENT { return error('cannot inspect temporary package activation pointer') }
+	os.symlink(target, temporary)!
+	replace_path(temporary, current)!
 	// A failure here means activation occurred but durability is uncertain.
 	// Never delete the newly activated generation on this error.
-	sync_directory(directory) or { return error('package set activated, but its directory flush failed; check storage and inspect status: ${err}') }
+	sync_directory(directory) or {
+		message := err.msg()
+		diagnostic := 'package set activated, but its directory flush failed; check storage and inspect status: ' + message
+		unsafe { message.free(); err.free() }
+		return error(diagnostic)
+	}
 }
 
 pub struct TransactionOptions {
@@ -287,14 +333,20 @@ pub fn transact(config Config, directory string, operation string, names []strin
 
 fn transact_locked(config Config, directory string, operation string, names []string, options TransactionOptions) !State {
 	current := read_state(directory, config.architecture)!
-	plan := operation_plan(config, directory, current, operation, names)!
+	defer { if current.generation != 0 { close_decoded_state(current) } }
+	mut prepared := prepare_operation_plan(config, directory, current, operation, names)!
+	defer { prepared.close() }
+	plan := prepared.plan
 	repairs := transaction_repairs(directory, current, plan, operation)
 	defer { close_transaction_repairs(repairs) }
 	if options.expected_review != '' {
-		check_review(options.expected_review, review_fingerprint(config, operation, names, current, plan, 0, repairs))!
+		fingerprint := review_fingerprint(config, operation, names, current, plan, 0, repairs)
+		defer { unsafe { fingerprint.free() } }
+		check_review(options.expected_review, fingerprint)!
 	}
 	options.progress(pkgprotocol.Progress{ phase: 'resolve' })
-	return activate_repair_plan_locked(config, directory, current, plan, operation, repairs, options)
+	state := activate_repair_plan_locked(config, directory, current, plan, operation, repairs, options)!
+	return owned_transaction_state(state)
 }
 
 // Callers validate the complete plan and any review identity under the writer
@@ -371,30 +423,45 @@ fn activate_repair_plan_from_locked(config Config, directory string, current Sta
 			}
 		}
 	}
-	os.mkdir_all(stage + '/apps')!
-	os.mkdir_all(stage + '/share/applications')!
-	os.write_file(stage + '/lease', '')!
-	os.chmod(stage + '/lease', 0o444)!
-	sync_file(stage + '/lease')!
+	apps := stage + '/apps'
+	applications := stage + '/share/applications'
+	lease := stage + '/lease'
+	metadata := stage + '/state.json'
+	defer { unsafe { apps.free(); applications.free(); lease.free(); metadata.free() } }
+	make_package_directories(apps, 0o777)!
+	make_package_directories(applications, 0o777)!
+	os.write_file(lease, '')!
+	os.chmod(lease, 0o444)!
+	sync_file(lease)!
 	mut done := 0
+	count := plan.packages.len.str()
+	defer { unsafe { count.free() } }
 	options.progress(pkgprotocol.Progress{ phase: 'stage', total: u64(plan.packages.len) })
 	for installed in plan.packages {
 		p := installed.package
-		println('Installing ${p.name} ${p.version} (${done + 1}/${plan.packages.len}) from ${installed.repository}')
+		position := (done + 1).str()
+		message := 'Installing ${p.name} ${p.version} (${position}/${count}) from ${installed.repository}'
+		defer { unsafe { position.free(); message.free() } }
+		println(message)
 		for file in p.files {
 			retained_number := if operation == 'rollback' { source_generation.state.generation.str() } else { current.generation.str() }
 			retained := directory + '/generations/' + retained_number + '/apps/' + p.id + '/' + file.path
 			defer { unsafe { retained_number.free(); retained.free() } }
+			mut acquired := false
 			source := if operation == 'rollback' {
 				if !verified_installed_file(retained, file) { return error('${p.id}: rollback source changed; review rollback again') }
 				retained
 			} else if operation == 'remove' && verified_file(retained, file) {
 				retained
 			} else {
+				acquired = true
 				cached_payload_progress(config, installed, file, directory, options.progress)!
 			}
+			defer { if acquired { unsafe { source.free() } } }
 			target := stage + '/apps/' + p.id + '/' + file.path
-			os.mkdir_all(os.dir(target))!
+			target_parent := os.dir(target)
+			defer { unsafe { target.free(); target_parent.free() } }
+			make_package_directories(target_parent, 0o777)!
 			copy_file_progress(source, target, 0, file.bytes,
 				pkgprotocol.Progress{ phase: 'copy', package: p.id, repository: installed.repository,
 					path: file.path, total: file.bytes }, options.progress)!
@@ -406,7 +473,7 @@ fn activate_repair_plan_from_locked(config Config, directory string, current Sta
 		if p.kind !in ['data', 'runtime'] {
 			entry := stage + '/share/applications/vinix-' + p.id + '.desktop'
 			text := desktop_entry(p)
-			defer { unsafe { text.free() } }
+			defer { unsafe { entry.free(); text.free() } }
 			os.write_file(entry, text)!
 			os.chmod(entry, 0o644)!
 			sync_file(entry)!
@@ -414,9 +481,9 @@ fn activate_repair_plan_from_locked(config Config, directory string, current Sta
 		done++
 		options.progress(pkgprotocol.Progress{ phase: 'stage', package: p.id, current: u64(done), total: u64(plan.packages.len) })
 	}
-	os.write_file(stage + '/state.json', encoded)!
-	os.chmod(stage + '/state.json', 0o644)!
-	sync_file(stage + '/state.json')!
+	os.write_file(metadata, encoded)!
+	os.chmod(metadata, 0o644)!
+	sync_file(metadata)!
 	options.checkpoint('prepared')
 	verify_generation_tree(stage, state, encoded, false)!
 	flush_tree(stage)!
@@ -431,17 +498,22 @@ fn activate_repair_plan_from_locked(config Config, directory string, current Sta
 	defer { unsafe { published.free() } }
 	publish_new_directory(stage, published, 'package generation')!
 	completed = true
-	sync_directory(directory + '/generations')!
+	generations := directory + '/generations'
+	defer { unsafe { generations.free() } }
+	sync_directory(generations)!
 	options.checkpoint('published')
 	options.progress(pkgprotocol.Progress{ phase: 'activate' })
 	verify_transaction_activation(directory, published, state, encoded, source_generation) or {
 		message := err.msg()
-		defer { unsafe { message.free(); err.free() } }
-		return error('package generation was not activated; retained for inspection at ${published}: ${message}; retry builds a new generation')
+		diagnostic := 'package generation was not activated; retained for inspection at ${published}: ${message}; retry builds a new generation'
+		unsafe { message.free(); err.free() }
+		return error(diagnostic)
 	}
 	activate(directory, generation)!
 	options.checkpoint('activated')
-	println('Activated package generation ${generation}')
+	message := 'Activated package generation ' + number
+	defer { unsafe { message.free() } }
+	println(message)
 	options.progress(pkgprotocol.Progress{ phase: 'complete', current: 1, total: 1 })
 	return state
 }
@@ -453,6 +525,11 @@ pub fn rollback(config Config, directory string) !State {
 fn rollback_target(config Config, directory string, current State) !State {
 	if current.previous == 0 { return error('no previous package generation is available') }
 	old := read_generation_state(directory, config.architecture, current.previous)!
+	mut accepted := false
+	defer { if !accepted { close_decoded_state(old) } }
+	number := old.generation.str()
+	root := directory + '/generations/' + number
+	defer { unsafe { number.free(); root.free() } }
 	require_publisher_keys(old.packages)!
 	for installed in old.packages {
 		check_policy(installed.package, config.policy)!
@@ -460,14 +537,18 @@ fn rollback_target(config Config, directory string, current State) !State {
 			return error('${installed.package.id}: rollback repository key is no longer trusted')
 		}
 		for file in installed.package.files {
-			if !verified_installed_file(directory + '/generations/' + old.generation.str() + '/apps/' + installed.package.id + '/' + file.path, file) {
+			path := '${root}/apps/${installed.package.id}/${file.path}'
+			valid := verified_installed_file(path, file)
+			unsafe { path.free() }
+			if !valid {
 				return error('${installed.package.id}: rollback payload verification failed')
 			}
 		}
-		if !verified_registration(directory + '/generations/' + old.generation.str(), installed.package) {
+		if !verified_registration(root, installed.package) {
 			return error('${installed.package.id}: rollback application registration verification failed')
 		}
 	}
+	accepted = true
 	return old
 }
 
@@ -488,10 +569,14 @@ fn rollback_progress(config Config, directory string, expected string, report fn
 
 fn rollback_transaction_locked(config Config, directory string, options TransactionOptions) !State {
 	current := read_state(directory, config.architecture)!
+	defer { if current.generation != 0 { close_decoded_state(current) } }
 	old := rollback_target(config, directory, current)!
+	defer { close_decoded_state(old) }
 	plan := Plan{ requested: old.requested, packages: old.packages }
 	if options.expected_review != '' {
-		check_review(options.expected_review, review_fingerprint(config, 'rollback', [], current, plan, old.generation, []))!
+		fingerprint := review_fingerprint(config, 'rollback', [], current, plan, old.generation, [])
+		defer { unsafe { fingerprint.free() } }
+		check_review(options.expected_review, fingerprint)!
 	}
 	number := old.generation.str()
 	root := directory + '/generations/' + number
@@ -506,8 +591,11 @@ fn rollback_transaction_locked(config Config, directory string, options Transact
 	verify_rollback_source(directory, source)!
 	options.progress(pkgprotocol.Progress{ phase: 'resolve' })
 	state := activate_repair_plan_from_locked(config, directory, current, plan, 'rollback', [], source, options)!
-	println('Restored packages from generation ${old.generation} in generation ${state.generation}; application data was retained')
-	return state
+	activated_number := state.generation.str()
+	message := 'Restored packages from generation ${number} in generation ${activated_number}; application data was retained'
+	defer { unsafe { activated_number.free(); message.free() } }
+	println(message)
+	return owned_transaction_state(state)
 }
 
 pub fn collect(config Config, directory string) ! {
@@ -534,12 +622,35 @@ fn collect_locked(config Config, directory string) ! {
 	defer { close_collection_targets(targets) }
 	recover_generation_stages(directory)!
 	for target in targets { remove_collection_target(target)! }
-	for name in os.ls(directory + '/objects')! {
-		if digest_valid(name) && name !in keep { os.rm(directory + '/objects/' + name)! }
-		if name.ends_with('.part') && digest_valid(name.all_before_last('.part')) {
-			os.rm(directory + '/objects/' + name)!
+	objects := directory + '/objects'
+	defer { unsafe { objects.free() } }
+	names := publisher_flush_names(objects)!
+	defer { unsafe { names.free() } }
+	for name in names {
+		mut partial := false
+		if name.len == 69 && name.ends_with('.part') {
+			digest := name[..64]
+			partial = digest_valid(digest)
+			unsafe { digest.free() }
+		}
+		if (digest_valid(name) && name !in keep) || partial {
+			path := objects + '/' + name
+			defer { unsafe { path.free() } }
+			// os.rm's wrapped diagnostic retains an intermediate concatenation
+			// under manualfree. Keep its remove(3) semantics and POSIX code while
+			// giving every temporary string an explicit lifetime.
+			if C.remove(path.str) != 0 {
+				code := C.errno
+				prefix := 'Failed to remove "${path}": '
+				message := prefix + os.posix_get_error_msg(code)
+				defer { unsafe { prefix.free() } }
+				// The returned error owns message; its caller retires it.
+				return error_with_code(message, code)
+			}
 		}
 	}
-	sync_directory(directory + '/generations')!
-	sync_directory(directory + '/objects')!
+	generations := directory + '/generations'
+	defer { unsafe { generations.free() } }
+	sync_directory(generations)!
+	sync_directory(objects)!
 }

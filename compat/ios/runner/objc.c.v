@@ -265,6 +265,8 @@ mut:
 	swift_task_main_jobs u64 // Queued main-executor callbacks, under the same mutex.
 	swift_hash_code u64 // Sealed generic Hashable forwarding entries, retired after callbacks drain.
 	swift_fatal_code u64 // Assertion argument capture and BRK, retired at quiescent teardown.
+	storefront_code u64 // Sealed Storefront getters/metadata, retired after Swift callers drain.
+	storefront_retired bool
 	names        map[string]u64
 	protocol_names map[string]u64
 	protocols map[u64]&ObjProtocol
@@ -298,6 +300,7 @@ mut:
 	foundation_keys_arena u64 // Sealed ubiquity, underlying-error and web-activity NSString cells.
 	devicecheck_arena u64 // Sealed DeviceCheck error-domain cell, CFSTR record and bytes.
 	corehaptics_constants_arena u64 // Sealed CoreHaptics NSString cells, records and bytes.
+	storekit_constants_arena u64 // Sealed StoreKit conversion NSString cells, records and bytes.
 	file_manager u64 // One owned NSFileManager cache reference, retired at shutdown.
 	process_info u64 // One owned NSProcessInfo singleton reference.
 	process_arguments u64 // Owned app arguments, configured before image initialization.
@@ -359,13 +362,13 @@ fn objc_start() {
 	ios_runtime.observers.flags |= .noslices
 	ios_runtime.selectors.flags |= .noslices
 	ios_runtime.transform = [f64(1), 0, 0, 1, 0, 0]!
-	for name in ['NSObject', 'VinixCVPixelBuffer', 'VinixIOSurface', 'VinixCVMetalTextureCache', 'VinixCVMetalTexture', 'MTLTextureDescriptor', 'VinixMetalTextureDescriptor', 'Protocol', 'OS_object', 'OS_dispatch_object', 'OS_dispatch_queue', 'OS_dispatch_queue_serial_executor', 'OS_dispatch_queue_serial', 'OS_dispatch_queue_main', 'OS_dispatch_queue_global', 'NSAutoreleasePool', 'NSFileManager', 'NSProcessInfo', 'NSDate', 'NSStream', 'NSInputStream', 'NSUUID', '_NSUUIDBridge', '__NSConcreteUUID', 'NSString', 'NSValue', 'NSConcreteValue', 'NSNumber', 'NSIndexPath', 'NSArray', 'NSMutableArray',
+	for name in ['NSObject', 'VinixCVPixelBuffer', 'VinixIOSurface', 'VinixCVMetalTextureCache', 'VinixCVMetalTexture', 'MTLTextureDescriptor', 'VinixMetalTextureDescriptor', 'Protocol', 'OS_object', 'OS_dispatch_object', 'OS_dispatch_group', 'OS_dispatch_source', 'OS_dispatch_semaphore', 'OS_dispatch_queue', 'OS_dispatch_queue_serial_executor', 'OS_dispatch_queue_serial', 'OS_dispatch_queue_main', 'OS_dispatch_queue_global', 'NSAutoreleasePool', 'NSFileManager', 'NSProcessInfo', 'NSDate', 'NSStream', 'NSInputStream', 'NSUUID', '_NSUUIDBridge', '__NSConcreteUUID', 'NSString', 'NSValue', 'NSConcreteValue', 'NSNumber', 'NSIndexPath', 'NSArray', 'NSMutableArray',
 		'VinixCMFormatDescription', 'VinixCMBlockBuffer', 'VinixCMSampleBuffer', 'VinixVTDecompressionSession', 'WKWebViewConfiguration', 'WKPreferences', 'WKUserContentController', 'WKProcessPool', 'WKWebsiteDataStore', 'WKWebpagePreferences', 'WKUserScript', 'WKContentWorld', 'WKNSArray',
 		'NSDictionary', 'NSMutableDictionary', 'NSConstantDictionary', 'NSJSONSerialization', 'NSNull', 'NSError', 'NSCondition', 'NSThread', 'ASWebAuthenticationSession', 'GCKeyboard', 'NSHTTPCookie', 'NSHTTPCookieInternal', 'NSLayoutConstraint', 'NSLayoutAnchor',
 		'NSLayoutXAxisAnchor', 'NSLayoutYAxisAnchor', 'NSLayoutDimension', 'NSTimer', 'UIColor', 'UIFont', 'CALayer', 'UIResponder',
 		'UIApplication', 'UIView', 'UIImageView', 'UILabel', 'UIControl', 'UIButton', 'UIWindow', 'UIViewController',
 		'UIScreen', 'UIGestureRecognizer', 'UISwipeGestureRecognizer', 'UIAlertView', 'UIAlertController', 'UIAlertAction',
-        'NSData', 'NSMutableData', '_NSZeroData', '_NSInlineData', 'Foundation.__NSSwiftData', 'NSLocale', 'NSTimeZone', 'NSBundle', 'NSNotification', 'NSNotificationCenter', 'NSCharacterSet',
+        'NSData', '_NSDispatchData', 'OS_dispatch_data', 'OS_dispatch_data_empty', 'NSMutableData', '_NSZeroData', '_NSInlineData', 'Foundation.__NSSwiftData', 'NSLocale', 'NSTimeZone', 'NSBundle', 'NSNotification', 'NSNotificationCenter', 'NSCharacterSet',
         'NSAttributedString', 'NSAssertionHandler', 'NSFileHandle', 'NSOperationQueue',
         'NSPropertyListSerialization', 'NSRunLoop', 'NSURL', 'NSURLComponents', 'NSURLRequest', 'NSMutableURLRequest', 'NSURLResponse', 'NSHTTPURLResponse', 'NSURLConnection', 'NSUserDefaults',
         'UIDevice', 'UIScene', 'UIWindowScene', 'UISceneSession', 'UISceneConnectionOptions', 'UIOpenURLContext', 'NSSet', 'NSMutableSet', 'UITouch', 'UIEvent', 'UITraitCollection', 'UIImage', 'UIPasteboard', 'WKWebView', 'WKBackForwardList',
@@ -379,6 +382,9 @@ fn objc_start() {
 		parent := match name {
 			'NSObject' { u64(0) }
 			'OS_dispatch_object' { ios_runtime.names['OS_object'] }
+			'OS_dispatch_group' { ios_runtime.names['OS_dispatch_object'] }
+			'OS_dispatch_source' { ios_runtime.names['OS_dispatch_object'] }
+			'OS_dispatch_semaphore' { ios_runtime.names['OS_dispatch_object'] }
 			'OS_dispatch_queue' { ios_runtime.names['OS_dispatch_object'] }
 			'OS_dispatch_queue_serial_executor', 'OS_dispatch_queue_global' { ios_runtime.names['OS_dispatch_queue'] }
 			'OS_dispatch_queue_serial' { ios_runtime.names['OS_dispatch_queue_serial_executor'] }
@@ -402,7 +408,9 @@ fn objc_start() {
 			'NSMutableSet' { ios_runtime.names['NSSet'] }
 			'NSMutableDictionary', 'NSConstantDictionary' { ios_runtime.names['NSDictionary'] }
 			'NSLayoutXAxisAnchor', 'NSLayoutYAxisAnchor', 'NSLayoutDimension' { ios_runtime.names['NSLayoutAnchor'] }
-			'NSMutableData' { ios_runtime.names['NSData'] }
+			'NSMutableData', '_NSDispatchData' { ios_runtime.names['NSData'] }
+			'OS_dispatch_data' { ios_runtime.names['_NSDispatchData'] }
+			'OS_dispatch_data_empty' { ios_runtime.names['OS_dispatch_data'] }
 			'_NSZeroData', '_NSInlineData', 'Foundation.__NSSwiftData' { ios_runtime.names['NSData'] }
 			'NSMutableURLRequest' { ios_runtime.names['NSURLRequest'] }
 			'NSHTTPURLResponse' { ios_runtime.names['NSURLResponse'] }
@@ -419,7 +427,8 @@ fn objc_start() {
 		metaclass.isa = if parent == 0 { meta } else { read64(parent) }
 		metaclass.parent = if parent == 0 { u64(cls) } else { read64(parent) }
 		size := match name {
-			'OS_object', 'OS_dispatch_object', 'OS_dispatch_queue', 'OS_dispatch_queue_serial_executor', 'OS_dispatch_queue_serial', 'OS_dispatch_queue_main', 'OS_dispatch_queue_global' { u32(8) }
+			'OS_object', 'OS_dispatch_object', 'OS_dispatch_group', 'OS_dispatch_source', 'OS_dispatch_semaphore', 'OS_dispatch_queue', 'OS_dispatch_queue_serial_executor', 'OS_dispatch_queue_serial', 'OS_dispatch_queue_main', 'OS_dispatch_queue_global' { u32(8) }
+			'_NSDispatchData', 'OS_dispatch_data', 'OS_dispatch_data_empty' { u32(8) }
 			'NSConstantDictionary' { u32(40) }
 			'_NSZeroData' { u32(8) }
 			'_NSInlineData' { u32(16) }
@@ -637,6 +646,9 @@ fn objc_stop() {
 	nw_stop()
 	reachability_stop()
 	dispatch_stop()
+	dispatch_sources_stop()
+	dispatch_specific_stop()
+	dispatch_group_stop()
 	reachability_free()
 	nw_free()
 	connection_stop()
@@ -683,6 +695,8 @@ fn objc_stop() {
 		objc_pool_drain_all()
 		if ios_runtime.associations.len == 0 && ios_runtime.distant_dates[0] == 0 && ios_runtime.distant_dates[1] == 0 { break }
 	}
+	dispatch_data_stop()
+	objc_pool_drain_all()
 	objc_pool_free(C.pthread_getspecific(ios_runtime.pool_key))
 	$if ios_text ? { text_stop() }
 	C.pthread_setspecific(ios_runtime.pool_key, unsafe { nil })
@@ -703,6 +717,7 @@ fn objc_stop() {
 	ns_foundation_keys_stop()
 	devicecheck_stop()
 	corehaptics_constants_stop()
+	storekit_constants_stop()
 	avfoundation_constants_stop()
 	corevideo_constants_stop()
 	coremedia_constants_stop()
@@ -712,6 +727,7 @@ fn objc_stop() {
 	if ios_runtime.objects.len == 0 { unsafe { ios_runtime.objects.free() } }
 	unsafe { ios_runtime.associations.free() }
 	objc_monitors_stop()
+	dispatch_data_free()
 	if ios_runtime.block_refs.len != 0 { eprintln('iOS: heap blocks still owned at shutdown') }
 	for _, text in ios_runtime.constant_utf8 { unsafe { text.free() } }
 	for address, info in ios_runtime.classes {
@@ -732,6 +748,14 @@ fn format_double(destination &char, size usize, format &char, value f64) int {
 }
 
 fn runtime_symbol(library string, symbol string) !u64 {
+	if library == '/usr/lib/libresolv.9.dylib' {
+		if address := resolver_query_symbol(symbol) { return address }
+	}
+	if library == '/usr/lib/libz.1.dylib' {
+		if address := zlib_checksum_symbol(symbol) { return address }
+		if address := zlib_compress_symbol(symbol) { return address }
+		if address := zlib_bound_symbol(symbol) { return address }
+	}
 	// Check before generic class fallbacks in libobjc and Foundation/UIKit.
 	if symbol in ['_OBJC_CLASS_$_MTLTextureDescriptor', '_OBJC_METACLASS_$_MTLTextureDescriptor']!
 		&& library != '/System/Library/Frameworks/Metal.framework/Metal' {

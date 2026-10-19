@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 module main
 
-import crypto.rand
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -22,18 +20,6 @@ fn C.memcmp(voidptr, voidptr, usize) int
 fn C.memchr(voidptr, int, usize) voidptr
 fn C.memmove(voidptr, voidptr, usize) voidptr
 fn C.floorf(f32) f32
-
-fn darwin_random_uniform(bound u32) u32 {
-	if bound < 2 { return 0 }
-	// Rejection sampling avoids modulo bias; crypto.rand uses each host's OS RNG.
-	threshold := (u32(0) - bound) % bound
-	for {
-		bytes := rand.bytes(4) or { panic('iOS: random source failed') }
-		value := u32(bytes[0]) | u32(bytes[1]) << 8 | u32(bytes[2]) << 16 | u32(bytes[3]) << 24
-		unsafe { bytes.free() }
-		if value >= threshold { return value % bound }
-	}
-}
 
 fn darwin_strlen(text &char) usize {
 	mut length := usize(0)
@@ -83,10 +69,16 @@ fn darwin_puts(text &char) int {
 }
 
 fn darwin_malloc(size usize) voidptr {
+	if system_data != unsafe { nil } { return darwin_zone_malloc(darwin_default_zone(), size) }
 	return C.malloc(size)
 }
 
 fn darwin_free(pointer voidptr) {
+	if pointer == unsafe { nil } { return }
+	saved_errno := unsafe { *C.ios_errno_address() }; defer { darwin_set_errno(saved_errno) }
+	heap_lock(); defer { heap_unlock() }
+	block := heap_block_find(pointer)
+	if block != unsafe { nil } { heap_release(block); return }
 	C.free(pointer)
 }
 
@@ -101,16 +93,21 @@ fn darwin_bzero(pointer voidptr, size usize) {
 // Fixed-argument AAPCS64 calls with compatible Apple and musl layouts.
 // Varargs, Darwin FILE*, errno/TLS and pthread objects use explicit adapters.
 fn libsystem_symbol(library string, symbol string) !u64 {
-	if library == '/usr/lib/libSystem.B.dylib' && symbol == '_posix_memalign' { return u64(unsafe { voidptr(C.posix_memalign) }) }
+	if library == '/usr/lib/libSystem.B.dylib' && symbol == '_posix_memalign' { return u64(unsafe { voidptr(darwin_posix_memalign) }) }
 	if library != '/usr/lib/libSystem.B.dylib' {
 		return error('iOS: library is not implemented: ${library} (${symbol})')
 	}
+	if address := inverse_hyperbolic_symbol(symbol) { return address }
+	if address := malloc_zone_symbol(symbol) { return address }
+	if address := random_symbol(symbol) { return address }
 	if address := pthread_symbol(symbol) { return address }
 	if address := stdio_symbol(symbol) { return address }
 	if address := dyld_symbol(symbol) { return address }
 	if address := fixed_symbol(symbol) { return address }
 	if address := dispatch_symbol(symbol) { return address }
 	if address := os_log_symbol(symbol) { return address }
+	if address := asl_symbol(symbol) { return address }
+	if address := backtrace_symbol(symbol) { return address }
 	if address := time_symbol(symbol) { return address }
 	if address := files_symbol(symbol) { return address }
 	if address := sockets_symbol(symbol) { return address }
@@ -123,6 +120,9 @@ fn libsystem_symbol(library string, symbol string) !u64 {
 	if address := terminal_symbol(symbol) { return address }
 	if address := thread_policy_symbol(symbol) { return address }
 	if address := mach_memory_symbol(symbol) { return address }
+	if address := mach_host_symbol(symbol) { return address }
+	if address := mach_exception_symbol(symbol) { return address }
+	if address := mach_message_symbol(symbol) { return address }
 	if address := common_crypto_symbol(symbol) { return address }
 	address := match symbol {
 		'_uuid_generate' { unsafe { voidptr(darwin_uuid_generate) } }
@@ -146,13 +146,17 @@ fn libsystem_symbol(library string, symbol string) !u64 {
 		'_pthread_create' { unsafe { voidptr(darwin_pthread_create) } }
 		'_pthread_join' { unsafe { voidptr(darwin_pthread_join) } }
 		'__tlv_bootstrap' { unsafe { voidptr(C.ios_tlv_get_addr) } }
+		'__tlv_atexit' { unsafe { voidptr(image_tlv_atexit) } }
 		'___cxa_atexit' { unsafe { voidptr(image_cxa_atexit) } }
 		'___cxa_finalize' { unsafe { voidptr(image_cxa_finalize) } }
 		'_atexit' { unsafe { voidptr(image_atexit) } }
 		'_exit' { unsafe { voidptr(image_exit) } }
 		'__exit' { unsafe { voidptr(image_immediate_exit) } }
+		'__Exit' { unsafe { voidptr(darwin_c11_exit) } }
+		'__NSGetEnviron' { unsafe { voidptr(darwin_ns_get_environ) } }
 		'_puts' { unsafe { voidptr(darwin_puts) } }
 		'_atoi' { unsafe { voidptr(darwin_atoi) } }
+		'_div' { unsafe { voidptr(darwin_div) } }
 		'_malloc' { unsafe { voidptr(darwin_malloc) } }
 		'_free' { unsafe { voidptr(darwin_free) } }
 		'_strlen' { unsafe { voidptr(darwin_strlen) } }
@@ -163,7 +167,6 @@ fn libsystem_symbol(library string, symbol string) !u64 {
 		'_memcmp' { unsafe { voidptr(C.memcmp) } }
 		'_memchr' { unsafe { voidptr(C.memchr) } }
 		'_bzero' { unsafe { voidptr(darwin_bzero) } }
-		'_arc4random_uniform' { unsafe { voidptr(darwin_random_uniform) } }
 		'_floorf' { unsafe { voidptr(C.floorf) } }
 		else { return error('iOS: libSystem symbol is not implemented: ${symbol}') }
 	}

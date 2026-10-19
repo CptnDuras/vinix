@@ -71,8 +71,8 @@ executing a GUI app directly from a shell does not create a window. Set
 | Mach thread policy subset | Calling-thread standard/fair scheduling reaches native libc; cache-affinity hints return the measured ARM64 `KERN_NOT_SUPPORTED`; remote and unrepresentable scheduling changes are rejected |
 | Signal subset | Darwin 16-byte `sigaction` and `signal`, translated native numbers/masks, one-argument handlers, `SA_RESTART`/`SA_NODEFER`, and callback draining before image unload |
 | Entry point | `LC_MAIN`, `argc`/`argv`, empty null-terminated environment and Apple vectors, integer exit status |
-| Dynamic linking | Chained pointer formats `DYLD_CHAINED_PTR_64` and `DYLD_CHAINED_PTR_64_OFFSET`, import formats 1/2/3; legacy rebase/bind/lazy/weak streams, export-trie lookup, signed addends and tagged RTTI pointers; app-bundled dylibs with `@executable_path`, `@loader_path` and own/executable `@rpath` lookup, shared mappings for repeated dependencies; checked lazy function slots resolve on first call through register-preserving ARM64 thunks; built-in and already-linked library `dlopen`/`dlsym`/`dlerror`, image/section lookup |
-| Image lifecycle | Superclass-first Objective-C `+load`, category attachment and category `+load` before C++ image constructors; checked `LC_ROUTINES_64`, initializer pointers/offsets, terminators and reverse-order image-scoped `atexit`/`__cxa_atexit`/`__cxa_finalize` callbacks; native `exit` and immediate `_exit` termination |
+| Dynamic linking | Chained pointer formats `DYLD_CHAINED_PTR_64` and `DYLD_CHAINED_PTR_64_OFFSET`, import formats 1/2/3; legacy rebase/bind/lazy/weak streams, export-trie lookup, signed addends and tagged RTTI pointers; app-bundled dylibs with `@executable_path`, `@loader_path` and own/executable `@rpath` lookup, shared mappings for repeated dependencies; checked lazy function slots resolve on first call through register-preserving ARM64 thunks; built-in and already-linked library `dlopen`/`dlsym`/`dlerror`, indexed mapped-image enumeration with signed slides and image/section lookup; main executable path with a checked 32-bit buffer size |
+| Image lifecycle | Bound-image add/remove notifications with synchronous, reentrant registration; superclass-first Objective-C `+load`, category attachment and category `+load` before C++ image constructors; checked `LC_ROUTINES_64`, initializer pointers/offsets, terminators and reverse-order image-scoped `atexit`/`__cxa_atexit`/`__cxa_finalize` callbacks; native `exit` and immediate `_exit`/`_Exit` process termination |
 | Thread-local storage | Darwin TLV descriptors, independent initialized and zero-filled templates for each image, lazy per-thread allocation and pthread-key cleanup; register-preserving ARM64 thunk |
 | Swift heap subset | Aligned allocation for native ARC classes and local/generic heap contexts; synchronized strong, batch, bridge and unknown ARC, x20 deallocating destructors, checked object/class and uninitialized deallocation; owners drain before metadata/thunk retirement |
 | C++ (optional) | `--with-cxx` builds LLVM libc++ with Apple ARM64 string, 128-byte `mbstate_t`, 32-bit ctype masks and eight-byte TLS keys; native strings and legacy growth/substring helpers, integer sorts, streams, regex, futures, shared/weak ownership and synchronization; V adapters for Darwin random_device and variadic abort |
@@ -860,8 +860,9 @@ values, guarded outputs and three rearmed key-destructor passes. It also forks
 from a worker and checks the child's main-thread identity. ASAN/UBSAN checks
 two image loads/unloads on the process thread and another on a native worker,
 with all app workers joined and keys/conditions destroyed before unmapping.
-TLS reads from key destructors and C++ thread-local destructor ordering remain
-unverified. The full ARM64 C++/GLES/PPSSPP regression passes; an earlier attempt
+TLS reads from arbitrary native pthread-key destructors remain unverified;
+C++ thread-local destructor ordering is checked by the TLV fixture below.
+The full ARM64 C++/GLES/PPSSPP regression passes; an earlier attempt
 failed the existing concurrent permission fixture with `ENOENT` and its log is
 preserved. This resolves five more strong imports across Fortnite and EOSSDK.
 
@@ -8006,22 +8007,1345 @@ streams and executables, native measurements and joined guest evidence are
 retained under `build/ios/fortnite/media-time-checks`. The actual IPA calls
 `CACurrentMediaTime` at `0x10a64d53c`.
 
-One further required import resolves. The actual IPA exits with status 1 before
-application entry at `_VTDecompressionSessionCanAcceptFormatDescription`. Image sample construction, codec
-execution and the system Metal device/renderer remain unavailable. Fortnite
-remains unplayable and full iOS regression remains unpassed.
+That probe stopped before application entry at
+`_VTDecompressionSessionCanAcceptFormatDescription`. VideoToolbox now provides
+all six VideoToolbox functions imported by this IPA, backed by the optional
+FFmpeg software H.264/HEVC decoder. Sessions own their codec, immutable format
+and output attributes. Successful decodes deliver independently allocated BGRA,
+limited-range NV12 or full-range NV12 buffers, with the sample timestamp, duration
+and caller reference delivered through the native callback ABI. Each callback
+borrows its image; clients retain it to outlive that callback. Full-range
+conversion is configured before scaler initialization to preserve the advertised
+pixel levels.
+
+The current profile processes one ready sample per call, with fixed dimensions
+and configuration and no frame reordering. Async and temporal permission flags
+allow synchronous completion; the actual IPA supplies flag value 9 at
+`0x1078cb7a0`. The realtime hint is accepted and DoNotOutputFrame decodes with a
+null callback image. Wait joins active decoding. Invalidation joins callbacks
+from other threads; callback-local invalidation retires the runner codec after
+the active operation returns. Retained pixel buffers survive codec destruction.
+Format changes require a fresh session. Hardware decoding, reorder queues,
+protected video, image-backed sample construction and the system Metal renderer
+remain unavailable.
+
+The installed Mac VideoToolbox library and V runner pass the same H.264/HEVC
+red/blue frame checks for all three pixel formats, timestamp/duration ABI,
+parameter-error output preservation, decode hints, suppressed images and joined
+callbacks. Runner checks additionally exercise corrupt-packet rejection and
+recovery, callback-local invalidation/release and two fully drained runtimes.
+Eight host ASan/UBSan runs and four ARM64 Vinix suites cover decoding, H.264/HEVC
+format metadata and pixel allocation. Eleven generated C/executable pairs,
+pinned inputs, native measurements and actual IPA evidence are retained under
+`build/ios/fortnite/video-decode-checks`. Earlier failed trials remain identified
+there. The measured Mac deadlocks when invalidation is called inside its own
+callback; that retirement case is tested only on the runner.
+
+`tests/ios/build-video.v` builds the optional ARM64 SDK from the reviewed
+FFmpeg archive in `tests/packages/ffmpeg-source.json`; it verifies its digest,
+disables hardware/GPL/nonfree components and reserves x18. Use a fresh output
+directory:
+
+```sh
+v -gc none -cc clang -o build/ios/build-video tests/ios/build-video.v
+build/ios/build-video build/package-ffmpeg-work/ffmpeg-8.0.1.tar.xz build/ios/video
+v -gc none -cc clang run tests/ios/native-checks.v build-video-decode
+```
+
+`VINIX_IOS_VIDEO_SDK` selects that SDK directory (default `build/ios/video`).
+The native V driver adds `ios_video`, the matching target headers and the static
+decoder libraries. The decode fixture requires the SDK. Runners built without
+the optional backend report decoder-not-found from session creation.
+
+After the six VideoToolbox imports resolved, the probe stopped at
+`_$s8StoreKit10StorefrontV11countryCodeSSvg`. StoreKit now implements that
+Swift getter. It borrows the resilient `Storefront` through x20, reads its
+country field at offset zero and returns an owned String pair in x0/x1.
+It retains the existing String owner, preserves Swift context/error registers
+and uses a sealed adapter that is unmapped after callers drain. The getter
+requires no per-call heap allocation.
+
+The installed StoreKit library and SDK confirm the field layout and bridge
+retention. Native comparisons cover small, immortal, native heap and Cocoa
+Strings, read-only fields beside guard pages, result survival after source
+release and concurrent ARC. Eight host ASan/UBSan runs and four ARM64 Vinix
+suites cover the getter and existing String, NSString bridge and shared UTF-8
+behavior, including concurrent publication and two drained runtime lifetimes.
+Native measurements, actual IPA call sites, pinned inputs and eleven generated
+C/executable pairs are retained under `build/ios/fortnite/storefront-checks`.
+The fixture is available through `tests/ios/native-checks.v build-storefront`
+and the native check inventories.
+
+That probe next stopped at `_$s8StoreKit10StorefrontV7currentACSgvgZ`.
+The asynchronous [Storefront.current](https://developer.apple.com/documentation/storekit/storefront/current)
+query now supports the accountless profile. Vinix has no App Store account
+service, so it completes with `Optional<Storefront>.none`. The native value
+witnesses encode that result in the country String's bridge word at offset 8;
+the other payload bytes remain uninitialized. Account integration and queries
+that return a populated storefront remain unavailable.
+
+The async entry receives its indirect result in x0 and child context in x22.
+It tail-resumes the caller with that same child context, allowing the caller to
+free the frame during completion. Its separate read-only async descriptor
+advertises the measured 64-byte context and relative entry point. Code and
+descriptor pages are retired after task callers drain.
+
+Native measurements on this Mac returned no storefront. Native and runner
+tests exercise real nested task calls, guarded optional results, child-frame
+release and single continuation resumption. Eight host ASan/UBSan runs and four
+ARM64 Vinix suites cover this path, the country getter, task creation and
+100,000-switch continuation regressions. Eleven generated C/executable pairs,
+pinned inputs and joined IPA evidence are retained under
+`build/ios/fortnite/storefront-current-checks`; the new fixture is available
+through `tests/ios/native-checks.v build-storefront-current`.
+
+The subsequent Storefront metadata accessor and nominal descriptor imports,
+`_$s8StoreKit10StorefrontVMa` and `_$s8StoreKit10StorefrontVMn`, now have a
+canonical StoreKit implementation. Native metadata describes a 48-byte value:
+country and identifier Strings at offsets 0 and 16, followed by Locale's
+implementation object and table at 32 and 40. All eight value witnesses are
+implemented, including field ownership during reentrant assignment, whole-value
+take assignment, and single-payload enum encoding through UInt32 case limits.
+
+Storefront exceeds Swift's three-word inline value buffer. Its buffer witness
+shares a retained, registered 64-byte box and returns the payload at offset 16;
+the box destructor releases all three owned fields before freeing storage.
+The existing Any implementation recognizes those boxes. Code and metadata use
+the existing sealed RX/R pages and retire after callers drain. The private
+nominal descriptor supports symbolic type lookup; field reflection, broader
+Storefront APIs and account services remain unavailable.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites validate metadata,
+the async current query, Any and Locale. Native comparisons include actual
+String/Locale values, reentrant field destruction, shared buffers, guarded and
+unaligned enum storage, concurrent callers, and two sealed/unmapped runtimes.
+Eleven generated C/executable pairs and pinned native/IPA evidence are retained
+under `build/ios/fortnite/storefront-metadata-checks`. The fixture is available
+through `tests/ios/native-checks.v build-storefront-metadata` and the native
+check inventories.
+
+The subsequent `Transaction.beginRefundRequest(for:in:)` entry and async
+descriptor now support the unavailable-platform profile. Vinix has no refund
+service, so each call throws an owned CFError with `SKErrorDomain`, SDK
+`SKErrorUnsupportedPlatform` (19), and a localized explanation. The entry
+does not submit a request or report a status. It leaves the indirect result
+and borrowed transaction/scene arguments untouched, returns the Error in x21,
+and tail-resumes the same child x22, which the caller may immediately free.
+
+`RefundRequestStatus` has canonical metadata and all eleven enum value
+witnesses: a one-byte POD value, two cases, and 254 extra inhabitants.
+Single-payload witnesses preserve native tag-width transitions and UInt32
+wrapping. Its private nested nominal descriptor supports symbolic lookup;
+Transaction's broader metadata, reflection, conformances and refund UI remain
+unavailable. These entries share the existing sealed StoreKit pages and drain
+with their callers.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites cover this path,
+Storefront.current, task creation, and NSError/Error bridging. The enum was
+compared with native witnesses; generic async throwing/catching was compared
+with native Swift tasks and synthetic CFErrors. Native refund service entries
+were inspected without invocation. The installed Mac entry has a 112-byte
+context, also used by this profile; its UIKit counterpart is unavailable on
+this Mac. Pinned measurements, joined IPA evidence and eleven generated
+C/executable pairs are retained under `build/ios/fortnite/refund-checks`.
+The fixture is available through `tests/ios/native-checks.v build-refund` and
+the native check inventories.
+
+StoreKit's three `SKAdNetworkCoarseConversionValue` globals now expose stable
+NSString pointer cells containing `high`, `medium` and `low`. The values and
+CFSTR representation were measured directly from the installed iOSSupport
+StoreKit shared-cache image. The IPA's actual consumer selects a pointer cell,
+then loads its NSString value. These globals occupy a sealed read-only page
+and remain available until pools, collections and Swift contexts drain.
+They do not provide an attribution service or submit postbacks.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites cover the constants,
+Storefront.current, NSString-to-Swift bridging and Objective-C associations.
+Checks include native string/ownership comparisons, contended publication,
+equal-key dictionary lookup, read-only/non-executable mappings, pool destructor
+availability and two unmapped runtime lifetimes. Pinned native/IPA evidence
+and eleven generated C/executable pairs are retained under
+`build/ios/fortnite/storekit-constants-checks`. The fixture is available through
+`tests/ios/native-checks.v build-storekit-constants` and the native inventories.
+
+The subsequent `_adler32` import now has a V implementation independent of
+the graphics backend. It preserves the Darwin unsigned-long seed/result and
+32-bit length ABI, normalizes seed halves, supports incremental updates,
+and uses bounded block sums without allocations or runtime-owned state.
+The fixture compares native zlib and an independent per-byte reference across
+guarded/read-only buffers, three byte patterns, arbitrary seeds, chunk
+boundaries through 1 MiB, known vectors and eight concurrent callers.
+Native zlib's null-buffer/one-byte fast path faults on this Mac; the V entry
+safely returns the reset checksum for every null-buffer length. That unsafe
+native call is excluded from subsequent comparisons, with its diagnostic
+retained. The fixture is available through
+`tests/ios/native-checks.v build-zlib-checksum` and the native inventories.
+
+Eight further host ASan/UBSan runs and four ARM64 Vinix suites cover Adler-32,
+the StoreKit constants, NSString bridging and Storefront.current. The actual
+IPA consumer's reset and incremental calls were inspected with V/Mach-O/LLVM.
+Pinned native/IPA evidence and eleven generated C/executable pairs are retained
+under `build/ios/fortnite/zlib-checksum-checks`.
+
+`compress2` and `compressBound` now have V implementations with the Darwin
+64-bit buffer-length and 32-bit level/status ABI. The encoder uses LZ77 with a
+32 KiB window and fixed Huffman blocks; levels control match-search effort.
+Level zero uses stored blocks, also used as a fallback for incompressible data
+to keep output within `compressBound`. The history uses at most 512 KiB per
+active compression call and is freed on success and error. No graphics backend
+or native zlib library is required. Encoded bytes and compression ratios can
+differ from native zlib; the resulting RFC 1950 streams remain interoperable.
+
+The fixture checks native errors, headers and unsigned-long bound arithmetic,
+and decodes V output using both native zlib and an independent V inflater.
+It covers all levels, four input patterns, exact 32 KiB match distances,
+64 KiB block boundaries, guarded/read-only input, bounded output, length-cell
+canaries, insufficient buffers, real compression and eight concurrent callers.
+The fixture is available through `tests/ios/native-checks.v build-zlib-compress`
+and the native inventories.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites cover compression,
+Adler-32, NSString bridging and Storefront.current. The actual IPA's compression
+call and its level selection were inspected with V/Mach-O/LLVM. Pinned inputs,
+native measurements, joined probe/audit logs and eleven generated C/executable
+pairs are retained under `build/ios/fortnite/zlib-compress-checks`.
+
+`deflateBound` now has an allocation-free V implementation with Darwin's
+64-bit unsigned-long arithmetic. It validates the stream, accounts for raw,
+zlib and gzip wrappers, preset dictionaries and custom gzip headers, and
+selects tight or conservative bounds from the stream settings. Initialized
+streams use the private LP64 deflate-state prefix shared by the inspected Mac
+zlib 1.2.12 and the supplied musl backend; changing that backend requires
+rerunning the native interoperability fixture. The function neither creates
+stream state nor adds streaming compression to the static runner.
+
+The inspected Darwin library underestimates some raw and zlib streams with a
+preset dictionary (64 KiB random input, level 1, fixed Huffman strategy). V uses a
+larger conservative bound for that case so the compressor can finish without
+exhausting the output buffer. Other measured Darwin results, including wrapping
+arithmetic, are preserved.
+
+`tests/ios/native-checks.v build-zlib-bound` builds the fixture. It compares
+Darwin bounds, including unsigned overflow, checks guarded read-only ABI
+objects and exercises real native streams, reset, dictionaries and custom gzip
+headers. Compression must finish within the returned capacity, and the backend
+inflater verifies the resulting raw/zlib/gzip data. The actual IPA consumer
+initializes a gzip stream, obtains its bound and then ends the stream; its
+instructions were inspected with V/Mach-O/LLVM.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering stream
+bounds, compression, NSString bridging and Storefront.current. Native streams
+from the Mac's zlib 1.2.12 and Vinix's packaged zlib 1.3.2 both finish within
+the V bounds. Pinned inputs, native/IPA inspection and eleven generated
+C/executable pairs are retained under `build/ios/fortnite/zlib-bound-checks`.
+
+`res_9_query` now constructs standard recursive DNS questions in V, including
+SRV records, escaped label bytes, root names and the full 16-bit class/type
+fields. It classifies returned DNS response codes and answer counts into BIND's
+`h_errno` values, preserves reply bytes, and bounds every write by the supplied
+answer capacity. Query construction and classification allocate no heap memory.
+The existing libc `res_send` handles configured nameservers, retries, UDP and
+TCP fallback. Queries use the default recursive profile without EDNS extensions.
+
+`tests/ios/native-checks.v build-resolver-query` builds the fixture. A local DNS
+server supplies real SRV replies, negative answers and a 65,535-byte TCP reply
+after UDP truncation. The fixture compares Mac BIND behavior and checks protected
+input/output boundaries, invalid and short arguments, error translation and
+eight concurrent query builders. Test VM resolver configuration points to its
+own loopback server. musl discards some DNS error responses that Mac BIND returns;
+these follow musl's retry policy and become `TRY_AGAIN` with Darwin's timeout
+error when the exchange expires.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering DNS,
+native zlib stream bounds, NSString bridging and Storefront.current. The IPA's
+SRV query and 65,535-byte answer capacity were inspected with V/Mach-O/LLVM.
+Pinned inputs, native measurements, probe/audit logs and eleven generated
+C/executable pairs are retained under `build/ios/fortnite/resolver-query-checks`.
+
+`CCKeyDerivationPBKDF` implements PBKDF2 in V using SHA1, SHA224, SHA256,
+SHA384 and SHA512. It preserves CommonCrypto's separate PRF numbering,
+parameter errors and nine-argument LP64 ABI. Binary passwords and salts,
+empty inputs, long HMAC keys and partial output blocks are supported. Null
+passwords, zero rounds/output lengths, overflowing pointer ranges and output
+lengths exceeding the four-byte PBKDF2 block counter are rejected before writes.
+Three owned hash states are reused across all rounds and freed on completion;
+the round loop allocates no memory and stack key/output temporaries are wiped.
+
+`tests/ios/native-checks.v build-pbkdf` builds the fixture. It compares all five
+PRFs against the installed Mac CommonCrypto, checks RFC 6070 vectors, protected
+buffer boundaries, error paths and concurrent callers. V/Mach-O/LLVM inspection
+of the actual IPA found two SHA1 callers: one derives 16 bytes using eight salt
+bytes and 1,000 rounds; the other uses 10,000 rounds and a runtime output length.
+Both profiles are included in the fixture.
+
+Eight retained host ASan/UBSan runs and four ARM64 Vinix suites pass, covering
+PBKDF2, DNS, native zlib stream bounds and Storefront.current. Pinned sources,
+Mac/IPA inspection, probe/audit logs and eleven generated C/executable pairs are
+retained under `build/ios/fortnite/pbkdf-checks`.
+
+`NDR_record` now exports the native eight-byte MIG representation descriptor
+from V's existing system-data storage. It is a writable object with stable
+identity during an execution; lookups preserve caller changes, and a new runtime
+restores the little-endian, ASCII and IEEE defaults. The object shares its
+owner's allocation and teardown without a separate allocation or mapping.
+
+`tests/ios/native-checks.v build-ndr-record` compares the Mac SDK's field offsets,
+native bytes and writable mapping, and checks scoped lookup, guarded message
+copies, concurrent readers and two reset/teardown cycles. V/Mach-O/LLVM inspection
+of the actual IPA shows an eight-byte load through the imported address followed
+by an unaligned store at offset 24 in a 36-byte Mach message. This data export
+does not add Mach IPC services.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering the NDR
+record, native zlib stream bounds, PBKDF2 and Storefront.current. Pinned inputs,
+native/IPA inspection, probe/audit logs and eleven generated C/executable pairs
+are retained under `build/ios/fortnite/ndr-record-checks`.
+
+That probe exited with status 1 before application entry at `__Exit` from
+`libSystem.B.dylib`.
+
+C11 `_Exit` (Mach-O `__Exit`) now resolves through a V adapter with an explicit
+signed 32-bit argument and a no-return contract. The native libc backend
+terminates the whole process from either the main thread or a worker, without
+running libc/image exit callbacks, C++/TLS destructors or flushing buffered
+stdio. It also works before image runtime initialization and allocates no memory.
+
+`tests/ios/native-checks.v build-immediate-exit` builds the subprocess fixture.
+It compares Vinix's adapter against the installed Mac `_Exit`, including negative
+and wrapping status values, and uses regular exit, image cleanup and thread
+return as positive controls for the callbacks and buffered output. V/Mach-O/LLVM
+inspection of the actual IPA follows both levels of branch islands and finds
+three direct callers and a tail forwarder, each passing zero in `w0`.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering immediate
+exit, native zlib stream bounds, the writable NDR record and Storefront.current.
+Pinned inputs, native/IPA inspection, joined probe/audit logs and eleven
+generated C/executable pairs are retained under
+`build/ios/fortnite/immediate-exit-checks`.
+
+That probe exited with status 1 before application entry at `__NSGetEnviron`
+from `libSystem.B.dylib`.
+
+`_NSGetEnviron` (Mach-O `__NSGetEnviron`) now returns the writable libc process
+environment cell through a V adapter. Its address stays stable when callers
+replace the vector or libc grows it; the existing `getenv`, `setenv` and
+`unsetenv` imports observe the same live vector. The getter is independent of
+image initialization, preserves errno and allocates no memory.
+
+`tests/ios/native-checks.v build-crt-environ` builds the isolated subprocess
+fixture. It compares the installed Mac getter with the V adapter, checks empty,
+UTF-8 and embedded-equals values, growth, overwrite/removal, null/empty vector
+replacement and eight concurrent readers. Each child owns its mutations; the
+driver's environment stays intact. V/Mach-O/LLVM inspection of the actual IPA
+finds the call at `0x1006b5634`, followed by loading the returned cell and walking
+eight-byte string pointers until the null terminator.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering the CRT
+environment getter, native zlib stream bounds, immediate process exit and
+Storefront.current. Native/IPA inspection, joined logs, pinned inputs and eleven
+generated C/executable pairs are retained under
+`build/ios/fortnite/crt-environ-checks`.
+
+That probe exited with status 1 before application entry at
+`__NSGetExecutablePath` from `libSystem.B.dylib`.
+
+`_NSGetExecutablePath` (Mach-O `__NSGetExecutablePath`) now copies the main
+image's cached path through a V adapter. It uses the Darwin 32-bit result and
+size pointer, includes the NUL byte in the required size, leaves successful
+capacity and errno unchanged, and reports insufficient buffers before touching
+their contents. The path is available before image initializers and remains
+stable across working-directory changes. The getter allocates no memory.
+
+`tests/ios/native-checks.v build-executable-path` builds the fixture. It compares
+the installed Mac behavior, checks protected source/output/size boundaries,
+read-only successful size pointers, paths longer than PATH_MAX, UTF-8, eight
+concurrent readers and two retired runtimes. Missing or retired main-image
+state and invalid output parameters reject explicitly. V/Mach-O/LLVM inspection
+of the actual IPA finds the zero-size query at `0x1000a68a8`, allocation using
+that 32-bit result and the buffer-fill call at `0x1000a68c0`.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering executable
+paths, native zlib stream bounds, the CRT environment cell and Storefront.current.
+Native/IPA inspection, pinned inputs, joined logs and eleven generated
+C/executable pairs are retained under
+`build/ios/fortnite/executable-path-checks`.
+
+That probe exited with status 1 before application entry at
+`__dispatch_source_type_timer` from `libSystem.B.dylib`.
+
+The dispatch timer source type now resolves to a direct, aligned, read-only
+V constant. The public type is opaque: clients pass the object's address to
+`dispatch_source_create`, without loading a pointer cell or depending on
+Apple's private descriptor fields. Its identity is independent of queue and
+image runtime initialization and teardown; resolving it allocates no memory.
+This export does not implement source creation, timer delivery or cancellation.
+
+`tests/ios/native-checks.v build-dispatch-timer-type` builds the fixture. It
+checks library and symbol scope, read-only storage, unchanged errno, eight
+concurrent readers and stable identity across two retired runtimes. The Mac
+reference confirms the public macro and dynamic export name the same data
+object and that its native timer factory accepts zero and strict masks.
+V/Mach-O/LLVM inspection finds four actual IPA consumers at `0x100007b78`,
+`0x10001553c`, `0x1000399d8` and `0x10009e4e0`, each loading the import slot
+directly into the factory's first argument.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering the timer
+type, native zlib stream bounds, the CRT environment cell and Storefront.current.
+Native/IPA inspection, pinned inputs, joined logs and eleven generated
+C/executable pairs are retained under
+`build/ios/fortnite/dispatch-timer-type-checks`.
+
+That probe exited with status 1 before application entry at
+`__dyld_get_image_header` from `libSystem.B.dylib`.
+
+The V dyld adapter now implements `_dyld_image_count`, `_dyld_get_image_header`,
+`_dyld_get_image_name` and `_dyld_get_image_vmaddr_slide` (Mach-O `__dyld_*`).
+It enumerates the main executable followed by mapped bundled Mach-O libraries,
+returns their live headers and borrowed UTF-8 paths, and computes signed
+64-bit slides from each mapping's preferred address. A header can sit above
+the mapping's lowest segment; `dladdr` and `getsectiondata` now agree with that
+header address. Invalid 32-bit indices return null/zero without changing errno.
+Queries allocate no memory, and their borrowed pointers remain valid until
+application activity and destructors drain at module teardown. Static import
+audits expose an empty image set because they create no Mach-O mappings.
+
+`tests/ios/native-checks.v build-dyld-images` builds the fixture. It maps three
+V-generated and parsed images between guard pages, checks real load commands,
+positive and negative slides, UTF-8 names, section lookup, upper-bound indices,
+eight readers and two teardown cycles. The Mac reference checks the public
+API, native shared-cache headers and an empty compiler-produced dylib's
+publication, repeated opens and unload. V/Mach-O/LLVM inspection finds four
+actual header-query callers, including `0x10008bd74` and `0x10062e1b0`, which
+identify the main image by file type and walk its load commands.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering dyld image
+queries, native zlib stream bounds, cached executable paths and the dispatch
+timer type. Native/IPA inspection, pinned inputs, joined logs and eleven
+generated C/executable pairs are retained under
+`build/ios/fortnite/dyld-images-checks`.
+
+That IPA probe exited with status 1 before application entry at
+`__dyld_register_func_for_add_image` from `libSystem.B.dylib`.
+
+The V dyld adapter now implements `_dyld_register_func_for_add_image` and
+`_dyld_register_func_for_remove_image`. Add registration synchronously replays
+published images before retaining the callback, preserving the measured native
+ordering for duplicate and nested registrations. A fully bound and protected
+batch is published before Objective-C `+load` or image initializers. Linked
+bundle libraries stay mapped across `dlclose`; actual execution retirement
+delivers removal notifications in reverse initialization order after
+destructors, with headers, paths, Objective-C and TLS still available.
+
+A process-lifetime recursive native mutex serializes callback registration,
+delivery and module retirement independently of the Objective-C lock.
+Per-execution callback arrays release their replaced buffers and are freed
+before the module registry. An active callback pins the registry across a
+concurrent teardown. Failed binding and static audits execute no notifications.
+
+`tests/ios/native-checks.v build-dyld-callbacks` builds the fixture. It checks
+real guarded Mach-O headers and signed slides, duplicate/nested replay, batch
+publication, eight concurrent registrars, linked reopens and callback draining.
+It also executes a V-generated ARM64 Mach-O twice through constructor, main,
+destructor and removal callback; the callback uses live Objective-C and TLS,
+and its constructor joins an Objective-C worker to check lock independence.
+The Mac reference measures real dylib publication and unload, including
+duplicate removal callbacks and image-query visibility during removal.
+V/Mach-O/LLVM inspection finds the IPA's add call at `0x1000a8ae4`, remove tail
+call at `0x1000a8af8` and an add callback that uses `dladdr`.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering dyld
+callbacks, image queries, native zlib bounds and cached executable paths.
+Native/IPA inspection, pinned inputs, joined logs and eleven generated
+C/executable pairs are retained under
+`build/ios/fortnite/dyld-callbacks-checks`.
+
+That IPA probe exited with status 1 before application entry at
+`__tlv_atexit` from `libSystem.B.dylib`.
+
+The V `__tlv_atexit` adapter implements Darwin's void callback/object-pointer
+ABI, preserving errno. Each execution has one native pthread key; each thread
+owns a stack of destructors and independent storage for every TLS image.
+Callbacks run in reverse registration order, including callbacks registered
+reentrantly, before any of that thread's image TLS is freed. Native key cleanup
+handles both normal thread return and `pthread_exit`, without the pthread
+destructor-iteration limit. `fork` keeps the surviving thread's TLS and drops
+copies belonging to vanished threads without invoking their callbacks.
+
+Process `exit` drains current-thread TLS before process/C++ exit handlers;
+immediate exit skips both, matching native Mac measurements. When an embedded
+execution returns, framework workers are joined and the main thread's TLS is
+drained before global destructors. Additional drains handle registrations from
+global destructors and dyld removal callbacks while Objective-C and image TLS
+remain available. Live foreign TLS owners are rejected before framework
+teardown; pending callbacks are rejected before deleting the native key or
+unmapping code. TLS storage survives all these finalizers and is then freed.
+
+`tests/ios/native-checks.v build-tlv-atexit` builds the fixture. It checks 32
+joined workers across two executions, two TLS images per thread, normal and
+explicit exit, nil callback arguments, 96 reentrant callbacks, fork ownership,
+process/immediate exit and active/pending shutdown rejection. A V-generated
+ARM64 Mach-O uses real TLV descriptors through constructor, main, TLS/global
+destructors and removal callbacks, checking live Objective-C and TLS twice.
+SDK declarations and typed native calls establish the ABI and ordering;
+V/Mach-O/LLVM inspection finds 86 IPA consumers/forwarders for this import.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering TLV exit,
+dyld callbacks, zlib bounds and executable paths. Native measurements, IPA
+inspection, pinned inputs, joined logs and eleven generated C/executable pairs
+are retained under `build/ios/fortnite/tlv-atexit-checks`. Preliminary build
+and source-review attempts are retained separately within that cohort.
+
+That IPA probe stopped at `_acosh` from `libSystem.B.dylib`, before
+application entry. Its scalar-double call at `0x101b9beac` and branch-island
+forwarder are confirmed by LLVM disassembly. Native Mac boundary, NaN,
+infinity, errno and floating-exception measurements are retained for the next
+adapter. Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now implements `_acosh`, `_asinh` and `_atanh` for `libSystem.B.dylib`.
+The adapters preserve errno, signed zeros, NaN signs and payloads, and existing
+floating-exception flags. Domain errors and poles raise the measured Darwin
+exceptions. Tiny `asinh`/`atanh` values reproduce Darwin's rounding-dependent
+underflow thresholds and one-step magnitude adjustments. Ordinary finite
+arguments use the native scalar math backend with the shared double ABI.
+
+The V fixture contains 1,694 vectors measured from this Mac's libSystem,
+with finite accuracy independently checked using the installed MPFR library
+at 256-bit precision. It checks four rounding modes, existing exception flags,
+thread-local errno and eight concurrent callers. Normal results are checked
+within two representable steps of the reference in nearest rounding and three
+in directed modes; special values and exception effects are checked exactly.
+MPFR is used only to generate reference data and is not linked into the runner.
+LLVM inspection confirms all three IPA scalar-double calls and their branch
+islands at `0x101b9beac`, `0x101b9bd2c` and `0x101b9c02c`.
+
+`tests/ios/native-checks.v build-inverse-hyperbolic` builds the new fixture.
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering these
+functions, TLV destruction, dyld callbacks and native zlib bounds. Native/MPFR
+measurements, the preliminary rounding failure, pinned inputs, joined logs
+and eleven generated C/executable pairs are retained under
+`build/ios/fortnite/inverse-hyperbolic-checks`.
+
+That IPA probe gets past the inverse hyperbolic imports and stops at
+`_arc4random` from `libSystem.B.dylib`, still before application entry.
+Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now implements `_arc4random` and `_arc4random_buf`, and the existing
+`_arc4random_uniform` uses the same OS entropy reader. The typed APIs return
+an unsigned 32-bit word, fill exactly the requested `size_t` byte count, and
+use rejection sampling for bounded values. Zero and one bounds return zero.
+The adapters preserve errno and floating-point state, allocate no temporary
+buffers, and keep no userspace generator state or locks across fork. Buffers
+are filled in at most 256-byte `getentropy` calls through CommonCrypto's
+existing backend. Entropy failure terminates the call instead of returning
+uninitialized output; the void Darwin ABI cannot report an error.
+
+SDK declarations and typed calls into this Mac's libSystem confirm the ABI,
+zero-length null/protected buffers, errno and exception behavior. V/Mach-O/LLVM
+inspection confirms the IPA's unsigned word calls at `0x100077828` and
+`0x10007782c`, and its 8-byte buffer calls at `0x100546450` and `0x100546854`.
+
+`tests/ios/native-checks.v build-arc4random` builds the fixture. Eight host
+ASan/UBSan runs and four ARM64 Vinix suites pass, covering random APIs,
+inverse hyperbolic functions, TLV destruction and native zlib bounds. The
+random fixture checks both guarded buffer ends, zero/chunk/page boundaries,
+buffers above 16 MiB, all four rounding modes, sticky exception flags,
+thread-local errno, eight concurrent callers and fresh parent/child output
+after fork. Native measurements, IPA inspection, pinned inputs, joined logs
+and eleven generated C/executable pairs are retained under
+`build/ios/fortnite/arc4random-checks`.
+
+That IPA probe passes the random imports and stops at `_asl_add_log_file`
+from `libSystem.B.dylib`, before application entry. Its caller at `0x100083950`
+passes a stored client pointer and descriptor 2. Preliminary typed native ASL
+measurements are retained for the next adapter; no log messages were sent.
+Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now implements the ASL client profile imported by this IPA: `_asl_open`,
+`_asl_set_filter`, `_asl_add_log_file` and variadic `_asl_log`. `_asl_close`,
+`_asl_remove_log_file` and `_asl_vlog` share the same client implementation.
+Each client owns a copy of its sender/facility strings in one allocation;
+close and runtime shutdown free that allocation. Logging snapshots the filter,
+options and a bounded sender prefix under the registry lock, then formats and
+writes outside that lock. A concurrent close cannot invalidate the snapshot.
+
+Native libSystem calls establish the default filter of 63, 16-bit mask storage,
+out-of-range levels clamped to debug, preserved errno and explicit stderr's
+filter bypass. Vinix directs the filtered server stream to local stderr with
+an `ident: message` prefix. Legacy file attachments follow the measured modern
+libSystem behavior: valid client/nil handles accept descriptors without using
+or owning them; the SDK marks this functionality unsupported.
+
+A naked V ARM64 entry passes the incoming stack pointer to a fixed-signature
+V formatter. It supports printf scalar, string and pointer conversions with
+width/precision, including mixed integer/double arguments and output beyond
+the small stack buffer. Unsupported message objects, positional formats,
+long doubles, wide strings, `%n` and `%m` return failure explicitly. The profile
+limits formats to 65,535 bytes and output to 1 MiB. No Apple ASL library supplies
+guest logging.
+
+V/Mach-O/LLVM inspection confirms the IPA's open at `0x1000838c8`, filter at
+`0x1000838e4` and log at `0x100083ca4`. The log passes a nil message, a 32-bit
+level, `%s` at `0x10c7344bc` and one string pointer on the stack.
+`tests/ios/native-checks.v build-asl` builds the fixture.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering ASL,
+random APIs, TLV destruction and native zlib bounds. The ASL fixture checks
+real variadic calls, mixed scalar/string arguments, large output, filtered
+protected pointers, errno, 1,024 threaded client lifetimes and two runtime
+shutdown cycles. Native measurements, IPA inspection, the preliminary compiler
+failures, pinned inputs, joined logs and eleven generated C/executable pairs
+are retained under `build/ios/fortnite/asl-checks`.
+
+The fresh IPA probe resolves all four ASL imports and stops at `_backtrace`
+from `libSystem.B.dylib`, before application entry. The IPA's forwarding
+wrapper and preliminary guarded native backtrace measurements are retained
+for the next adapter. Fortnite remains unplayable and the full iOS regression
+is unpassed.
+
+V now implements `_backtrace` for ARM64 frame chains. A naked V entry captures
+the incoming frame pointer, return address and stack pointer before any
+compiler-generated frame. The V walker writes the immediate caller PC, then
+follows ascending, aligned, complete 16-byte frame records within the current
+thread's live stack bounds. It strips return-address authentication bits and
+frame-link top-byte tags, preserves interior null PCs and trims trailing null
+PCs. The walk allocates no storage and preserves errno and floating-point
+state. Zero or negative capacities return zero without touching the buffer;
+negative counts are a defensive policy, not the native unsigned-count behavior.
+
+The existing pthread stack-bounds bridge supplies the current stack range.
+If those bounds cannot be obtained, or the captured SP is outside them, the
+adapter returns only the caller PC. Alternate signal stacks, asynchronous
+Swift stack reconstruction, symbolication and DWARF/C++ exception unwinding
+remain unsupported. This adapter does not depend on ELF metadata for the
+application's mapped Mach-O frames.
+
+Typed native libSystem measurements and LLVM inspection confirm the pointer
+array/int32 ABI, frame decoding and trailing-null trimming. V/Mach-O/LLVM
+inspection follows the IPA's guarded forwarding wrapper at `0x104844e98` to
+actual callers, including fixed capacities of 100, 66 and 10 frames and a
+variable-capacity buffer. `tests/ios/native-checks.v build-backtrace` builds
+the new fixture.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering backtrace,
+ASL, TLV destruction and native zlib bounds. The backtrace fixture emits three
+real ARM64 call frames into executable memory and checks their exact return
+PCs against both native libSystem and the V adapter. It also checks guarded
+buffer ends, malformed/cyclic/tagged links, incomplete records at a guard
+page, all four rounding modes, sticky exception flags, preserved errno,
+512 concurrent captures and a forked child. Native measurements, IPA consumers,
+preliminary helper compiler failures, pinned inputs, joined logs and eleven
+generated C/executable pairs are retained under
+`build/ios/fortnite/backtrace-checks`.
+
+The fresh IPA probe passes `_backtrace` and stops at `_dispatch_data_create`
+from `libSystem.B.dylib`, before application entry. The IPA also imports
+`_dispatch_data_create_concat`; its callers create data with stack-block
+destructors, concatenate it and release the input objects. Preliminary typed
+native measurements establish default-buffer copying, the empty singleton,
+retained concatenation inputs and mapped subrange bytes for the next adapter.
+Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now implements `_dispatch_data_create` and `_dispatch_data_create_concat`,
+with `_dispatch_data_get_size`, `_dispatch_data_create_map` and the empty-data
+global sharing the same owned representation. Default creation copies the
+input bytes. Custom block destructors borrow them, promote the block captures
+and retain the supplied queue (or use the default global queue). Concatenation
+retains both immutable inputs without copying their bytes. Mapping a leaf
+retains that leaf; mapping a composite creates a contiguous owned copy.
+
+Normal final release schedules a custom destructor on its queue exactly once.
+Zero-length creation returns the immortal empty singleton and still schedules
+its custom destructor. Block calls and dispose helpers run outside the
+scheduler mutex and can release other data or query the runtime. Shutdown
+joins workers, invokes pending cancellation destructors, then disposes any
+remaining application captures while their data buffers are still valid.
+Remaining shutdown callbacks run synchronously before Objective-C storage and
+application mappings retire. Graph traversal and destruction use iterative
+walks rather than recursive calls through concatenation nodes.
+
+Data uses the measured eight-byte Objective-C facade:
+`OS_dispatch_data_empty` → `OS_dispatch_data` → `_NSDispatchData` → `NSData`.
+Dispatch, Objective-C and Swift unknown-object ownership share the data
+registry; generic allocation and isa replacement are rejected. The supported
+Objective-C messages cover identity, class queries and ownership. NSData byte
+methods, weak references, subranges, region iteration and named FREE/MUNMAP
+destructor globals remain unsupported; no native dispatch library supplies
+the guest data implementation.
+
+Native libSystem calls establish copy/borrow behavior, capture promotion,
+queued destruction, empty-data identity and the class hierarchy. V/Mach-O/LLVM
+inspection confirms creation with a stack-block destructor at `0x1078a9f8c`
+and concatenation followed by releases of both inputs at `0x101fbeaac`.
+`tests/ios/native-checks.v build-dispatch-data` builds the new fixture.
+
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering dispatch
+data, dispatch queue Objective-C ownership, TLV destruction and native zlib
+bounds. The data fixture compares the native APIs, checks promoted captures,
+queued/empty/shutdown destructor paths, guarded zero buffers, all four rounding
+modes, sticky exception flags, errno, 1,024 concurrent lifetimes, 4,096-node
+ropes, mapped byte order and three drained runtime lifetimes. Native references,
+IPA inspection, the initial invalid native-queue test and corrected runs,
+pinned inputs, joined logs and eleven generated C/executable pairs are retained
+under `build/ios/fortnite/dispatch-data-checks`.
+
+The fresh IPA probe passes both dispatch-data imports and stops before entry
+at `_dispatch_get_specific` from `libSystem.B.dylib`. Preliminary native
+measurements confirm pointer keys, local direct lookup, target-chain
+inheritance during current-queue lookup, child overrides and nil removal for
+the next adapter. Fortnite remains unplayable and the full iOS regression is
+unpassed.
+
+V now implements `_dispatch_get_specific`, `_dispatch_queue_set_specific` and
+`_dispatch_queue_get_specific`. Keys are compared as pointer identities without
+reading their memory. Direct lookup reads one queue; current-queue lookup
+follows its target chain, including child overrides and inheritance restored
+by nil removal. The main thread denotes the main queue outside callbacks.
+Native measurements also distinguish implicitly targeted serial queues from
+queues explicitly targeting the public default global queue; Vinix now keeps
+those roots separate so their associations stay independent.
+
+Each nonnull association owns one entry. Replacement, removal and the queue's
+last release retire its old destructor on the default global concurrent queue.
+Replacing an unchanged pointer still retires the previous association. Nil
+keys are ignored; nil contexts ignore the supplied new destructor. Queued work
+keeps its queue and associations alive through callback completion. Callbacks
+run outside the scheduler lock and can query or modify other associations.
+Lookup allocates no temporary storage, and the V entry points preserve errno
+and floating-point state.
+
+Shutdown joins workers and invokes cancelled owned destructors, then drains
+remaining main/global/application queue associations while Objective-C and
+application storage remain live. Remaining shutdown destructors run
+synchronously; new nonnull associations are rejected during that phase.
+Nested synchronous dispatch restores the caller's current-queue TLS value.
+
+V/Mach-O/LLVM inspection confirms the IPA's lookup at `0x100007544` and setter
+at `0x1000070dc`, with additional consumers using the same pointer-key ABI.
+`tests/ios/native-checks.v build-dispatch-specific` builds the fixture.
+Eight host ASan/UBSan runs and four ARM64 Vinix suites pass, covering specific
+contexts, dispatch data, queue Objective-C ownership and native zlib bounds.
+The new fixture compares native lookup/lifetime behavior, exercises protected
+keys, main/global/foreign threads, nested dispatch, all four rounding modes,
+sticky exceptions, 1,024 concurrent association lifetimes, queued-work retention,
+reentrant destructor queries, deterministic cancellation and two drained
+shutdowns. Native measurements, preliminary measurement/compiler failures,
+pinned inputs, joined logs and eleven generated C/executable pairs are retained
+under `build/ios/fortnite/dispatch-specific-checks`.
+
+The fresh IPA probe passes both required queue-specific imports and stops
+before entry at `_dispatch_group_async` from `libSystem.B.dylib`. Preliminary
+native group measurements cover membership, empty/immediate waits, asynchronous
+work and completion notification for the next adapter. Fortnite remains
+unplayable and the full iOS regression is unpassed.
+
+V now implements `_dispatch_group_create`, `_dispatch_group_enter`,
+`_dispatch_group_leave`, `_dispatch_group_wait`, `_dispatch_group_async` and
+`_dispatch_group_notify`, plus the two function-pointer submission variants.
+Native Mac measurements and the supplied IPA's six required imports establish
+the function and Apple Blocks ABIs. The async import cell is `0x10dc9a660`,
+with a stack-block caller at `0x10000bfb4`; other callers submit global blocks.
+Creation is also visible at `0x103ccaae4`.
+
+A nonempty group owns an internal membership reference. Submissions enter
+before publishing queue work, promote stack blocks, and leave after both the
+callback and copied-block disposal return. Explicit enter/leave pairs preserve
+the group after its external owner releases it. Waits support immediate,
+monotonic, wall-clock and infinite deadlines, with generation tracking so a
+completed wait cannot become attached to a later reuse. Pending notifications
+retain their destination queue and copied block, then submit ordinary queue
+work when the group becomes empty. Empty-group notifications still enqueue
+asynchronously. Capture helpers and notification callbacks run outside the
+scheduler mutex.
+
+The native `OS_dispatch_group` → `OS_dispatch_object` → `OS_object` →
+`NSObject` hierarchy has an eight-byte public instance size. Vinix publishes
+that facade while keeping ownership, membership and callbacks in its private
+registry. ObjC and Swift unknown-object ARC use the registry, and generic
+construction or isa replacement remains rejected. Context and finalizer APIs
+also recognize groups. Shutdown joins workers, cancels queued members, and
+disposes pending notification captures before block/class metadata is retired;
+unbalanced explicit membership is discarded with remaining image storage.
+The separately bounded Swift `DispatchQueue.async` overlay still requires a
+nil group.
+
+`tests/ios/native-checks.v build-dispatch-group` builds the fixture. Eight final
+host ASan/UBSan runs and four ARM64 Vinix suites pass for groups, queue-specific
+contexts, dispatch data and queue ObjC ownership. The new native/V comparisons
+cover 1,024 concurrent submissions, nested work, stack/global blocks, copied
+capture disposal before completion, early external release, queued notification
+ownership, reused generations, deadline clocks and floating-point state.
+Vinix checks additionally cover main-queue delivery, ObjC/Swift ownership and
+two complete cancellation/shutdown lifetimes. Native measurements, IPA consumer
+inspection, preliminary runs, pinned inputs, joined logs and eleven generated
+C/executable pairs are retained under
+`build/ios/fortnite/dispatch-group-checks`.
+
+The fresh IPA probe passes all six group imports and stops before application
+entry at `_dispatch_resume`. Its inspected callers configure timer sources
+and event-handler blocks before resuming them. A native scout verifies that
+timer sources begin suspended, resume activates their deadline, event data
+counts expirations, and cancellation runs its handler after the event callback.
+Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now implements timer-source creation, timer configuration, event/cancel
+handlers in Blocks and function-pointer forms, cancellation queries and source
+data/handle/mask access. `_dispatch_resume` activates a newly created source;
+`_dispatch_suspend` and later resumes maintain a balanced suspension count.
+The same calls suspend queues, including their serial target descendants.
+`_dispatch_set_target_queue` supports inactive sources and idle application
+queues, retaining their new targets and rejecting cycles or changes that would
+invalidate running work.
+
+Timers use the existing dispatch workers, scheduler condition and queue jobs.
+One-shot and repeating timers preserve monotonic or wall-clock deadlines,
+coalesce missed expirations, and prevent concurrent invocation of one source
+even on a concurrent target. Reconfiguration clears accumulated pending data.
+Forever deadlines disarm delivery; zero intervals become one nanosecond. The
+timer flag profile accepts ordinary and strict timers and fires at the requested
+deadline without adding a deliberate leeway delay. Other source kinds remain
+unsupported.
+
+Handler updates are queued within the source. Event functions receive the
+context captured when registration takes effect, while cancel functions receive
+the source context current at delivery. Updates submitted during an event may
+take effect after the source yields its target queue. Copied blocks and the
+source's target queue remain owned until replacement, cancellation or shutdown.
+Explicit cancellation suppresses future events and delivers its handler after
+any running event returns. Cancellation before activation or during suspension
+waits for a resume. Native measurements also show that the last external release
+implicitly cancels an active source without invoking its cancel handler.
+
+The eight-byte `OS_dispatch_source` facade inherits from `OS_dispatch_object`.
+ObjC and Swift unknown-object ARC use separate external and internal source
+references. Queue work pins the source through callback return and capture
+disposal. Shutdown joins workers, cancels queued jobs and disposes all remaining
+handler updates/captures before retiring class metadata or application storage;
+sources remain registered while cross-source capture cycles are dismantled.
+
+`tests/ios/native-checks.v build-dispatch-source` builds the new fixture. Ten
+host ASan/UBSan runs and five ARM64 Vinix suites pass for timer sources, groups,
+queue-specific contexts, dispatch data and queue ObjC ownership. Native/V tests
+exercise deferred contexts, handler replacement during execution, copied block
+ownership, 128 concurrent source lifetimes, one-shot rearming, clock domains,
+suspension, nonreentrant callbacks, explicit/implicit cancellation and floating
+state. Vinix additionally tests source/queue targets, main delivery, ObjC/Swift
+ownership and two shutdowns with queued and cyclic captures. The sanitizer run
+identified a mutable-map pointer lowering issue in the V compiler; scheduler
+loops now bind each stored pointer to a local before passing it to a helper.
+Generated-C checks verify that those calls receive source storage rather than
+the address of a map slot.
+
+V/Mach-O/LLVM inspection locates timer creation at `0x100007b8c` and balanced
+suspension at `0x1000156d0`. Native measurements, initial invalid test
+assumptions and the sanitizer failure, corrected runs, pinned inputs, joined
+logs and thirteen generated C/executable pairs are retained under
+`build/ios/fortnite/dispatch-source-checks`.
+
+The fresh IPA probe passes eight more required imports and stops before
+application entry at `_dispatch_semaphore_create`. A native scout verifies token
+consumption, immediate timeout value 49, signaling with and without a blocked
+waiter, and balanced release. The initial scouts released unbalanced
+semaphores and trapped; the invalid-count case was not isolated in those runs.
+They are preserved separately. Fortnite remains unplayable and the full iOS
+regression is unpassed.
+
+V now implements `_dispatch_semaphore_create`, `_dispatch_semaphore_wait` and
+`_dispatch_semaphore_signal`. Negative creation returns null; a positive initial
+count permits that many immediate acquisitions. Empty waits support immediate,
+monotonic, wall-clock and forever deadlines, returning Darwin timeout value 49.
+A signal grants exactly one registered waiter or adds one available token, and
+returns whether it woke a waiter. The scheduler mutex serializes grants and
+timeout removal, so a timed-out wait cannot consume a later signal. Each wait
+record stays on its thread's stack, with no allocation on the wait/signal path.
+
+The eight-byte `OS_dispatch_semaphore` facade inherits from
+`OS_dispatch_object`; dispatch, ObjC, Swift unknown-object ARC and copied Block
+captures share its ownership. Contexts and finalizers use the existing dispatch
+object APIs. Final release requires all waits to have returned and the original
+token balance to have been restored, then schedules its finalizer outside the
+mutex. Shutdown disposes queued captures before freeing remaining semaphore
+storage. Generic ObjC allocation remains rejected. A new isolated native test
+corrects the earlier invalid-count note: negative creation returns null, while
+releasing a consumed positive-count semaphore traps.
+
+`tests/ios/native-checks.v build-dispatch-semaphore` builds the fixture. Ten host
+ASan/UBSan runs and five ARM64 Vinix suites pass for semaphores, timer sources,
+groups, dispatch data and queue ObjC ownership. The semaphore suite compares
+native and V behavior for eight blocked waiters, 2,048 handoffs through a
+three-token resource pool, 64 timeout/signal races, timer callback signaling,
+stack Block captures, contexts/finalizers and floating-point state. Vinix also
+checks ObjC/Swift ownership, unbalanced-release diagnosis and two drained
+shutdowns. Generated-C review found and corrected V heap promotion of the wait
+record; the first passing cohort is retained alongside the corrected runs.
+
+V/Mach-O/LLVM inspection finds creation at `0x10214f270` followed by
+`MKW_GetCurrent` and a forever wait at `0x10214f2a4`. Native reference results,
+pinned inputs, joined logs and thirteen generated C/executable pairs are under
+`build/ios/fortnite/dispatch-semaphore-checks`. The fresh IPA probe passes all
+three semaphore imports and stops before application entry at `_div`. A native
+scout verifies its signed 32-bit arguments and eight-byte quotient/remainder
+result. Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now implements `_div` with Darwin ARM64's eight-byte `div_t`: signed
+32-bit quotient and remainder fields return together in `x0`. Results truncate
+toward zero, and a nonzero remainder has the numerator's sign. The adapter
+uses integer arithmetic without allocations or changes to errno, rounding mode
+or sticky floating-point flags. Explicit branches reproduce the measured ARM64
+results for zero divisors and `INT_MIN / -1`, without evaluating undefined C
+division in the generated code. Those inputs remain outside the C language
+contract; their behavior here follows the native ARM64 library.
+
+LLVM inspection of this Mac's `div` confirms 32-bit `SDIV`/`MSUB` arithmetic
+and packing into `x0`. V/Mach-O/LLVM inspection finds Fortnite's call at
+`0x10027279c`, followed by a shift extracting the remainder from the upper
+32 bits. `tests/ios/native-checks.v build-division` builds the new fixture. Two
+host ASan/UBSan runs and the ARM64 Vinix suite pass for signed boundaries,
+exhaustive small operands, 32,768 full-width pairs, native oracle comparisons,
+four rounding modes and eight concurrent callers. A machine-code call probe
+checks dirty upper input bits, packed return fields, a protected indirect-result
+address, a callee-saved register and output canaries.
+
+Native measurements, disassembly, the corrected test pointer-cast build failure,
+pinned inputs, joined logs and five generated C/executable pairs are retained
+under `build/ios/fortnite/division-checks`. The fresh IPA probe passes `_div`
+and stops before application entry at `_exception_raise`. Native exception
+client scouts verify the three client signatures and invalid-destination errors
+without invoking a live exception server. Mach exception delivery remains
+unimplemented. Fortnite remains unplayable and the full iOS regression is
+unpassed.
+
+V now resolves `_exception_raise`, `_exception_raise_state` and
+`_exception_raise_state_identity` for the current Mach task/thread/semaphore
+namespace. The clients check the native limits of two signed 32-bit exception
+codes and 1,296 unsigned 32-bit state words before port lookup, returning
+`MIG_ARRAY_TOO_LARGE` for oversized inputs. Missing or dead destinations return
+`MACH_SEND_INVALID_DEST`; missing descriptor rights return
+`MACH_SEND_INVALID_RIGHT`. Live kernel ports reject the RPC with the measured
+`KERN_FAILURE` or `KERN_INVALID_ARGUMENT`, preserving inputs, outputs, flavor,
+count, send references, semaphore credits, errno and floating-point state.
+Destroying a semaphore preserves any retained send rights until their last
+reference is dropped. Native Mac ports use the native transport in host tests.
+
+This is a client validation and kernel-port error subset: Vinix still has no
+public Mach receive ports, user exception-message delivery or kernel fault
+interception. V/Mach-O/LLVM inspection finds Fortnite's three forwarding calls
+at `0x1000b459c`, `0x1000b4650` and `0x1000b4618`, including the state clients'
+ninth through eleventh arguments on the stack.
+`tests/ios/native-checks.v build-mach-exception` builds the fixture. Two host
+ASan/UBSan runs and the
+ARM64 Vinix suite pass for bounds and error precedence, live/retired rights,
+ownership, eight concurrent callers, fork and two image teardowns. Generated-C
+review verifies stack temporaries, lock release and no new adapter allocations.
+
+Native measurements, failed test assumptions and their corrections, joined
+logs, pinned inputs and five final generated C/executable pairs are retained
+under `build/ios/fortnite/mach-exception-checks`. The IPA probe passes all three
+client imports and stops before entry at `_flock`. Native RE verifies its
+locking flags and Fortnite's nonblocking unlock at `0x1005a752c`. Fortnite
+remains unplayable and the full iOS regression is unpassed.
+
+V now resolves `_flock` for regular files and directories using native kernel
+locks. The adapter reproduces Darwin's unlock-before-exclusive-before-shared
+flag precedence, ignores unknown bits, preserves the nonblocking bit and maps
+contention to Darwin `EWOULDBLOCK` (35). Invalid operations on valid files report
+`EBADF`; pipes and sockets report `ENOTSUP` before operation validation. Kernel
+open descriptions retain ownership through dup and fork, wake blocking waiters,
+and release locks on last close. The adapter adds no allocation or lifetime state.
+
+This remains a Linux lock backend: a failed shared-to-exclusive conversion can
+drop the shared lock, and flock/POSIX record locks have separate conflict domains.
+Native Darwin retains the shared lock and makes those lock domains interact.
+Device locks remain unsupported on Vinix and return `ENOTSUP`.
+
+`tests/ios/native-checks.v build-flock` builds the fixture. Two host ASan/UBSan
+runs and the ARM64 Vinix suite pass for 80 flag combinations, real contention
+and blocking wakeup, directories, read/write access, descriptor errors, dup/fork
+ownership, dirty upper ARM64 arguments, ordinary status flags, contents, offsets,
+errno, floating-point state and eight concurrent callers. The tests account for
+the Mac's additional `F_GETFL` bit after flock. Worker fixtures are opened before
+the concurrent calls; the initial guest fixture-open failure is retained.
+
+Native reference measurements, the failed attempts, joined logs, pinned inputs
+and five final generated C/executable pairs are under
+`build/ios/fortnite/flock-checks`. V/Mach-O/LLVM inspection confirms Fortnite's
+nonblocking unlock at `0x1005a752c`. The fresh IPA probe passes `_flock` and stops
+before entry at `_getprogname`. Native RE verifies its stable borrowed basename
+pointer. Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now resolves `_getprogname` from the main image's original `argv[0]`.
+Startup installs a borrowed basename pointer before dependency binding and
+initializers; it remains available through entry, joined workers and teardown.
+Later edits to the original bytes remain visible, while replacing the argv cell
+or introducing another slash does not recompute the pointer. The bounded scan
+stops at the first NUL, handles empty and trailing-slash names, and adds no
+allocation. Calls without a configured image fail explicitly. Native Darwin
+measurements and LLVM disassembly verify its stored-pointer behavior.
+
+`tests/ios/native-checks.v build-progname` builds the regression fixture.
+Two host ASan/UBSan runs and the ARM64 Vinix suite pass for guarded read-only
+inputs, long and UTF-8 names, embedded NULs, mutable aliases, errno and
+floating-point state, eight concurrent readers, import scoping and invalid
+lifecycle states. A generated ARM64 Mach-O binds the real import and verifies
+initializer, entry and destructor callbacks over two complete executions,
+including replacement of its argv cell. Generated C review confirms the bounded
+scan, borrowed lifetime and initialization order.
+
+Native references, joined logs, pinned inputs and five generated C/executable
+pairs are retained under `build/ios/fortnite/progname-checks`. Failed fixture
+attempts are retained: the legacy import table initially lacked its nlist entry,
+and an incorrect ADRP displacement reached the wrong page. LLVM verifies all
+three corrected callback stubs in both executed host fixtures. The fresh IPA
+probe passes `_getprogname` and stops before entry at `_host_page_size`.
+V/Mach-O/LLVM inspection identifies its call at `0x1005a715c` for the next
+adapter. Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now resolves `_host_page_size` from the same writable cache exported as
+`_vm_page_size`. Native ARM64 disassembly shows that Darwin's public function
+ignores the host port, stores the cached eight-byte `vm_size_t` and returns
+success. The V adapter follows that behavior using Vinix's page size, preserves
+errno and floating-point state, and adds no allocation or port lifetime.
+
+`tests/ios/native-checks.v build-host-page-size` builds its fixture. Two host
+ASan/UBSan runs and the ARM64 Vinix suite pass for native comparison, null/dead/
+unknown port names, dirty upper argument bits, guarded aligned and unaligned
+outputs, adjacent canaries, cache changes and aliasing, eight concurrent callers,
+import scoping and two system-data lifecycles. Explicit byte-copy casts avoid
+typed alignment checks; the initial sanitizer failure and its correction are
+retained. Generated C review verifies the stack snapshot and exact eight-byte
+copy. Unconfigured calls fail explicitly.
+
+Measurements, joined logs, pinned inputs and five generated C/executable pairs
+are retained under `build/ios/fortnite/host-page-size-checks`. The fresh IPA probe
+passes `_host_page_size` and stops before entry at `_host_statistics`. Native
+statistics count negotiation, port/flavor errors and output extents are retained
+for the next adapter. Fortnite remains unplayable and the full iOS regression
+is unpassed.
+
+V now resolves `_mach_host_self`, `_host_statistics` and `_host_statistics64`.
+The Vinix host send right has reference counts, shared namespace locking,
+atomic name publication and names that survive neither last-reference removal
+nor image retirement. Port type/ref queries, reference modification, deallocation,
+exception arguments and wrong-type semaphore operations recognize it. Forked
+children acquire a fresh host right. The Mac backend uses native host rights
+and statistics calls.
+
+The Vinix statistics subset supports `HOST_VM_INFO` through both functions and
+`HOST_VM_INFO64` through the 64-bit function. Native count negotiation selects
+12/14/15-word legacy revisions and 24/38/40/62-word 64-bit revisions. Short
+buffers and invalid destinations/flavors return the measured errors without
+changing output. A bounded `/proc/meminfo` parser rejects malformed, duplicate
+and overflowing mapped fields. Output copies use the negotiated word count;
+64-bit counters retain their upper words and legacy counters saturate.
+
+Vinix lacks Darwin's active/inactive page queues. This adapter reports resident
+file cache as inactive, kernel slab as wired, and remaining resident pages as
+active, with bounded totals and separate compressed-storage counts. Available
+Vinix page-in/page-out counters are mapped; unsupported lifetime and tagging
+counters remain zero. These are approximate classifications of Vinix memory.
+Other host-statistics flavors remain unsupported on Vinix.
+
+`tests/ios/native-checks.v build-host-statistics` builds the fixture. Two host
+ASan/UBSan runs and the ARM64 Vinix suite pass for guarded revision layouts,
+parser failures, counter saturation, dirty upper arguments, errno/floating-point
+state, eight concurrent callers, host references, fork isolation and two
+lifecycles. Existing Mach thread, semaphore and exception host suites also pass
+twice under ASan/UBSan. The initial host exception fixture mixed native and
+synthetic task names; its failed attempt and the corrected fixture are retained.
+Generated C review verifies stack buffers and no added allocation lifetime.
+
+Native measurements, joined logs, pinned inputs and eight generated C/executable
+pairs are under `build/ios/fortnite/host-statistics-checks`. The fresh IPA probe
+passes all three imports and stops before entry at `_logbf`. Fortnite remains
+unplayable and the full iOS regression is unpassed.
+
+V now resolves `_logbf` with scalar float ABI and exact finite exponents.
+Normal and subnormal inputs use integer bit inspection, so flush-to-zero does
+not turn a nonzero input into a pole. Both signed zeros return negative infinity
+and raise divide-by-zero. Infinities and NaNs use the native ARM64 floating
+multiply: signaling NaNs raise invalid, payloads/signs survive normally, and
+default-NaN mode produces the canonical positive NaN. Errno, rounding controls
+and previously raised flags are preserved. The adapter allocates nothing and
+does not call a logarithm backend.
+
+`tests/ios/native-checks.v build-logb` builds the regression fixture. Two host
+ASan/UBSan runs and the ARM64 Vinix suite pass for every finite exponent class,
+both signs, subnormal boundaries, zero poles, NaN cases, four rounding modes,
+all combinations of flush-to-zero/default-NaN controls, sticky flags and eight
+concurrent callers. The host suite also runs these cases against native `logbf`.
+Generated C and both optimized runner binaries are reviewed; LLVM confirms
+single-precision special-value multiplication and the explicit zero exception.
+
+Native references, joined logs, pinned inputs and five generated C/executable
+pairs are under `build/ios/fortnite/logb-checks`. The IPA's color-packing call at
+`0x10063b454` consumes the float result before `ldexpf`. The fresh probe passes
+`_logbf` and stops before entry at `_mach_make_memory_entry_64`. Its call sites
+and native permission/size negotiation and shared aliases are measured for the
+next adapter. Fortnite remains unplayable and the full iOS regression is unpassed.
+
+V now resolves `_mach_make_memory_entry_64`, `_vm_map` and `_vm_page_mask`.
+Named entries retain independent backing descriptors, with send-right type/ref
+queries, reference changes, deallocation and retired names. Exception arguments,
+host statistics and wrong-type semaphore operations recognize these rights.
+One namespace lock protects mappings, entries and fork cleanup. Dropping the last
+right closes its descriptor and frees the entry; mapped aliases remain valid.
+
+The current-task subset exports regions allocated or mapped by the compatibility
+VM, rounds unaligned source ranges, returns the available part of a source region,
+and supports restricted child entries. Shared mappings alias the same bytes.
+Copy mappings take an eager backing snapshot, so later writes to either mapping
+stay separate. Protection limits are checked and retained by remaps. Fixed
+replacement requires a fully owned destination range; splitting and deallocation
+retain the surviving backing offsets. Foreign malloc/mmap regions, cross-task
+export, memory-entry flags, alignment masks, other inheritance modes and executable
+anonymous mappings remain unsupported. The existing four-GiB mapping limit remains.
+BSD fixed mmap, munmap and mprotect reject overlapping compatibility VM regions
+with `ENOTSUP`, preventing stale ownership records; ordinary BSD regions retain
+their existing behavior.
+
+`tests/ios/native-checks.v build-memory-entry` builds the fixture. Native Mach
+measurements, eight host ASan/UBSan runs and the ARM64 Vinix fixture cover region
+negotiation, parent slices, reference ownership, alias/snapshot independence,
+read-only replacements, split deallocation, remap protection limits, errno,
+eight concurrent callers, fork and image retirement. The host runs include the
+existing thread, semaphore and exception suites. Generated C review checks entry
+allocation/free, descriptor cleanup, lock coverage and temporary snapshot views.
+The Mac's POSIX shared-memory descriptors reject `pread`/`pwrite`; the initial
+failed attempt and its mapped-view correction are retained.
+
+Evidence and compressed generated C/executables are under
+`build/ios/fortnite/memory-entry-checks`. LLVM inspection confirms the IPA's
+entry calls at `0x1000b1cb8` and `0x1000b1d44`, followed by read-only copy mapping
+over an allocated destination and immediate send-right removal. The fresh probe
+passes these three imports and stops before entry at `_mach_msg`. Fortnite remains
+unplayable and the full iOS regression is unpassed.
+
+V now provides `_mach_msg`, receive-port allocation, same-name `MAKE_SEND` right
+insertion and port destruction. The process-local transport accepts inline
+`COPY_SEND`, `MOVE_SEND` and `MAKE_SEND` messages without transferred reply or
+voucher rights. It has a five-message FIFO queue, a 64-KiB message limit, blocking
+send/receive and millisecond timeouts. The caller's buffer is copied before a
+send waits for space. Receives return the Darwin header and minimum eight-byte
+trailer, including exact partial output for undersized buffers.
+
+`MACH_RCV_LARGE` retains the message for retry and reports only fields that fit.
+Ordinary oversized receives discard the message and return a header-only result.
+Timed-out sends return their in-transit right: copy/make sends gain a reference,
+move sends restore theirs, and the returned header permits a move-send retry.
+Native measurements also show that removing a receive right wakes receivers
+with `MACH_RCV_PORT_CHANGED`, while an already blocked send succeeds and discards
+its message when the destination is destroyed. The adapter follows these rules.
+
+Port type/ref queries, send/dead references, receive-right removal and last-right
+cleanup share the existing namespace. Call pins keep objects alive across waits;
+destruction wakes callers and frees queued packets. Pending sender copies are
+tracked from allocation through enqueue or failure. Fork freezes the queues and
+retires the child's inherited namespace. Image teardown checks for active calls
+before freeing packets and native synchronization objects. Host-statistics and
+exception RPCs to these user ports reject unsupported delivery explicitly.
+Cross-process transport, complex descriptors, transferred reply/voucher
+rights, alternate trailers and kernel exception delivery remain
+unsupported. Only the measured message options are accepted.
+
+`tests/ios/native-checks.v build-mach-message` builds the fixture. Ten host
+ASan/UBSan runs include native Mach comparison and the existing memory-entry,
+thread, semaphore and exception suites. The ARM64 Vinix fixture covers guarded
+output extents, queue pressure, retry ownership, FIFO payloads, blocking sends,
+eight receivers, retirement, errno, fork with blocked send/receive and queued data,
+import scope and two image lifecycles. Generated C review checks packet and port
+ownership, reference credits, lock order, stack copies and teardown order.
+
+Native probes, retained failed assumptions, joined logs, pinned inputs and
+compressed generated C/executables are under `build/ios/fortnite/mach-message-checks`.
+LLVM inspection confirms Fortnite's receive loop at `0x1000b416c`, stop send at
+`0x1000b46fc` and reply forwarding call at `0x1000b4894`. The fresh import probe
+passes `_mach_msg` and stops before entry at `_mach_port_move_member`. Fortnite
+remains unplayable and the full iOS regression is unpassed.
+
+The V adapter now also allocates port sets and implements
+`mach_port_move_member`. Fortnite's constructor attaches two receive ports to
+one set before starting the receive loop above. Membership moves preserve the
+member queues; removing a member from no set returns `KERN_NOT_IN_SET`.
+Set receives rotate between ready member queues while retaining FIFO order
+within each port. Successful receives and `MACH_RCV_LARGE_IDENTITY` identify
+the member port. An oversized `MACH_RCV_LARGE` receive retains the packet but
+still rotates that member behind the other ready queues, as measured on macOS.
+Direct receives remain available while a port belongs to a set.
+
+Port-set type/ref queries, removal through destroy/mod-refs/deallocate and
+blocked receiver wakeups follow native measurements. Set destruction preserves
+the member ports and queued messages. Namespace locking, call pins and queue
+guards protect selection against concurrent direct receives, membership changes
+and destruction. A sender releases its queue guard before notifying the set;
+the receiver holds the set guard across the empty scan and condition wait.
+Membership adds no allocation. Fork and image retirement use the existing
+queue ownership and synchronization cleanup. Multiple simultaneous memberships
+through `mach_port_insert_member`, transferred rights and cross-process message
+transport remain unsupported.
+
+`tests/ios/native-checks.v build-mach-port-set` builds the port-set fixture.
+Native comparisons cover rights, error precedence, ready queue selection,
+oversized retry and guarded output extents. Sanitizer and ARM64 checks exercise
+blocked receivers, sender pressure, membership changes, destruction, errno,
+fork and image retirement. Evidence is retained under
+`build/ios/fortnite/mach-port-set-checks`. The fresh Fortnite probe passes
+`_mach_port_move_member` and stops before entry at
+`_mach_port_request_notification`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+The V adapter now implements `mach_port_request_notification` for
+`MACH_NOTIFY_NO_SENDERS` (70), the request made by Fortnite at `0x1000b3f88`.
+Native measurements establish the `sync` gate, make-send count, one-shot delivery,
+replacement/cancellation and the 36-byte notification ABI. Ordinary messages
+retain their destination send rights while queued, so the notification fires
+after the last such message is received or discarded. A retained oversized
+receive keeps that right. Timed-out sends restore their user reference and
+retain the measured make-send count.
+
+Each request reserves its send-once right and notification packet. Delivery
+allocates nothing and bypasses the ordinary queue limit, as Darwin does.
+Replacement and cancellation return owned send-once names; deallocation or
+source destruction sends `MACH_NOTIFY_SEND_ONCE` (71). Returned rights support
+type/ref queries, removal, reuse with `MOVE_SEND_ONCE`, dead-name conversion
+and inline send-once messages. Dead targets are retained only while a right
+still needs their state. Namespace locking, target references and atomic
+in-transit counts preserve ownership through concurrent receives and ref drops.
+Fork and image teardown retire internal/exported rights before their targets.
+Other notification families and send-right notification descriptors explicitly
+return `KERN_NOT_SUPPORTED`; transferred reply rights and complex descriptors
+remain unsupported.
+
+`tests/ios/native-checks.v build-mach-notification` builds the fixture.
+The public driver now routes registered individual build commands through the
+fixture table and rejects unknown fixture names.
+Fourteen host ASan/UBSan runs and the ARM64 Vinix fixture cover native ABI
+comparisons, guarded output, queue ownership, retry/discard, saturation, full
+queues, dead targets, eight set receivers, concurrent ref drops, errno, fork
+and two image lifecycles. Generated C review checks the reserved packet and
+target ownership, atomic counts, lock order and cleanup. Evidence is under
+`build/ios/fortnite/mach-notification-checks`. The fresh Fortnite probe passes
+`_mach_port_request_notification` and stops before entry at `_madvise`.
+Fortnite remains unplayable and the full iOS regression is unpassed.
+
+The V `madvise` adapter now translates Darwin's advice values and outward page
+rounding to Vinix's Linux ABI. It supports normal/random/sequential/will-need
+hints, non-destructive `MADV_DONTNEED`, private anonymous `MADV_FREE` and
+`MADV_FREE_REUSABLE`, and `MADV_FREE_REUSE`. Free/reusable eagerly discard the
+permitted contents, so reuse cannot leave a lazy-free page eligible for later
+reclamation. Whole-range mapping, protection and backing validation precedes
+discard; holes, overflow and failures preserve the measured errno behavior for
+the supported profile. Shared Mach aliases and file mappings explicitly reject
+free/reusable with `ENOTSUP` rather than losing their shared backing. Wired-page
+zeroing, reusable-state queries, pageout and zero-page advice remain unsupported
+on Vinix. macOS validation uses the native implementation.
+
+`tests/ios/native-checks.v build-madvise` builds the fixture. Native measurements,
+four host ASan/UBSan runs and the ARM64 Vinix fixture cover unaligned/empty
+ranges, overflow, holes, protection, contents after reuse, actual eager discard,
+shared aliases, file guards, long mapping names, errno and two image lifetimes.
+The existing Mach memory-entry regression also passes under the host sanitizers.
+Generated C review checks the scalar ABI, bounded stack parsing, complete-range
+validation, namespace locking and absence of retained allocations. Evidence is
+under `build/ios/fortnite/madvise-checks`. The fresh Fortnite probe passes
+`_madvise` and stops before entry at `_malloc_create_zone`, called with a 4 MiB
+initial size at `0x10489c068`. Fortnite remains unplayable; the full iOS regression
+is unpassed.
+
+The V allocator now implements Fortnite's seven malloc-zone imports: creation,
+destruction, allocation, realloc, free, exact pointer lookup and consistency
+checks. Zones expose the version-5 ARM64 callback table, including size, calloc,
+page-aligned allocation and memalign. Their introspection table supplies size
+rounding, consistency checks, locking and statistics; remote enumeration and
+debug printing/logging remain unsupported. Creation accepts the measured zero
+flags; the initial size is an allocation hint.
+
+A hash table and per-zone lists track payload ownership without reading guest
+memory or adding private headers to returned blocks. Imported malloc, calloc,
+realloc, strdup and posix_memalign use an embedded default zone. Global free and
+realloc recognize custom-zone blocks, and malloc_size reports their tracked
+capacity. Failed resize preserves the original bytes and ownership. Zero-sized
+allocations and realloc return usable storage. NSData and CMBlockBuffer disposal
+remove tracked ownership before freeing transferred guest buffers. Zone lookup
+covers allocations through these adapters; allocations made inside native
+bridge/C++ libraries are outside that registry, while existing native-pointer
+free/realloc/size operations retain their native fallback.
+
+The namespace gate serializes heap metadata and already spans fork, so child
+allocations remain independently usable. Zone destruction reclaims outstanding
+blocks; image retirement also releases the default heap and zone headers.
+`tests/ios/native-checks.v build-malloc-zone` builds the fixture. Ten host
+ASan/UBSan runs cover the allocator, libSystem, Mach memory entries, block
+buffers and Objective-C storage. Native allocator measurements run separately
+from ASan's allocator interposition; the existing native class-lifetime fixture
+is rebuilt for this cohort. The ARM64 fixture covers callback layout, ownership,
+alignment, failure, transferred buffers, eight callers, fork and two image
+lifetimes. Generated C review checks allocation/free paths and pointer stability.
+Evidence is under `build/ios/fortnite/malloc-zone-checks`. Fortnite now passes
+the zone imports and stops before entry at `_mkstemp`, called at `0x1000a960c`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_mkstemp` is now implemented in V. Native macOS measurements and LLVM
+disassembly establish the BSD template rules: replace all trailing `X`s,
+accept shorter runs and literal names, reject an empty template, and check
+the 1,024-byte path limit before mutation. OS entropy chooses the initial
+alphanumeric suffix; collision retries enumerate the name space and terminate
+with `EEXIST`. Creation uses `O_RDWR | O_CREAT | O_EXCL`, mode `0600` filtered
+by umask, and a descriptor without close-on-exec. Existing files and final
+symlinks remain untouched. Successful retries can retain `EEXIST` in errno,
+matching the measured native behavior.
+
+Suffix and retry state stay on the stack. The Vinix adapter bounds filename
+components to 255 bytes. A parent-symlink fallback preserves exclusive creation
+and closes its temporary directory descriptor. The existing fork gate
+serializes adapter calls: concurrent creates otherwise lose directory entries
+in the frozen validation kernel. The fixture retains all 400 files until its
+eight callers join, checking both uniqueness and contents.
+
+`tests/ios/native-checks.v build-mkstemp` builds the fixture. Six host ASan/UBSan
+runs cover temporary files, file timestamps and file locking; the ARM64 fixture
+also passes. Checks include guarded template mutation, empty/literal/short
+templates, path and component boundaries, modes, flags, exhausted collisions,
+symlinks, unlink lifetime, eight callers, a heap-owned Fortnite-style template
+and two image lifetimes. Generated C review checks the scalar ABI, stack state,
+locking, error paths and descriptor cleanup. Evidence is under
+`build/ios/fortnite/mkstemp-checks`. The fresh Fortnite probe clears `_mkstemp`
+and stops before entry at `_nextafterf`. Fortnite remains unplayable; the full
+iOS regression is unpassed.
+
+`_nextafterf` now uses a V adapter measured against this Mac's ARM64 libSystem.
+Finite values step by one float representation; equal comparisons return the
+target, preserving its signed-zero representation. Native float comparisons
+retain flush-to-zero and input-denormal behavior. A float addition supplies
+NaN payload/signaling priority and default-NaN behavior. Explicit volatile
+floating operations raise the measured underflow/overflow exceptions without
+being optimized away, including the flush-to-zero underflow policy. The
+adapter preserves errno, rounding/control bits and existing exception flags;
+its ordinary path allocates nothing.
+
+`tests/ios/native-checks.v build-nextafter` builds the fixture. Native reference
+digests cover 3,312 input pairs across all normal exponents, subnormal/zero
+boundaries, infinities, NaN combinations and deterministic random samples.
+The 64 profiles combine four rounding modes, flush-to-zero/default-NaN controls
+and four sticky-flag presets. Six host ASan/UBSan runs cover this adapter,
+logbf and libSystem; the new host fixture runs with optimization. The ARM64
+fixture also passes, including eight callers and two image lifetimes.
+Generated C and optimized ARM64 disassembly review confirm the scalar float
+ABI, exception instructions and absence of direct control/status-register
+writes. Evidence is under `build/ios/fortnite/nextafter-checks`. The fresh
+Fortnite probe clears `_nextafterf` and stops before entry at
+`_os_unfair_lock_lock`. Fortnite remains unplayable; the full iOS regression
+is unpassed.
 
 `run-ios --audit BINARY` now checks each bundled library's imports as well as
 the executable, without mapping or executing app code. The static C++ runner reports:
 
 | Image | Resolved | Unresolved strong | Unresolved weak |
 | --- | ---: | ---: | ---: |
-| Fortnite executable | 1,668 | 492 | 79 |
+| Fortnite executable | 1,762 | 398 | 79 |
 | EOSSDK | 659 | 3 | 18 |
 | MarketplaceKitWrapper | 176 | 0 | 23 |
-| All images | 2,503 | 495 | 120 |
+| All images | 2,597 | 401 | 120 |
 
-The C++/GLES/Text variant reports 2,517 resolved imports, 481 unresolved strong
+The C++/GLES/Text variant reports 2,611 resolved imports, 387 unresolved strong
 imports and 120 unresolved weak imports, including its native zlib/text backends.
 
 The executable's available imports include the bundled frameworks' exports;

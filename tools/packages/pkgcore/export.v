@@ -4,18 +4,22 @@ module pkgcore
 import os
 
 fn check_export_parent(parent string, kind string) ! {
-	mut path := parent
+	mut path := parent.clone()
+	defer { unsafe { path.free() } }
 	for {
-		info := os.lstat(path)!
+		mut info := C.stat{}
+		if C.lstat(path.str, unsafe { &info }) != 0 { return error('cannot inspect export parent: ' + path) }
 		// Sticky shared directories protect an exclusive child. Other users must
 		// not be able to replace its ancestors while the administrator writes it.
-		if os.is_link(path) || !os.is_dir(path)
-			|| (info.uid != 0 && info.uid != u32(os.geteuid()))
-			|| (info.mode & 0o022 != 0 && info.mode & 0o1000 == 0) {
+		if info.st_mode & 0o170000 != 0o040000
+			|| (info.st_uid != 0 && info.st_uid != u32(os.geteuid()))
+			|| (info.st_mode & 0o022 != 0 && info.st_mode & 0o1000 == 0) {
 			return error('${kind} parent must be controlled by this administrator; writable shared directories require the sticky bit: ${path}')
 		}
 		if path == '/' { return }
-		path = os.dir(path)
+		next := os.dir(path)
+		unsafe { path.free() }
+		path = next
 	}
 }
 
@@ -25,18 +29,29 @@ fn export_target(destination string, kind string) !string {
 	}
 	trimmed := destination.trim_right('/')
 	name := os.file_name(trimmed)
-	if name in ['', '.', '..'] { return error('${kind} destination must be a new directory') }
-	if os.exists(destination) || os.is_link(destination) { return error('${kind} destination must be new') }
+	defer { unsafe { trimmed.free(); name.free() } }
+	if name in ['', '.', '..']! { return error('${kind} destination must be a new directory') }
+	if publisher_entry_exists(destination) { return error('${kind} destination must be new') }
 	path := os.dir(trimmed)
-	mut existing := os.abs_path(path)
-	for !os.exists(existing) && !os.is_link(existing) { existing = os.dir(existing) }
-	if !os.is_dir(existing) { return error('${kind} parent must be a directory') }
-	check_export_parent(os.real_path(existing), kind)!
-	os.mkdir_all(path, mode: 0o755)!
-	parent := os.real_path(path)
+	defer { unsafe { path.free() } }
+	mut existing := mirror_absolute_path(path)!
+	defer { unsafe { existing.free() } }
+	for !publisher_entry_exists(existing) {
+		next := os.dir(existing)
+		unsafe { existing.free() }
+		existing = next
+	}
+	mut info := C.stat{}
+	if C.fstatat(C.AT_FDCWD, existing.str, unsafe { &info }, 0) != 0 || info.st_mode & 0o170000 != 0o040000 { return error('${kind} parent must be a directory') }
+	ancestor := publisher_real_path(existing)!
+	defer { unsafe { ancestor.free() } }
+	check_export_parent(ancestor, kind)!
+	make_package_directories(path, 0o755)!
+	parent := publisher_real_path(path)!
+	defer { unsafe { parent.free() } }
 	check_export_parent(parent, kind)!
-	target := parent.trim_right('/') + '/' + name
-	if os.exists(target) || os.is_link(target) { return error('${kind} destination must be new') }
+	target := if parent == '/' { parent + name } else { parent + '/' + name }
+	if publisher_entry_exists(target) { unsafe { target.free() }; return error('${kind} destination must be new') }
 	return target
 }
 

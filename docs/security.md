@@ -51,14 +51,35 @@ argument counts are rejected. Existing wire command names remain compatible;
 canonical `application/...` and `compositor/...` names identify domain and
 clipboard policy denials in broker diagnostics without logging arguments.
 
+An exact-key map finds the authorization rule. After authorization and bounded
+decoding, a private fixed table maps the operation directly to its typed handler;
+there is no second chain of operation comparisons. Tests check that every
+operation has exactly one rule and one handler at its corresponding table index.
+
 Every request passes the global same-account peer identity check, the domain's
 compositor requirement when applicable, and current selector-specific privacy
 checks before argument values are decoded or handlers run. A more specific
 filter cannot override a denial. The broker supplies caller identity from kernel
-peer credentials and its own compositor lease; UID 0 has no special bypass.
+peer credentials; UID 0 has no special bypass. Compositor authority comes only
+from the private socket pair created before the compositor launches the broker.
+Public requests never receive that authority, even when their PID and UID equal
+the compositor's. This includes `attach`, which only confirms private access,
+and clipboard offers, which require the private connection to publish directly.
 Queued application actions still require the compositor's existing gesture and
-Settings ownership checks when consumed. Attaching a compositor still requires
-that an existing compositor has exited or is the caller itself.
+Settings ownership checks when consumed.
+
+At startup the broker validates the inherited stream's same-account parent peer
+and sets close-on-exec before launching services. The compositor's endpoint is
+also close-on-exec and is never published in the environment or filesystem.
+Only the broker's descriptor number crosses its startup arguments; no secret is
+passed on a command line. The private startup-ready frame keeps initialization
+asynchronous without timing out a request before the broker is listening.
+Public attachment cannot race for ownership, and PID reuse does not recreate
+possession of the connection. EOF, transport failure or
+a partial-frame timeout retires the connection and starts orderly broker/service
+shutdown. A new compositor must launch a new broker with a fresh socket pair;
+there is no public reconnect or takeover operation. The capability assumes the
+OS protects process memory and file descriptors from other applications.
 
 Disabling application clipboard access blocks offers, requests, grant retrieval,
 grant creation, promotion and reads, including reads using an already issued
@@ -74,9 +95,22 @@ successful lookup and every denial layer with `-gc none -manualfree` and heap
 tracking. The session integration suite also checks denial before decoding and
 clipboard token revocation through the real broker socket.
 
+The service integration suite also checks public denials before and after a
+trusted attach with identical PID/UID credentials, application exec isolation,
+connection-loss shutdown, and fresh-capability restart. PID-based owner tags
+still identify application clipboard offers and dialog requests; they no longer
+grant the compositor domain.
+
+`V=/path/to/v v run desktop/tools/test-services.v` additionally measures the
+production receive/authorize/decode/log/reply path over Unix socket pairs. The
+rejection regression sends 1,200 requests, including malformed encoded arguments,
+and requires zero retained bytes with `-gc none -manualfree -d track_heap`.
+Logging prints error messages directly, releases owned errors after use, and
+preserves shared selector denials; interpolating an error would allocate again.
+
 ## Authenticated UEFI images
 
-[`tools/verified-boot`](../tools/verified-boot/README.md) builds a Limine 12.8
+[`tools/verified-boot`](../tools/verified-boot/README.md) builds a Limine 12.9
 UEFI boot tree using an administrator-supplied signing key and certificate.
 The configuration hash is embedded in the loader before its PE signature is
 made. That configuration pins the command line, kernel, initramfs overlays and

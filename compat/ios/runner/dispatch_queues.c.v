@@ -10,11 +10,13 @@ mut:
 	target &DispatchQueue = unsafe { nil }
 	refs int = 1
 	busy int
+	suspended u64
 	concurrent bool
 	main bool
 	immortal bool
 	context voidptr
 	finalizer DispatchFunction = unsafe { nil }
+	specific &DispatchSpecific = unsafe { nil }
 }
 
 @[heap]
@@ -39,6 +41,7 @@ mut:
 	key u64
 	queues map[u64]&DispatchQueue
 	globals [5]u64
+	default_root u64
 	jobs []&DispatchJob
 	retired []&DispatchQueue
 	workers [4]usize
@@ -46,6 +49,17 @@ mut:
 	sequence u64
 	stopping bool
 	objc_classes [3]u64 // Main, serial and global, published before guest use.
+	data_classes [2]u64
+	data map[u64]&DispatchData
+	empty_data &DispatchData = unsafe { nil }
+	data_retired &DispatchData = unsafe { nil }
+	data_stopping bool
+	group_class u64
+	groups map[u64]&DispatchGroup
+	source_class u64
+	sources map[u64]&DispatchSource
+	semaphore_class u64
+	semaphores map[u64]&DispatchSemaphore
 }
 
 __global dispatch_runtime = unsafe { &DispatchRuntime(nil) }
@@ -62,6 +76,7 @@ fn dispatch_start() {
 		|| C.ios_key_create(unsafe { &dispatch_runtime.key }, unsafe { nil }) != 0 {
 		panic('iOS: cannot initialize dispatch scheduler')
 	}
+	dispatch_data_start()
 	dispatch_objc_publish_classes()
 	mut queue := dispatch_queue_allocate(c'com.apple.main-thread')
 	queue.identity = darwin_dispatch_get_main_queue()
@@ -122,13 +137,26 @@ fn darwin_dispatch_get_global_queue(identifier i64, flags u64) u64 {
 	return dispatch_global_locked(index).identity
 }
 
+// Native implicit serial targets use a different root from the public
+// default global queue. Their queue-specific associations are independent.
+fn dispatch_default_root_locked() &DispatchQueue {
+	if dispatch_runtime.default_root != 0 { return dispatch_queue_locked(dispatch_runtime.default_root) }
+	mut queue := dispatch_queue_allocate(c'com.apple.root.default-qos.overcommit')
+	queue.concurrent = true
+	queue.immortal = true
+	queue.isa = dispatch_runtime.objc_classes[2]
+	dispatch_runtime.default_root = queue.identity
+	dispatch_runtime.queues[queue.identity] = queue
+	return queue
+}
+
 fn darwin_dispatch_queue_create_with_target(label &char, attributes u64, target u64) u64 {
 	if attributes != 0 { panic('iOS: dispatch queue attributes are not implemented') }
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
 	defer { C.pthread_mutex_unlock(dispatch_runtime.mutex) }
 	if dispatch_runtime.stopping { panic('iOS: dispatch queue created during image shutdown') }
 	mut queue := dispatch_queue_allocate(label)
-	queue.target = if target == 0 { dispatch_global_locked(2) } else { dispatch_queue_locked(target) }
+	queue.target = if target == 0 { dispatch_default_root_locked() } else { dispatch_queue_locked(target) }
 	if !queue.target.immortal { queue.target.refs++ }
 	dispatch_runtime.queues[queue.identity] = queue
 	return queue.identity
@@ -156,10 +184,7 @@ fn darwin_dispatch_queue_get_label(identity u64) &char {
 }
 
 fn darwin_dispatch_retain(identity u64) {
-	C.pthread_mutex_lock(dispatch_runtime.mutex)
-	mut queue := dispatch_queue_locked(identity)
-	if !queue.immortal { queue.refs++ }
-	C.pthread_mutex_unlock(dispatch_runtime.mutex)
+	if !dispatch_objc_retain(identity) { panic('iOS: invalid dispatch object') }
 }
 
 // Apple blocks may capture a dispatch queue as an Objective-C object. These
@@ -172,10 +197,21 @@ fn dispatch_objc_is_queue(identity u64) bool {
 	return identity in dispatch_runtime.queues
 }
 
+fn dispatch_objc_is_object(identity u64) bool {
+	if dispatch_runtime == unsafe { nil } { return false }
+	C.pthread_mutex_lock(dispatch_runtime.mutex)
+	defer { C.pthread_mutex_unlock(dispatch_runtime.mutex) }
+	return identity in dispatch_runtime.queues || identity in dispatch_runtime.data || identity in dispatch_runtime.groups || identity in dispatch_runtime.sources || identity in dispatch_runtime.semaphores
+}
+
 fn dispatch_objc_retain(identity u64) bool {
 	if dispatch_runtime == unsafe { nil } { return false }
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
 	defer { C.pthread_mutex_unlock(dispatch_runtime.mutex) }
+	if mut data := dispatch_runtime.data[identity] { dispatch_data_retain_locked(mut data); return true }
+	if mut group := dispatch_runtime.groups[identity] { group.refs++; return true }
+	if mut source := dispatch_runtime.sources[identity] { source.refs++; source.external_refs++; return true }
+	if mut semaphore := dispatch_runtime.semaphores[identity] { semaphore.refs++; return true }
 	mut queue := dispatch_runtime.queues[identity] or { return false }
 	if !queue.immortal { queue.refs++ }
 	return true
@@ -184,6 +220,42 @@ fn dispatch_objc_retain(identity u64) bool {
 fn dispatch_objc_release(identity u64) bool {
 	if dispatch_runtime == unsafe { nil } { return false }
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
+	if mut semaphore := dispatch_runtime.semaphores[identity] {
+		removed := dispatch_semaphore_drop_locked(mut semaphore)
+		C.pthread_mutex_unlock(dispatch_runtime.mutex)
+		if removed { C.free(semaphore) }
+		return true
+	}
+	if mut source := dispatch_runtime.sources[identity] {
+		if source.external_refs == 0 { panic('iOS: unbalanced dispatch source release') }
+		source.external_refs--
+		if source.external_refs == 0 && !source.finished {
+			if !dispatch_runtime.stopping && (!source.activated || source.suspended != 0) { panic('iOS: release of inactive or suspended dispatch source') }
+			if !source.cancelled {
+				source.cancelled = true
+				source.abandoned = true
+				source.pending = 0
+				dispatch_source_schedule_locked(mut source)
+			}
+		}
+		removed := dispatch_source_drop_locked(mut source)
+		C.pthread_mutex_unlock(dispatch_runtime.mutex)
+		if removed { C.free(source) }
+		dispatch_retire()
+		return true
+	}
+	if mut group := dispatch_runtime.groups[identity] {
+		removed := dispatch_group_drop_locked(mut group)
+		C.pthread_mutex_unlock(dispatch_runtime.mutex)
+		if removed { C.free(group) }
+		return true
+	}
+	if mut data := dispatch_runtime.data[identity] {
+		dispatch_data_drop_locked(mut data)
+		C.pthread_mutex_unlock(dispatch_runtime.mutex)
+		dispatch_data_retire()
+		return true
+	}
 	mut queue := dispatch_runtime.queues[identity] or { C.pthread_mutex_unlock(dispatch_runtime.mutex); return false }
 	dispatch_queue_drop_locked(mut queue)
 	C.pthread_mutex_unlock(dispatch_runtime.mutex)
@@ -195,6 +267,7 @@ fn dispatch_queue_drop_locked(mut queue DispatchQueue) {
 	if queue.immortal { return }
 	queue.refs--
 	if queue.refs == 0 {
+		if queue.suspended != 0 && !dispatch_runtime.stopping { panic('iOS: release of suspended dispatch queue') }
 		dispatch_runtime.queues.delete(queue.identity)
 		dispatch_runtime.retired << &queue
 	}
@@ -205,6 +278,8 @@ fn dispatch_retire() {
 		C.pthread_mutex_lock(dispatch_runtime.mutex)
 		if dispatch_runtime.retired.len == 0 { C.pthread_mutex_unlock(dispatch_runtime.mutex); return }
 		queue := dispatch_runtime.retired.pop()
+		specific := queue.specific
+		unsafe { queue.specific = nil }
 		// A finalizer itself keeps the target alive until it has run.
 		if !dispatch_runtime.stopping && queue.finalizer != unsafe { nil } && queue.context != unsafe { nil } {
 			dispatch_add_locked(queue.target, 0, 0, queue.context, queue.finalizer, false)
@@ -212,21 +287,25 @@ fn dispatch_retire() {
 		if queue.target != unsafe { nil } { dispatch_queue_drop_locked(mut queue.target) }
 		C.pthread_cond_broadcast(dispatch_runtime.condition)
 		C.pthread_mutex_unlock(dispatch_runtime.mutex)
+		dispatch_specific_retire(specific)
 		C.free(queue.label)
 		unsafe { free(queue) }
 	}
 }
 
 fn darwin_dispatch_release(identity u64) {
-	C.pthread_mutex_lock(dispatch_runtime.mutex)
-	mut queue := dispatch_queue_locked(identity)
-	dispatch_queue_drop_locked(mut queue)
-	C.pthread_mutex_unlock(dispatch_runtime.mutex)
-	dispatch_retire()
+	if !dispatch_objc_release(identity) { panic('iOS: invalid dispatch object') }
 }
 
 fn darwin_dispatch_set_context(identity u64, context voidptr) {
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
+	if mut semaphore := dispatch_runtime.semaphores[identity] { semaphore.context = context; C.pthread_mutex_unlock(dispatch_runtime.mutex); return }
+	if mut source := dispatch_runtime.sources[identity] { source.context = context; C.pthread_mutex_unlock(dispatch_runtime.mutex); return }
+	if mut group := dispatch_runtime.groups[identity] {
+		group.context = context
+		C.pthread_mutex_unlock(dispatch_runtime.mutex)
+		return
+	}
 	mut queue := dispatch_queue_locked(identity)
 	if !queue.immortal { queue.context = context }
 	C.pthread_mutex_unlock(dispatch_runtime.mutex)
@@ -235,11 +314,21 @@ fn darwin_dispatch_set_context(identity u64, context voidptr) {
 fn darwin_dispatch_get_context(identity u64) voidptr {
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
 	defer { C.pthread_mutex_unlock(dispatch_runtime.mutex) }
+	if semaphore := dispatch_runtime.semaphores[identity] { return semaphore.context }
+	if source := dispatch_runtime.sources[identity] { return source.context }
+	if group := dispatch_runtime.groups[identity] { return group.context }
 	return dispatch_queue_locked(identity).context
 }
 
 fn darwin_dispatch_set_finalizer_f(identity u64, function DispatchFunction) {
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
+	if mut semaphore := dispatch_runtime.semaphores[identity] { semaphore.finalizer = function; C.pthread_mutex_unlock(dispatch_runtime.mutex); return }
+	if mut source := dispatch_runtime.sources[identity] { source.finalizer = function; C.pthread_mutex_unlock(dispatch_runtime.mutex); return }
+	if mut group := dispatch_runtime.groups[identity] {
+		group.finalizer = function
+		C.pthread_mutex_unlock(dispatch_runtime.mutex)
+		return
+	}
 	mut queue := dispatch_queue_locked(identity)
 	if !queue.immortal { queue.finalizer = function }
 	C.pthread_mutex_unlock(dispatch_runtime.mutex)
@@ -257,6 +346,7 @@ fn dispatch_main_target(queue &DispatchQueue) bool {
 fn dispatch_queue_available(queue &DispatchQueue) bool {
 	mut current := unsafe { &DispatchQueue(queue) }
 	for current != unsafe { nil } {
+		if current.suspended != 0 { return false }
 		if !current.concurrent && current.busy != 0 { return false }
 		current = current.target
 	}
@@ -370,6 +460,7 @@ fn dispatch_promote_locked() {
 }
 
 fn dispatch_ready_locked(on_main bool, maximum u64) int {
+	dispatch_sources_poll_locked()
 	dispatch_promote_locked()
 	for i, job in dispatch_runtime.jobs {
 		if job.sequence <= maximum && dispatch_main_target(job.queue) == on_main
@@ -386,7 +477,7 @@ fn dispatch_worker(argument voidptr) voidptr {
 		for !dispatch_runtime.stopping {
 			index = dispatch_ready_locked(false, dispatch_forever)
 			if index >= 0 && !dispatch_runtime.jobs[index].synchronous { break }
-			mut interval := dispatch_forever
+			mut interval := dispatch_sources_interval_locked()
 			for job in dispatch_runtime.jobs {
 				if !dispatch_main_target(job.queue) {
 					remaining := dispatch_remaining(job.when)
@@ -448,6 +539,7 @@ fn dispatch_main_drain() bool {
 	if dispatch_runtime == unsafe { nil } { return false }
 	if u64(C.pthread_self()) != ios_runtime.main_thread { panic('iOS: main queue drained on a background thread') }
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
+	dispatch_sources_poll_locked()
 	dispatch_promote_locked()
 	maximum := dispatch_runtime.sequence
 	C.pthread_mutex_unlock(dispatch_runtime.mutex)
@@ -494,6 +586,28 @@ fn dispatch_stop() {
 
 fn dispatch_free() {
 	if dispatch_runtime == unsafe { nil } { return }
+	dispatch_stop()
+	dispatch_sources_stop()
+	dispatch_specific_stop()
+	dispatch_group_stop()
+	dispatch_data_stop()
+	dispatch_data_free()
+	C.free(dispatch_runtime.empty_data)
+	unsafe { dispatch_runtime.data.free() }
+	for _, source in dispatch_runtime.sources {
+		if source.work_pending || source.event != unsafe { nil } || source.cancel != unsafe { nil } || source.updates != unsafe { nil } { panic('iOS: dispatch source still owns image callbacks at unmap') }
+		dispatch_queue_drop_locked(mut source.queue)
+		C.free(source)
+	}
+	unsafe { dispatch_runtime.sources.free() }
+	dispatch_retire()
+	for _, group in dispatch_runtime.groups { C.free(group) }
+	unsafe { dispatch_runtime.groups.free() }
+	for _, semaphore in dispatch_runtime.semaphores {
+		if semaphore.waiters != 0 { panic('iOS: dispatch semaphore waiter still active at unmap') }
+		C.free(semaphore)
+	}
+	unsafe { dispatch_runtime.semaphores.free() }
 	for _, queue in dispatch_runtime.queues {
 		if queue.busy != 0 { panic('iOS: dispatch callback still running when its image unmaps') }
 		C.free(queue.label)

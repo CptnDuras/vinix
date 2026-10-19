@@ -18,6 +18,8 @@ Standalone staging and qualification are also available:
 v run tools/packages/stage.v --arch aarch64 --staging /path/to/root
 v run tools/packages/stage.v --arch x86_64 --staging /path/to/root
 v run tools/packages/stage.v --arch aarch64 --staging /path/to/fresh-root --config /release/reviewed-packages.json
+v run tools/packages/stage.v --arch aarch64 --staging /path/to/fresh-root --config /release/reviewed-packages.json --repositories /release/repository-bundle
+v run tools/packages/stage.v --check --arch aarch64 --staging /path/to/fresh-root --config /release/reviewed-packages.json --repositories /release/repository-bundle
 v run tests/packages/distribution-check.v --cross --desktop
 ```
 
@@ -30,6 +32,84 @@ and missing configuration beside retained package state requires recovery.
 See [image configuration](SDK.md#release-image-configuration) and its
 [qualification](../../tests/packages/image-configuration-check.md).
 
+The three package tools compile together in a private captured workspace. A
+compiler or target-validation failure preserves existing tool versions; all
+outputs and private destination temporaries are prepared before replacement.
+See [captured tool staging](../../tests/packages/image-tools-check.md) for
+failure/recovery checks and native execution on both architectures. The complete
+image build still requires successful completion before distribution.
+
+For an offline image, `--repositories DIRECTORY` or
+`VINIX_PACKAGE_IMAGE_REPOSITORIES=/absolute/DIRECTORY` captures complete signed
+release exports under their configured IDs. Their reviewed URLs must be
+`file:///usr/share/vinix-packages/repositories/ID`. The bundle is verified against
+those keys and organization/license/firmware policy, then published atomically.
+Existing identical bundles are preserved; different or damaged destinations
+refuse. See [the bundle contract](SDK.md#offline-repository-bundles-in-release-images)
+and [qualification](../../tests/packages/image-repositories-check.md).
+
+Add `--check` to validate those selected package inputs and emit a reproducible
+format-1 JSON report before service compilation or image publication. It records
+the effective configuration and its digest, bundle publication/preservation,
+signed index digests/sequences/expiry, package counts by architecture and licensing
+flags, unique payload bytes and the bundle disk budget. Existing matching bundles
+are checked; unsafe or changed destinations refuse. The target image remains
+unchanged, and target compilers are not required. Preparation uses a temporary
+authenticated capture, which is removed before exit. See
+[image input preflight](../../tests/packages/image-input-check.md).
+
+Repeat `--require-app ID` in check or normal staging to gate a release's
+advertised catalog before compiler lookup or image writes. The signed bundle
+must supply actual application candidates for the target host whose complete
+runtime/dependency closures resolve together under the effective policy. Check
+output includes an exact format-2 deployment lock for subsequent ordinary review;
+remote URLs, data packages and runtime packages cannot stand in for advertised
+applications. See [the contract](SDK.md#require-an-advertised-application-catalog)
+and [qualification](../../tests/packages/image-applications-check.md).
+
+Desktop/release builds can select the same gate declaratively with
+`VINIX_PACKAGE_IMAGE_APPLICATIONS=/absolute/requirements.json`, or use
+`stage.v --applications FILE`. This is a nonempty format-1 deployment root
+manifest for the selected architecture. Explicit file or inline-ID options
+override the environment; the two explicit forms cannot be combined. Reports
+retain the exact file digest, and the native desktop cache tracks its selection
+and contents. Exact format-2 locks are refused here so their pins cannot be
+discarded. See [the contract](SDK.md#application-requirements-files-in-desktop-builds)
+and [qualification](../../tests/packages/image-requirements-check.md).
+
+`--check --export-deployment NEW_FILE` saves that exact resolved format-2 lock
+for ordinary Software/CLI deployment review. It requires selected app requirements
+and a new file outside the image, preserves existing destinations, and reports
+the saved path and newline-inclusive digest. The target image remains unchanged.
+See [the export contract](SDK.md#export-an-image-application-deployment) and
+[qualification](../../tests/packages/image-export-check.md).
+
+Image input preparation, reporting, export and publication retire temporary
+storage on success and refusal while preserving exact declarations and recovery
+data. See [image ownership checks](../../tests/packages/image-owner-check.md)
+for 264 measured calls, sanitizer checks and both native guest runs.
+
+Software's **Deployment → Choose file…** selects an organization manifest,
+release deployment lock or saved installed snapshot through the session file
+dialog. Selection fills the literal path; **Review deployment** and confirmation
+remain explicit. Cancellation preserves the draft, and intervening editing,
+navigation or review discards late selections. If the dialog is unavailable,
+the absolute-path field remains usable. See
+[chooser checks](../../tests/packages/software-deployment-chooser-check.md).
+
+Normal staging with selected application requirements also declares that exact
+set at `/usr/share/vinix-packages/applications.json`, after publishing its matching
+trust and signed bundle. Software's **Deployment → Review release apps** opens
+the complete proposal for separate confirmation. Existing identical declarations
+are preserved; different or unsafe files refuse. Check reports include the image
+path, publish/preserve decision, byte count and digest. See
+[the contract](SDK.md#declare-release-applications-in-an-image) and
+[qualification](../../tests/packages/image-catalog-check.md).
+
+**Deployment → Check release apps** reports missing apps and installed metadata
+drift from that exact image lock without administrator approval or state changes.
+See [installed-release checks](../../tests/packages/release-audit-check.md).
+
 Desktop checks need generated examples under `build/app-src` and a headless ui2
 overlay under `build/vmodules`; `VINIX_PACKAGE_TEST_UI2` selects another overlay
 parent. Package implementation, publishing, staging and qualification use V.
@@ -39,10 +119,26 @@ retain declarations to avoid pruning required crypto types. The launcher heap
 fixture disables the compiler's crash handler in its separately linked C unit;
 assertions and process exit failures still fail the check.
 
+Prepared-root imports recheck file/directory identity, size, executable bits and
+directory names in the captured guest namespace. Unpinned imports compare the
+copied bytes with a source digest; catalog imports use their locked inventory.
+Changed sources refuse before packing, with private-workspace cleanup and exact
+retry. See [source consistency checks](../../tests/packages/import-capture-check.md).
+The resolver also retires path scratch on success, link/parent restart and
+refusal; repeated [lookups and rechecks](../../tests/packages/import-lookup-check.md)
+retain no tracked temporary storage under the manual-free toolchain.
+
 `--https` adds the [real TLS transport fixture](../../tests/packages/https-check.md);
 `--https-only` runs it without desktop/UI prerequisites. It uses native curl and
 OpenSSL to check range recovery, certificate/redirect refusal and signed
 transaction state. The fixture binds only to loopback and uses a temporary CA.
+
+HTTPS failures now explain the transport status and offer a relevant next step
+for DNS, connection, proxy, timeout, interruption, HTTP access, TLS trust, response
+size and missing-tool failures. Service clients receive this guidance even when
+curl's stderr belongs to an administrator daemon. Retained prefixes and bounded
+retries follow the existing recovery rules. See
+[diagnostic checks](../../tests/packages/https-diagnostics-check.md).
 
 Software's **Failure details** pages through the latest bounded service failure,
 including long paths and exit status. It survives catalog reloads until another
@@ -87,6 +183,13 @@ the short page and its corresponding full page. Smaller windows retain Back.
 This applies to catalog facts and frozen install, remove, update, repair,
 deployment, rollback and offline-export reviews. See
 [compact detail checks](../../tests/packages/software-details-navigation-check.md).
+
+For installed packages, **Details → Diagnostics** also shows the installed
+dependency IDs, inclusive/exclusive version bounds and actual installed versions.
+It names one requested app that requires a shared package, including indirectly,
+and reports incomplete information from older services. Update previews keep the
+installed graph until activation. See
+[dependency inspection checks](../../tests/packages/software-dependencies-check.md).
 
 Compact catalog windows offer **Browse catalog**. Search, a cycling
 Catalog/Installed/Updates filter, Previous/Next package and complete **Details**
@@ -234,9 +337,88 @@ to emit a complete signed consumer repository with atomic publication, dependenc
 closure validation on each declared architecture and retained publisher sequence
 history. The legacy `publish` command remains available for workspace metadata.
 
+The V reply owns its strings independently and supports idempotent
+`ReleaseInfo.close()`, preserving signed output, seed and sequence history.
+The CLI closes its reply after JSON encoding. Complete publication and
+canonical-index scratch now have measured owners across 304 calls and 448
+canonicalization cycles. See [release ownership checks](../../tests/packages/release-owner-check.md)
+for refusals, exact signed retry, both-guest coverage and retained evidence.
+
 Read [administration/recovery](../../docs/application-distribution.md) and
 [SDK 1](SDK.md) for enrollment, policy, packaging and limits. Release publisher
 enrollment and catalog/runtime guest qualification remain required.
+
+Software's **Details → License** separates the displayed version's license,
+proprietary/firmware declarations and runtime from the installed generation's
+recorded facts. Legacy services report unavailable installed information.
+Update previews and policy/trust failures preserve the installed disclosure;
+review details describe their reviewed target. See
+[installed payload checks](../../tests/packages/software-payload-check.md).
+
+V clients retire responses from `pkgcore.software_view()` with `.close()`.
+Each response owns its headers, rows and nested permissions/requirements,
+independently of source metadata or another observation. Complete reads retire
+configuration, catalog, state and planning scratch; the CLI closes catalog
+responses after presentation. See
+[catalog observation checks](../../tests/packages/software-view-owner-check.md).
+
+Software explains exact byte shortfalls before confirmation. A review with
+insufficient reported space remains readable and cancellable, with Confirm
+unavailable. Free space, cancel and review again to get a fresh estimate.
+Offline exports account for destination and separate cache filesystems without
+charging acquisition twice on a shared filesystem. No-op package plans and
+fully cached separate exports keep their service reserve exemptions. See
+[space review checks](../../tests/packages/software-space-check.md).
+
+Review format 2 compares installed permission declarations with the target set.
+Software summarizes known additions/removals across dependencies and exposes
+each version-labelled change in **Package details → Permissions**, including
+rollback and uninstall. Legacy prior facts stay unavailable. Deploy the updated
+Software and tools together; older strict readers refuse the new format. See
+[permission review checks](../../tests/packages/review-permissions-check.md).
+Both review formats also reject actions that contradict installed versions,
+including nested exports, before presenting confirmation. Missing prior facts
+remain unknown for an existing-package action. See
+[action validation checks](../../tests/packages/review-actions-check.md).
+Review construction releases failed presentation metadata, generation-scan
+scratch and ordinary/deployment fingerprint storage. Returned fingerprints are
+independently owned; their encoded identity stays compatible with prior reviews.
+See [construction checks](../../tests/packages/review-construction-check.md).
+Complete ordinary/deployment review requests also retire configuration, installed
+and rollback states, deployment documents, authenticated catalogs and solver
+buffers after building their independent reply, including refusal paths. See
+[request ownership checks](../../tests/packages/review-request-check.md).
+Public `Service.plan()`/`preview_plan()` results also own every root, publisher
+identity and nested manifest field independently of configuration and request
+preparation. V callers retire them with `Plan.close()`; the CLI closes its plan
+after presentation. Resolver/transaction plans keep their borrowed lifetime.
+See [plan observation checks](../../tests/packages/plan-observation-check.md).
+
+`Service.refresh()`/`refresh()` return independently owned catalogs, including
+publisher identities and nested manifests. V clients retire these replies with
+`Catalog.close()`; the CLI `update` command does so automatically. Service
+configuration and refresh paths, fetched metadata and workspace inventories
+retire on success/refusal. Low-level `load_catalog()`/`snapshots_catalog()` keep
+their borrowed publisher identities and must not use this close method. See
+[refresh request checks](../../tests/packages/refresh-request-check.md).
+
+Public transactions, rollback and deployment replies also own their complete
+state independently. V clients call `State.close()` after use; the CLI closes
+successful replies. Request configuration, plans, source states and staging or
+download scratch retire on success and refusal. Internal activation states
+retain their borrowed lifetime. See
+[activation request checks](../../tests/packages/activation-request-check.md).
+
+HTTPS acquisition retires argument construction and Range-fallback messages
+across complete transfers and refusals. Scoped repeated process checks and live
+host TLS fetch/refresh/install requests preserve byte bounds, signed state,
+output guards and child/descriptor retirement. See
+[HTTPS ownership checks](../../tests/packages/https-owner-check.md).
+
+Software releases rejected progress-frame errors under manual memory management.
+Malformed frames keep the last valid progress, and oversized lines recover at
+the next newline while human failure diagnostics remain available. See
+[stream allocation checks](../../tests/packages/software-progress-memory-check.md).
 
 Software's **Clean up versions → Read review** presents the complete admitted
 generation list, fingerprint, retained current/rollback identities and deletion
@@ -433,12 +615,34 @@ prepared-root recipes and pinned inventories atomically, with complete declared
 architecture/version/runtime coverage. It emits a canonical catalog lock and a
 private publisher workspace for `publish-release`. See the
 [catalog contract](SDK.md#build-a-pinned-application-catalog).
+Workspace metadata/budget preparation owns its decoded state and returns an
+independent `CatalogInfo` reply with an idempotent `close()`. The original
+canonical bytes, object accounting and disk headroom are preserved. See
+[workspace planning qualification](../../tests/packages/catalog-plan-check.md).
+
+[Complete catalog builder qualification](../../tests/packages/catalog-builder-check.md)
+also covers imports, staged verification, publication and reply/error disposal:
+280 calls across 35 cases retain zero tracked allocations after JSON
+initialization. Recursive flushing retires enumeration and path scratch across
+192 success/refusal cycles. Both guests check ten selected complete-call cases;
+canonical locks, deduplicated objects and saved recovery data are preserved.
+
+Catalog normalization retains one owned decoded result, sorts its buffers in
+place and retires validation scratch on success or refusal. Structural release
+checks also retire their borrowed candidate/license lists and each fixed-root
+search. Repeated one/64-import checks require zero retained bytes after the
+result/error is retired. See [normalization qualification](../../tests/packages/catalog-normalize-check.md).
 
 Prepared-root imports, catalog builds and all three fixed profiles capture an
 ordinary source directory before creating output parents. Empty/NUL paths and
 leaf directory aliases refuse, including aliases with trailing separators.
 Ordinary directories with redundant separators retain the same canonical
 metadata. See [root admission qualification](../../tests/packages/prepared-root-check.md).
+Prepared-root materialization also enforces a shared 32,768-entry traversal
+budget across selectors and aliases, and the final packer's 128-level output
+depth bound, before creating excessive output. See
+[import traversal qualification](../../tests/packages/import-limits-check.md)
+for exact boundaries, failure cleanup and retry.
 
 `sqlite-catalog SQLITE_VERSION RUNTIME_VERSION PREPARED_ROOTS NEW_LOCK_DIRECTORY`
 creates the concrete SQLite CLI/musl runtime lock for both supported hosts. It
@@ -463,6 +667,38 @@ pinned FFmpeg 8.0.1 local media profile: FFmpeg and FFprobe share a separately
 versioned musl/library runtime, with notices, upstream source and V build tools.
 See the [profile](SDK.md#ffmpeg-local-media-publisher-profile) and
 [qualification](../../tests/packages/ffmpeg-profile-check.md).
+
+`wine-catalog RECIPE_DIRECTORY PREPARED_ROOTS NEW_LOCK_DIRECTORY` pins a reviewed
+Win64 application and explicit Wine runtime for both hosts. It checks PE32+
+application structure, matching native static launchers, notices, runtime bounds
+and consistent license/permission declarations before publishing a catalog lock.
+It supplies no Wine runtime or consumer license grants. See the
+[profile contract](SDK.md#wine-win64-publisher-profile) and
+[publisher qualification](../../tests/packages/wine-profile-check.md); actual
+Wine/translated/graphical execution remains a separate gate.
+
+`apple-catalog RECIPE_DIRECTORY PREPARED_ROOTS NEW_LOCK_DIRECTORY` produces a
+reproducible AArch64 iOS app/runtime lock. It checks thin ARM64 Mach-O mappings,
+XML/binary bundle identity, a native static launcher, complete file inventories
+and explicit notices/licenses/runtime bounds before publishing. See the
+[profile contract](SDK.md#apple-ios-arm64-publisher-profile) and
+[publisher checks](../../tests/packages/apple-profile-check.md). It supplies no
+Apple SDK, proprietary payload or x86-64 translation variant.
+
+`AppleProfileInfo.close()` idempotently releases independently owned V reply
+metadata. Complete builder, partial-import and bundle-admission lifetimes are
+covered by the [ownership checks](../../tests/packages/apple-owner-check.md),
+including canonical retry and recovery-data preservation.
+
+Apple launches now derive the iOS compatibility runtime's Documents and keychain
+overrides from admitted private app data. They retain their containers through
+updates, rollback and uninstall without adding sandbox grants. The
+[Apple package check](../../tests/packages/apple-runtime-check.md) executes real
+ARM64 Mach-O instructions through a signed static runtime on AArch64, with
+separate ordinary users, ambient-override refusal and cached reinstall. The
+Mach-O itself checks Foundation container paths and file writes, Security
+generic-password persistence, duplicate/delete errors and access-group refusal. Wider
+Apple APIs, graphical sessions and other host architectures remain unqualified.
 
 Fixed native, SQLite and FFmpeg profiles recheck the complete imported file list
 and bounded, nonempty notices before publishing a lock. Replacing a required
@@ -540,8 +776,16 @@ edit grants or run commands, and is unavailable during execution. See
 `compose-catalog` combines reviewed profile locks into one publisher catalog,
 with separate prepared-root directories for each profile. It retains pins,
 permissions and license declarations and rechecks targets and dependencies.
+`compose-catalog-for aarch64|x86_64` explicitly selects one supported host from
+complete profiles with different architecture sets, retaining shared packages
+and full input-lock provenance. Every input must support the selected host.
 See [catalog composition](SDK.md#compose-application-catalogs) and
-[qualification](../../tests/packages/composition-check.md).
+[qualification](../../tests/packages/composition-check.md), including
+[explicit host selection](../../tests/packages/composition-target-check.md).
+Composition retires each validated input before reading the next and returns
+independently owned metadata with an idempotent `CompositionInfo.close()`.
+See [composition ownership qualification](../../tests/packages/composition-ownership-check.md)
+for measured planner lifetimes, unchanged canonical bytes and both target guests.
 
 The [application SDK module](appsdk/context.v) supplies an owned launch context
 with installed app/runtime versions, publisher provenance, admitted generation,
@@ -583,6 +827,12 @@ descriptor per obsolete generation. Removal rechecks directory/lease identities
 and the live lock under the package writer lock. See
 [collection qualification](../../tests/packages/collection-limit-check.md) for
 the reproduced 128-generation / 32-descriptor failure and corrected workflow.
+
+Complete `Service.collect()` requests retire their configuration and directory
+storage on success and refusal. Collection also retires cache enumeration,
+partial-name checks, removal paths and flush paths; explicit `collect()` borrows
+its configuration. Retained payloads and live generation leases keep their
+existing protection. See [request ownership checks](../../tests/packages/collection-request-check.md).
 
 A damaged resumed download now retries once from byte zero with the same signed
 payload requirements. Invalid complete/oversized partials start fresh; a bad

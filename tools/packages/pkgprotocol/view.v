@@ -4,6 +4,13 @@ module pkgprotocol
 
 import tools.packages.appsdk
 
+pub struct SoftwareDependency {
+pub:
+	id string
+	minimum string
+	before string
+}
+
 pub struct SoftwareRow {
 pub:
 	id string
@@ -11,6 +18,14 @@ pub:
 	description string
 	version string
 	installed_version string
+	installed_repository string
+	installed_public_key string
+	installed_dependencies_known bool
+	installed_dependencies []SoftwareDependency
+	installed_license string
+	installed_proprietary bool
+	installed_firmware bool
+	installed_runtime string
 	installed_name string
 	installed_kind string
 	installed_permissions []string
@@ -92,12 +107,50 @@ pub fn (view &SoftwareView) validate() ! {
 			return error('incomplete installed launch metadata in Software view')
 		}
 		ids[row.id] = true
+		if row.installed_license == '' {
+			if row.installed_proprietary || row.installed_firmware || row.installed_runtime != '' {
+				return error('incomplete installed payload metadata in Software view')
+			}
+		} else if row.installed_version == '' || !printable(row.installed_license, 256)
+			|| (row.installed_runtime != '' && !identifier(row.installed_runtime))
+			|| (row.installed_kind in ['linux', 'windows', 'apple']! && row.installed_runtime == '') {
+			return error('invalid installed payload metadata in Software view')
+		}
+		if (row.installed_repository == '') != (row.installed_public_key == '')
+			|| (row.installed_repository != '' && (row.installed_version == ''
+				|| !identifier(row.installed_repository) || !digest(row.installed_public_key))) {
+			return error('invalid installed publisher provenance in Software view')
+		}
+		if row.installed_dependencies.len > 128
+			|| (row.installed_dependencies_known && row.installed_version == '')
+			|| (!row.installed_dependencies_known && row.installed_dependencies.len != 0) {
+			return error('invalid installed dependency metadata in Software view')
+		}
+		mut dependencies := map[string]bool{}
+		defer { unsafe { dependencies.free() } }
+		for dependency in row.installed_dependencies {
+			if !identifier(dependency.id) || dependency.id in dependencies
+				|| !policy_range_valid(dependency.minimum, dependency.before) {
+				return error('invalid installed dependency requirement in Software view')
+			}
+			dependencies[dependency.id] = true
+		}
+	}
+}
+
+fn close_software_dependencies(values []SoftwareDependency) {
+	unsafe {
+		for value in values { value.id.free(); value.minimum.free(); value.before.free() }
+		(&array(&values)).free()
 	}
 }
 
 fn close_software_row(row SoftwareRow) {
+	close_software_dependencies(row.installed_dependencies)
 	unsafe {
 		row.id.free(); row.name.free(); row.description.free(); row.version.free(); row.installed_version.free()
+		row.installed_repository.free(); row.installed_public_key.free()
+		row.installed_license.free(); row.installed_runtime.free()
 		row.installed_name.free(); row.installed_kind.free(); row.architecture.free(); row.kind.free(); row.runtime.free()
 		row.repository.free(); row.public_key.free(); row.license.free(); row.update_action.free(); row.diagnostic.free()
 		for value in row.permissions { value.free() }; (&array(&row.permissions)).free()

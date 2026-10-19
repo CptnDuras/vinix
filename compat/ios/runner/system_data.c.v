@@ -24,12 +24,21 @@ fn C.ios_host_stdio(int) voidptr
 struct SystemData {
 mut:
 	guard u64
+	default_heap DarwinHeapZone
+	heap_zones &DarwinHeapZone = unsafe { nil }
+	heap_blocks [1024]&DarwinHeapBlock
 	page_size u64
+	page_mask u64
 	task_self u32
+	host_name u32
+	host_refs u32
 	thread_ports &MachThreadPort = unsafe { nil }
 	semaphores &MachSemaphore = unsafe { nil }
+	receive_ports &MachReceivePort = unsafe { nil }
+	send_once &MachSendOnce = unsafe { nil }
 	main_queue [8]u64
 	vm_mappings []MachMapping
+	memory_entries &MachMemoryEntry = unsafe { nil }
 	vm_sequence u64
 	in6_any [16]u8
 	in6_loopback [16]u8
@@ -48,15 +57,21 @@ mut:
 	dispatch_once map[u64]voidptr
 	logs &OsLogHandle = unsafe { nil }
 	log_count int
+	asl_clients &AslClient = unsafe { nil }
+	asl_filter u16 = 63
 	log_default [8]u8
 	log_disabled [8]u8
+	// MIG's exported NDR_record is a writable eight-byte object, not a
+	// pointer cell. Darwin ARM64 uses little-endian integers, ASCII and IEEE.
+	ndr_record [8]u8 = [u8(0), 0, 0, 0, 1, 0, 0, 0]!
 }
 
 __global system_data = unsafe { &SystemData(nil) }
 
 fn system_data_start() ! {
-	system_data = &SystemData{page_size: u64(C.getpagesize()), task_self: 1}
+	system_data = &SystemData{page_size: u64(C.getpagesize()), page_mask: u64(C.getpagesize()) - 1, task_self: 1}
 	system_data.in6_loopback[15] = 1
+	heap_start()
 	system_queries_start()!
 	system_data.vm_mappings.flags |= .noslices
 	bytes := rand.bytes(8)!
@@ -102,10 +117,12 @@ fn system_data_stop() {
 	signals_stop()
 	dispatch_free()
 	os_log_stop()
+	asl_stop()
 	system_queries_stop()
 	mach_memory_stop()
 	mach_threads_stop()
 	mach_semaphores_stop()
+	mach_receive_stop()
 	pthread_rwlocks_stop()
 	for _, pointer in system_data.mutexes {
 		if C.pthread_mutex_destroy(pointer) != 0 { panic('iOS: active mutex at image shutdown') }
@@ -125,13 +142,29 @@ fn system_data_stop() {
 		C.free(unsafe { voidptr(file) })
 	}
 	C.free(system_data.runes)
+	heap_stop()
 	unsafe { system_data.dl_error.free() }
 	unsafe { system_data.streams.free(); system_data.mutexes.free(); system_data.rwlocks.free(); system_data.conditions.free(); system_data.once.free(); system_data.dispatch_once.free(); free(system_data) }
 	system_data = unsafe { nil }
 }
 
+// Darwin's public host_page_size reads the cached vm_page_size without a
+// host RPC or port validation. Copy exactly vm_size_t's eight ARM64 bytes;
+// the exported _vm_page_size cell and this getter share the same storage.
+fn darwin_host_page_size(_ u32, output &u64) i32 {
+	if system_data == unsafe { nil } { panic('iOS: host page size requires configured system data') }
+	value := system_data.page_size
+	unsafe { C.memcpy(voidptr(output), voidptr(&value), 8) }
+	return 0
+}
+
 fn system_data_symbol(symbol string) ?u64 {
 	return match symbol {
+		'_host_page_size' { u64(unsafe { voidptr(darwin_host_page_size) }) }
+		'_NDR_record' {
+			if system_data == unsafe { nil } { return none }
+			u64(unsafe { &system_data.ndr_record[0] })
+		}
 		'___stack_chk_guard' { u64(unsafe { &system_data.guard }) }
 		'___stdinp' { u64(unsafe { &system_data.standard[0] }) }
 		'___stdoutp' { u64(unsafe { &system_data.standard[1] }) }
@@ -142,6 +175,7 @@ fn system_data_symbol(symbol string) ?u64 {
 		'_in6addr_loopback' { u64(unsafe { &system_data.in6_loopback[0] }) }
 		'_mach_task_self_' { u64(unsafe { &system_data.task_self }) }
 		'_vm_page_size' { u64(unsafe { &system_data.page_size }) }
+		'_vm_page_mask' { u64(unsafe { &system_data.page_mask }) }
 		'_acos' { u64(unsafe { voidptr(C.acos) }) }
 		'_asin' { u64(unsafe { voidptr(C.asin) }) }
 		'_atan' { u64(unsafe { voidptr(C.atan) }) }

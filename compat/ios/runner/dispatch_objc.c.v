@@ -6,7 +6,7 @@ module main
 fn dispatch_objc_name(name string) bool {
 	return name in ['OS_object', 'OS_dispatch_object', 'OS_dispatch_queue',
 		'OS_dispatch_queue_serial_executor', 'OS_dispatch_queue_serial',
-		'OS_dispatch_queue_main', 'OS_dispatch_queue_global']!
+		'OS_dispatch_queue_main', 'OS_dispatch_queue_global', 'OS_dispatch_group', 'OS_dispatch_source', 'OS_dispatch_semaphore', '_NSDispatchData', 'OS_dispatch_data', 'OS_dispatch_data_empty']!
 }
 
 // Symbol lookup borrows static names; slicing the caller's string would
@@ -15,11 +15,17 @@ fn dispatch_objc_import_name(symbol string) ?string {
 	return match symbol {
 		'_OBJC_CLASS_$_OS_object', '_OBJC_METACLASS_$_OS_object' { 'OS_object' }
 		'_OBJC_CLASS_$_OS_dispatch_object', '_OBJC_METACLASS_$_OS_dispatch_object' { 'OS_dispatch_object' }
+		'_OBJC_CLASS_$_OS_dispatch_group', '_OBJC_METACLASS_$_OS_dispatch_group' { 'OS_dispatch_group' }
+		'_OBJC_CLASS_$_OS_dispatch_source', '_OBJC_METACLASS_$_OS_dispatch_source' { 'OS_dispatch_source' }
+		'_OBJC_CLASS_$_OS_dispatch_semaphore', '_OBJC_METACLASS_$_OS_dispatch_semaphore' { 'OS_dispatch_semaphore' }
 		'_OBJC_CLASS_$_OS_dispatch_queue', '_OBJC_METACLASS_$_OS_dispatch_queue' { 'OS_dispatch_queue' }
 		'_OBJC_CLASS_$_OS_dispatch_queue_serial_executor', '_OBJC_METACLASS_$_OS_dispatch_queue_serial_executor' { 'OS_dispatch_queue_serial_executor' }
 		'_OBJC_CLASS_$_OS_dispatch_queue_serial', '_OBJC_METACLASS_$_OS_dispatch_queue_serial' { 'OS_dispatch_queue_serial' }
 		'_OBJC_CLASS_$_OS_dispatch_queue_main', '_OBJC_METACLASS_$_OS_dispatch_queue_main' { 'OS_dispatch_queue_main' }
 		'_OBJC_CLASS_$_OS_dispatch_queue_global', '_OBJC_METACLASS_$_OS_dispatch_queue_global' { 'OS_dispatch_queue_global' }
+		'_OBJC_CLASS_$__NSDispatchData', '_OBJC_METACLASS_$__NSDispatchData' { '_NSDispatchData' }
+		'_OBJC_CLASS_$_OS_dispatch_data', '_OBJC_METACLASS_$_OS_dispatch_data' { 'OS_dispatch_data' }
+		'_OBJC_CLASS_$_OS_dispatch_data_empty', '_OBJC_METACLASS_$_OS_dispatch_data_empty' { 'OS_dispatch_data_empty' }
 		else { return none }
 	}
 }
@@ -43,7 +49,7 @@ fn dispatch_objc_allocation_checked(cls u64) ! {
 	for _ in 0 .. 128 {
 		info := ios_runtime.classes[current] or { return error('iOS: construction requires a registered class') }
 		if info.meta { return error('iOS: construction requires an instance class') }
-		if info.name == 'OS_object' {
+		if info.name in ['OS_object', '_NSDispatchData']! {
 			return error('iOS: dispatch objects require their dispatch factory; generic ObjC construction/isa replacement is unsupported')
 		}
 		current = info.parent
@@ -68,17 +74,42 @@ fn dispatch_objc_publish_classes() {
 		queue.isa = dispatch_runtime.objc_classes[if queue.main {0} else if queue.concurrent {2} else {1}]
 		unsafe { *(&u64(queue.identity)) = queue.isa }
 	}
+	for i,name in ['OS_dispatch_data', 'OS_dispatch_data_empty']! { dispatch_runtime.data_classes[i] = ios_runtime.names[name] }
+	for _,mut data in dispatch_runtime.data { data.isa = dispatch_runtime.data_classes[if data.immortal {1} else {0}] }
+	dispatch_runtime.group_class = ios_runtime.names['OS_dispatch_group']
+	for _, mut group in dispatch_runtime.groups { group.isa = dispatch_runtime.group_class }
+	dispatch_runtime.source_class = ios_runtime.names['OS_dispatch_source']
+	for _, mut source in dispatch_runtime.sources { source.isa = dispatch_runtime.source_class }
+	dispatch_runtime.semaphore_class = ios_runtime.names['OS_dispatch_semaphore']
+	for _, mut semaphore in dispatch_runtime.semaphores { semaphore.isa = dispatch_runtime.semaphore_class }
 }
 
 struct DispatchObjcView {
 	cls u64
 	refs u64
+	data bool
 }
 fn dispatch_objc_view(identity u64) ?DispatchObjcView {
 	if ios_runtime == unsafe { nil } || ios_runtime.swift_concurrency_retired
 		|| dispatch_runtime == unsafe { nil } { return none }
 	C.pthread_mutex_lock(dispatch_runtime.mutex)
 	defer { C.pthread_mutex_unlock(dispatch_runtime.mutex) }
+	if data := dispatch_runtime.data[identity] {
+		if data.isa == 0 { return none }
+		return DispatchObjcView{cls:data.isa,refs:if data.immortal {~u64(0)} else {data.refs},data:true}
+	}
+	if group := dispatch_runtime.groups[identity] {
+		if group.isa == 0 { return none }
+		return DispatchObjcView{cls: group.isa, refs: group.refs}
+	}
+	if source := dispatch_runtime.sources[identity] {
+		if source.isa == 0 { return none }
+		return DispatchObjcView{cls: source.isa, refs: source.external_refs}
+	}
+	if semaphore := dispatch_runtime.semaphores[identity] {
+		if semaphore.isa == 0 { return none }
+		return DispatchObjcView{cls: semaphore.isa, refs: semaphore.refs}
+	}
 	queue := dispatch_runtime.queues[identity] or { return none }
 	if queue.isa == 0 { return none }
 	return DispatchObjcView{cls:queue.isa,refs:if queue.immortal {~u64(0)} else {u64(queue.refs)}}
@@ -100,7 +131,7 @@ fn dispatch_objc_types(name string, meta bool, selector string) ?string {
 
 fn dispatch_objc_dispatch(object u64, selector string, mut frame RegisterFrame) bool {
 	view := dispatch_objc_view(object) or {
-		if dispatch_objc_is_queue(object) { panic('iOS: dispatch queue messages outside Objective-C runtime lifetime') }
+		if dispatch_objc_is_object(object) { panic('iOS: dispatch object messages outside Objective-C runtime lifetime') }
 		return false
 	}
 	if dispatch_objc_types('OS_dispatch_queue',false,selector) == none {

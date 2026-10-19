@@ -27,6 +27,34 @@ use [`publish-release`](../../tools/packages/SDK.md#build-and-publish) to sign
 or the CLI. No host image rebuild or shared runtime is needed for these static
 applications. Select an ordinary `launch_user` for a root desktop session.
 
+For a release image, save the advertised set as a reviewed requirements file
+(use `x86_64` for that target):
+
+```json
+{"format":1,"architecture":"aarch64","packages":["org.vinix.package-hello","org.vinix.counter","org.vinix.memo"]}
+```
+
+Select it with `VINIX_PACKAGE_IMAGE_APPLICATIONS=/absolute/native-apps.json`
+alongside the reviewed `VINIX_PACKAGE_IMAGE_CONFIG` and signed offline
+`VINIX_PACKAGE_IMAGE_REPOSITORIES` bundle. Desktop staging checks their joint
+installability before package-tool compilation, and its cache tracks the selected
+requirements and contents. Direct `stage.v --check --applications FILE` returns
+the requirements digest and exact deployment lock without changing the image.
+See [the release contract](../../tools/packages/SDK.md#application-requirements-files-in-desktop-builds).
+
+Add `--export-deployment /release/new-native-deployment.json` to that check to
+save its exact lock directly. The new output must be outside the image. Ship it
+with the authenticated bundle, then open its path in Software's **Deployment**
+form to review the complete set before applying it. Current publisher trust and
+policy are checked again. See [deployment export](../../tools/packages/SDK.md#export-an-image-application-deployment).
+
+Normal image staging with that requirements file also saves the exact lock in
+the image. After boot, **Software → Deployment → Review release apps** reviews
+Hello, Counter and Memo together from the bundled signed repository. Confirm the
+complete plan before administrator approval. The release declaration does not
+install apps or change personal data during image construction. See
+[image declaration](../../tools/packages/SDK.md#declare-release-applications-in-an-image).
+
 The version argument labels the three application manifests. Publishers must
 review source and toolchain changes when advancing it. Binary reproducibility
 across different compiler installations is not implied. Signed updates,

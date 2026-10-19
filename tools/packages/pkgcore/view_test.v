@@ -4,6 +4,8 @@ module pkgcore
 import json2
 import os
 import time
+import tools.packages.pkgprotocol
+import tools.packages.signing
 
 $if track_heap ? {
 	#include "@VMODROOT/../../../desktop/tools/tests/heap_tracker.h"
@@ -45,6 +47,149 @@ fn view_configuration() Config {
 
 fn view_row(view SoftwareView, id string) SoftwareRow {
 	return view.rows.filter(it.id == id)[0]
+}
+
+fn test_software_views_own_independent_rows_after_input_and_sibling_retirement() {
+	for architecture in ['aarch64', 'x86_64']! {
+		base := Config{ ...view_configuration(), architecture: architecture, launch_user: 'alex' }
+		config := decode_configuration(json2.encode(base))!
+		p := Package{ ...view_package('app', '1.0.0', 'native'), architecture: architecture,
+			permissions: ['display'], dependencies: [Dependency{id: 'assets', minimum: '1.0.0', before: '3.0.0'}] }
+		assets := view_installed(view_package('assets', '1.0.0', 'data'))
+		current := decode_persistent_state(json2.encode(State{ architecture: architecture, generation: 1, requested: ['app'], packages: [view_installed(p), assets] }), architecture)!
+		updated := decode_persistent_state(json2.encode(State{ ...current, generation: 2, packages: [
+			view_installed(Package{ ...p, version: '2.0.0', permissions: ['files'] }), assets] }), architecture)!
+		catalog := Catalog{ packages: updated.packages }
+		mut first := catalog_view(config, catalog, current, '')!
+		mut second := catalog_view(config, catalog, current, '')!
+		assert first == second && first.rows.data != second.rows.data && first.architecture.str != second.architecture.str
+		old := view_row(first, 'app'); other := view_row(second, 'app')
+		assert old.name.str != other.name.str && old.installed_name.str != other.installed_name.str
+		assert old.permissions.data != other.permissions.data && old.installed_permissions.data != other.installed_permissions.data
+		assert old.installed_dependencies.data != other.installed_dependencies.data && old.installed_dependencies[0].id.str != other.installed_dependencies[0].id.str
+		text := json2.encode(second)
+		close_decoded_configuration(config); close_decoded_state(current); close_decoded_state(updated)
+		first.close(); first.close()
+		assert first.rows.len == 0 && first.architecture == ''
+		assert view_row(second, 'app').name == 'app' && view_row(second, 'app').installed_dependencies[0].before == '3.0.0'
+		assert view_row(second, 'app').permissions == ['files'] && view_row(second, 'app').installed_permissions == ['display']
+		assert view_row(second, 'app').installed_license == 'MIT' && view_row(second, 'app').repository == 'fixture'
+		mut wire := pkgprotocol.decode_software_view(text)!
+		assert json2.encode(second) == text && wire.architecture == architecture
+		wire.close(); second.close(); second.close()
+		unsafe { text.free() }
+	}
+	println('SOFTWARE VIEW OWNERSHIP independent catalog rows survive source and sibling retirement; both architectures and unchanged protocol fields PASS')
+}
+
+fn test_software_catalog_projection_retires_rows_resolution_policy_and_refusal_scratch() {
+	$if track_heap ? {
+		base := view_configuration()
+		app := view_installed(view_package('app', '1.0.0', 'native'))
+		current := State{ architecture: 'aarch64', generation: 1, requested: ['app'], packages: [app] }
+		for mode in ['update', 'unresolved', 'revoked', 'denied', 'fresh', 'growing']! {
+			config := if mode == 'revoked' { Config{ ...base, repositories: [] } }
+				else if mode == 'denied' { Config{ ...base, policy: Policy{ allowed: ['other'] } } } else { base }
+			mut packages := [Installed{ ...app, package: Package{ ...app.package, version: '2.0.0',
+				dependencies: if mode == 'unresolved' { [Dependency{id: 'missing'}] } else { []Dependency{} } } }]
+			if mode == 'growing' {
+				for index in 0 .. 64 { packages << view_installed(view_package('app-' + index.str(), '1.0.0', 'native')) }
+			}
+			catalog := Catalog{packages: packages}
+			C.vinix_heap_begin()
+			for _ in 0 .. 1000 {
+				mut view := catalog_view(config, catalog, if mode == 'fresh' { State{architecture: 'aarch64'} } else { current },
+					if mode == 'revoked' { 'Publisher revoked' } else { '' })!
+				assert view.rows.len == if mode == 'growing' { 65 } else { 1 }
+				if mode in ['unresolved', 'denied']! { assert view.update_error != '' }
+				view.close(); view.close()
+			}
+			kept := C.vinix_heap_end()
+			assert kept == 0 && C.vinix_heap_count() == 0, mode + ': retained ' + kept.str() + ' bytes'
+		}
+		mut packages := []Installed{cap: 4097}
+		for index in 0 .. 4097 { packages << view_installed(view_package('app-' + index.str(), '1.0.0', 'native')) }
+		C.vinix_heap_begin()
+		for _ in 0 .. 16 {
+			if mut view := catalog_view(base, Catalog{packages: packages}, State{architecture: 'aarch64'}, '') {
+				view.close(); assert false
+			} else { message := err.msg(); assert message.contains('row limit'); unsafe { message.free(); err.free() } }
+		}
+		kept := C.vinix_heap_end()
+		assert kept == 0 && C.vinix_heap_count() == 0, 'row-limit refusals retained ' + kept.str()
+		println('SOFTWARE VIEW OWNERSHIP 1000 update/unresolved/revoked/denied/fresh/65-row cycles and sixteen row-limit refusals retain zero tracked bytes PASS')
+	}
+}
+
+fn test_public_software_view_retires_fresh_authenticated_and_failed_read_storage() {
+	root := os.temp_dir() + '/vinix-view-owned-' + os.getpid().str() + '-' + time.now().unix_micro().str()
+	os.mkdir_all(root + '/etc/vinix-packages')!
+	defer { os.rmdir_all(root) or {} }
+	path := root + '/etc/vinix-packages/config.json'; directory := state_directory(root)
+	fresh := json2.encode(Config{architecture: 'aarch64', launch_user: 'alex'})
+	os.write_file(path, fresh)!
+	$if track_heap ? { C.vinix_heap_begin() }
+	for _ in 0 .. 1000 {
+		mut view := software_view(root, true)!
+		assert view.offline && view.catalog_error.contains('repo-enroll') && view.rows.len == 0
+		view.close(); view.close()
+	}
+	$if track_heap ? { kept := C.vinix_heap_end(); assert kept == 0, 'fresh reads retained ' + kept.str() }
+	assert os.read_file(path)! == fresh && !os.exists(directory)
+	private := signing.new_key_from_seed([]u8{len: 32, init: 7})
+	repository := Repository{id: 'fixture', url: 'file:///offline/repository', public_key: private.public_key().hex()}
+	config := Config{architecture: 'aarch64', launch_user: 'alex', repositories: [repository]}
+	text := json2.encode(config); os.write_file(path, text)!
+	app := view_package('app', '1.0.0', 'native')
+	installed := Installed{package: app, repository: repository.id, public_key: repository.public_key, sequence: 1}
+	state := State{architecture: 'aarch64', generation: 1, requested: ['app'], packages: [installed]}
+	guard := acquire(directory)!; guard.release()
+	os.mkdir_all(directory + '/generations/1')!
+	state_text := json2.encode(state); os.write_file(directory + '/generations/1/state.json', state_text)!
+	os.symlink('generations/1', directory + '/current')!
+	index := canonical_index(Index{repository: repository.id, sequence: 1, expires: time.now().unix() + 3600,
+		packages: [Package{ ...app, version: '2.0.0' }]})!
+	bytes := index.bytes(); signature := signing.sign(private, bytes)!
+	cache := json2.encode([Snapshot{repository: repository, text: index, signature: signature.hex()}])
+	os.write_file(directory + '/catalog.json', cache)!
+	// Initialize generic metadata tables outside the measured read boundary.
+	mut warm := software_view(root, false)!; warm.close()
+	for failed in [false, true]! {
+		if failed { os.write_file(directory + '/catalog.json', '{invalid catalog')! }
+		$if track_heap ? { C.vinix_heap_begin() }
+		for _ in 0 .. if failed { 1000 } else { 128 } {
+			mut view := software_view(root, false)!
+			assert view.rows.len == 1 && view.rows[0].installed_version == '1.0.0'
+			assert view.rows[0].version == if failed { '1.0.0' } else { '2.0.0' }
+			assert (view.catalog_error != '') == failed && view.rows[0].updatable == !failed
+			view.close(); view.close()
+		}
+		$if track_heap ? { kept := C.vinix_heap_end(); assert kept == 0, 'cached reads retained ' + kept.str() }
+	}
+	// Failed configuration and busy-reader refusals release all partial storage.
+	for busy in [false, true]! {
+		writer := if busy { acquire(directory)! } else { Lock{fd: -1} }
+		os.write_file(path, '{invalid configuration')!
+		$if track_heap ? { C.vinix_heap_begin() }
+		for _ in 0 .. 1000 {
+			if mut view := software_view(root, false) { view.close(); assert false }
+			else { message := err.msg(); if busy { assert message.contains('another package transaction') }; unsafe { message.free(); err.free() } }
+		}
+		$if track_heap ? { kept := C.vinix_heap_end(); assert kept == 0, 'refused reads retained ' + kept.str() }
+		if busy { writer.release() }
+		os.write_file(path, text)!
+	}
+	os.write_file(directory + '/catalog.json', cache)!
+	mut retained := software_view(root, true)!; mut sibling := software_view(root, false)!
+	assert retained.rows.data != sibling.rows.data && retained.rows[0].name.str != sibling.rows[0].name.str
+	sibling.close(); sibling.close()
+	assert os.read_file(path)! == text && os.read_file(directory + '/generations/1/state.json')! == state_text
+	assert os.readlink(directory + '/current')! == 'generations/1' && os.ls(directory + '/objects')!.len == 0
+	os.write_file(path, '{replaced configuration')!; os.rm(directory + '/catalog.json')!
+	assert retained.rows[0].version == '2.0.0' && retained.rows[0].installed_version == '1.0.0' && retained.offline
+	retained.close(); retained.close()
+	unsafe { bytes.free(); signature.free(); index.free(); cache.free(); state_text.free(); fresh.free(); text.free() }
+	println('SOFTWARE VIEW OWNERSHIP public reads preserve stored bytes and independently retire 1000 fresh/catalog-failure/configuration-failure/busy reads plus 128 authenticated reads PASS')
 }
 
 fn test_updates_expose_resolved_runtime_data_and_new_dependencies() {
@@ -103,6 +248,93 @@ fn test_launch_presentation_retains_installed_metadata_when_an_update_changes_ki
 	row := view_row(view, 'app')
 	assert row.updatable && row.name == 'Planned assets' && row.kind == 'data' && row.permissions == ['files']
 	assert row.installed_name == 'Installed app' && row.installed_kind == 'native' && row.installed_permissions.len == 0
+}
+
+fn test_software_provenance_retains_installation_identity_through_preview_revocation_activation_and_rollback() {
+	for architecture in ['aarch64', 'x86_64']! {
+		base := view_configuration()
+		replacement := Repository{ ...base.repositories[0], public_key: '3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c' }
+		config := Config{ ...base, architecture: architecture, repositories: [replacement] }
+		assets := view_installed(view_package('assets', '1.0.0', 'data'))
+		old := view_installed(Package{ ...view_package('app', '1.0.0', 'native'), architecture: architecture, dependencies: [Dependency{ id: 'assets', minimum: '1.0.0', before: '2.0.0' }] })
+		incoming := Installed{ ...old, package: Package{ ...old.package, version: '2.0.0', dependencies: [] }, repository: replacement.id, public_key: replacement.public_key }
+		fresh := Installed{ ...incoming, package: Package{ ...incoming.package, id: 'fresh' } }
+		current := State{ architecture: architecture, generation: 1, requested: ['app'], packages: [old, assets] }
+		catalog := Catalog{ packages: [incoming, fresh] }
+		view := catalog_view(config, catalog, current, '')!
+		row := view_row(view, 'app')
+		assert row.version == '2.0.0' && row.installed_version == '1.0.0' && row.update_action == 'update'
+		assert row.installed_dependencies_known && row.installed_dependencies == old.package.dependencies
+		assert row.repository == replacement.id && row.public_key == replacement.public_key
+		assert row.installed_repository == old.repository && row.installed_public_key == old.public_key
+		mut wire := pkgprotocol.decode_software_view(json2.encode(view))!
+		assert wire.rows.filter(it.id == 'app')[0].installed_public_key == old.public_key
+		assert wire.rows.filter(it.id == 'app')[0].public_key == replacement.public_key
+		assert wire.rows.filter(it.id == 'app')[0].installed_dependencies[0].minimum == '1.0.0'
+		assert wire.rows.filter(it.id == 'app')[0].installed_dependencies[0].before == '2.0.0'
+		wire.close()
+		assert row.diagnostic.contains('revoked')
+		removed := view_row(view, 'assets')
+		assert removed.update_action == 'remove' && removed.installed_repository == assets.repository && removed.installed_public_key == assets.public_key
+		assert view_row(view, 'fresh').installed_repository == '' && view_row(view, 'fresh').installed_public_key == ''
+		assert !view_row(view, 'fresh').installed_dependencies_known && view_row(view, 'fresh').installed_dependencies.len == 0
+		revoked := catalog_view(Config{ ...config, repositories: [] }, Catalog{}, current, 'publisher revoked')!
+		assert view_row(revoked, 'app').installed_repository == old.repository && view_row(revoked, 'app').installed_public_key == old.public_key
+		assert view_row(revoked, 'app').diagnostic.contains('revoked') && !view_row(revoked, 'app').updatable
+		assert view_row(revoked, 'app').installed_dependencies == old.package.dependencies
+		activated := catalog_view(config, catalog, State{ ...current, generation: 2, packages: [incoming] }, '')!
+		assert view_row(activated, 'app').installed_repository == incoming.repository && view_row(activated, 'app').installed_public_key == incoming.public_key
+		assert view_row(activated, 'app').installed_dependencies_known && view_row(activated, 'app').installed_dependencies.len == 0
+		restored := catalog_view(config, catalog, State{ ...current, generation: 3 }, '')!
+		assert view_row(restored, 'app').installed_repository == old.repository && view_row(restored, 'app').installed_public_key == old.public_key
+		assert view_row(restored, 'app').installed_dependencies == old.package.dependencies
+		unavailable := catalog_view(config, Catalog{}, current, 'catalog unavailable')!
+		assert view_row(unavailable, 'app').installed_repository == old.repository && view_row(unavailable, 'app').installed_public_key == old.public_key
+	}
+	println('SOFTWARE PROVENANCE both hosts retain installed publisher across previews, removal, revocation, activation, restored generations and unavailable catalogs PASS')
+	println('SOFTWARE DEPENDENCIES both hosts retain installed requirements across update previews, removals, revocation, activation and rollback PASS')
+}
+
+fn test_installed_payload_facts_survive_preview_policy_revocation_and_generation_changes() {
+	for architecture in ['aarch64', 'x86_64']! {
+		for flagged in [false, true]! {
+			base := view_configuration()
+			config := Config{ ...base, architecture: architecture, policy: Policy{ licenses: ['Installed-EULA', 'New-License'], allow_firmware: true } }
+			runtime := view_installed(Package{ ...view_package('old-runtime', '1.0.0', 'runtime'), architecture: architecture })
+			old := view_installed(Package{ ...view_package('app', '1.0.0', 'native'), architecture: architecture,
+				kind: 'linux', runtime: 'old-runtime', dependencies: [Dependency{id: 'old-runtime'}],
+				license: 'Installed-EULA', proprietary: flagged, firmware: flagged })
+			incoming := view_installed(Package{ ...view_package('app', '2.0.0', 'native'), architecture: architecture,
+				license: 'New-License', proprietary: !flagged, firmware: !flagged })
+			fresh := Installed{ ...incoming, package: Package{ ...incoming.package, id: 'fresh' } }
+			current := State{ architecture: architecture, generation: 1, requested: ['app'], packages: [old, runtime] }
+			catalog := Catalog{packages: [incoming, fresh]}
+			view := catalog_view(config, catalog, current, '')!
+			row := view_row(view, 'app')
+			assert row.updatable && row.license == 'New-License' && row.proprietary == !flagged && row.firmware == !flagged && row.runtime == ''
+			for presented in [view,
+				catalog_view(Config{ ...config, repositories: [] }, Catalog{}, current, 'publisher revoked')!,
+				catalog_view(Config{ ...config, policy: Policy{} }, Catalog{}, current, 'catalog unavailable')!,
+				catalog_view(config, catalog, State{ ...current, generation: 3 }, '')!] {
+				installed := view_row(presented, 'app')
+				assert installed.installed_license == 'Installed-EULA' && installed.installed_runtime == 'old-runtime'
+				assert installed.installed_proprietary == flagged && installed.installed_firmware == flagged
+				mut wire := pkgprotocol.decode_software_view(json2.encode(presented))!
+				decoded := wire.rows.filter(it.id == 'app')[0]
+				assert decoded.installed_license == installed.installed_license && decoded.installed_runtime == installed.installed_runtime
+				assert decoded.installed_proprietary == flagged && decoded.installed_firmware == flagged
+				wire.close()
+			}
+			removed := view_row(view, 'old-runtime')
+			assert removed.update_action == 'remove' && removed.installed_license == runtime.package.license
+			uninstalled := view_row(view, 'fresh')
+			assert uninstalled.installed_license == '' && uninstalled.installed_runtime == '' && !uninstalled.installed_proprietary && !uninstalled.installed_firmware
+			activated := view_row(catalog_view(config, catalog, State{ ...current, generation: 2, packages: [incoming] }, '')!, 'app')
+			assert activated.installed_license == 'New-License' && activated.installed_runtime == ''
+			assert activated.installed_proprietary == !flagged && activated.installed_firmware == !flagged
+		}
+	}
+	println('SOFTWARE PAYLOAD both hosts keep installed license, proprietary/firmware flags and runtime distinct across previews, policy/trust failures and generation changes PASS')
 }
 
 fn test_updates_disclose_dependency_removals_and_retain_explicit_roots() {
@@ -226,6 +458,12 @@ fn test_disk_view_is_read_only_and_uses_package_reader_lock() {
 	assert view.generation == state.generation && view.offline && !load_config(root)!.policy.offline
 	assert view.rows.filter(it.updatable).map(it.id) == ['runtime']
 	assert view_row(view, 'runtime').version == '2.0.0'
+	assert view_row(view, 'runtime').installed_repository == 'fixture' && view_row(view, 'runtime').installed_public_key == key
+	assert view_row(view, 'app').installed_repository == 'fixture' && view_row(view, 'app').installed_public_key == key
+	assert view_row(view, 'app').installed_dependencies_known && view_row(view, 'app').installed_dependencies == app.dependencies
+	mut wire := pkgprotocol.decode_software_view(json2.encode(view))!
+	assert wire.rows.filter(it.id == 'app')[0].installed_dependencies[0].id == 'runtime'
+	wire.close()
 	assert os.ls(directory + '/objects')! == objects && os.ls(directory + '/generations')! == generations
 	assert read_state(directory, 'aarch64')! == state
 	guard := acquire(directory)!

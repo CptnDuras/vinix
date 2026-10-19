@@ -18,7 +18,10 @@ struct ReviewIdentity {
 }
 
 fn review_fingerprint(config Config, operation string, names []string, current State, plan Plan, target u64, repairs []string) string {
-	text := json2.encode(ReviewIdentity{
+	mut bytes := []u8{cap: 2048}
+	unsafe { bytes.flags |= .noslices }
+	defer { unsafe { bytes.free() } }
+	json2.encode_append(ReviewIdentity{
 		config:            config
 		operation:         operation
 		names:             names
@@ -26,14 +29,17 @@ fn review_fingerprint(config Config, operation string, names []string, current S
 		plan:              plan
 		target_generation: target
 		repairs:           repairs
-	})
-	bytes := text.bytes()
-	result := sha256.sum(bytes).hex()
-	unsafe {
-		bytes.free()
-		text.free()
-	}
-	return result
+	}, mut bytes)
+	return review_identity_digest(bytes)
+}
+
+fn review_identity_digest(bytes []u8) string {
+	mut hash := sha256.new()
+	mut sum := []u8{len: sha256.size}
+	defer { unsafe { sum.free(); hash.free(); free(hash) } }
+	hash.write(bytes) or { panic(err) }
+	hash.checksum_into(mut sum)
+	return sum.hex()
 }
 
 fn check_review(expected string, actual string) ! {
@@ -42,16 +48,41 @@ fn check_review(expected string, actual string) ! {
 	}
 }
 
+// Request-local storage. Solver buffers borrow manifests from the authenticated
+// catalog (or current state for removal); repair borrows the state's buffers too.
+// Retire this owner before its configuration and installed state.
+struct PreparedOperationPlan {
+mut:
+	plan Plan
+	catalog Catalog
+	owns_catalog bool
+	owns_buffers bool
+}
+
+fn (mut prepared PreparedOperationPlan) close() {
+	if prepared.owns_buffers {
+		unsafe { (&array(&prepared.plan.requested)).free(); (&array(&prepared.plan.packages)).free() }
+	}
+	if prepared.owns_catalog { close_authenticated_catalog(prepared.catalog) }
+	prepared = PreparedOperationPlan{}
+}
+
+// Legacy internal callers retain this borrowed plan's preparation. Public
+// requests keep its owner explicitly until their independent reply is built.
 fn operation_plan(config Config, directory string, current State, operation string, names []string) !Plan {
+	return prepare_operation_plan(config, directory, current, operation, names)!.plan
+}
+
+fn prepare_operation_plan(config Config, directory string, current State, operation string, names []string) !PreparedOperationPlan {
 	if operation == 'deploy' && names.len == 0 {
 		// An explicit empty target only removes packages. Like uninstall, it
 		// must remain available without an authenticated catalog or publisher.
 		config.validate()!
-		return Plan{}
+		return PreparedOperationPlan{}
 	}
 	if operation == 'repair' {
 		if names.len != 0 { return error('repair takes no package IDs; it preserves the complete installed closure') }
-		if current.packages.len == 0 { return Plan{ requested: current.requested, packages: current.packages } }
+		if current.packages.len == 0 { return PreparedOperationPlan{plan: Plan{ requested: current.requested, packages: current.packages }} }
 		// Repair cannot turn a missing/withdrawn installed version into an update.
 		// Authenticate the exact manifests and provenance against today's cached
 		// catalog, then retain the already validated persistent dependency closure.
@@ -64,16 +95,19 @@ fn operation_plan(config Config, directory string, current State, operation stri
 			}
 			check_policy(installed.package, config.policy)!
 		}
-		return Plan{ requested: current.requested, packages: current.packages }
+		return PreparedOperationPlan{plan: Plan{ requested: current.requested, packages: current.packages }}
 	}
 	roots := desired_roots(current, operation, names)!
 	defer { unsafe { (&array(&roots)).free() } }
 	// Uninstall remains available with expired/revoked publishers or tightened policy.
-	catalog := if operation == 'remove' {
-		Catalog{ packages: current.packages }
-	} else {
-		load_catalog(config, directory)!
+	mut prepared := PreparedOperationPlan{}
+	mut accepted := false
+	defer { if !accepted { prepared.close() } }
+	if operation != 'remove' {
+		prepared.catalog = load_catalog(config, directory)!
+		prepared.owns_catalog = true
 	}
+	catalog := if operation == 'remove' { Catalog{packages: current.packages} } else { prepared.catalog }
 	mut licenses := []string{}
 	unsafe { licenses.flags |= .noslices }
 	defer { unsafe { (&array(&licenses)).free() } }
@@ -92,16 +126,20 @@ fn operation_plan(config Config, directory string, current State, operation stri
 	}
 	defer { if operation == 'remove' { unsafe { (&array(&resolution_config.policy.permissions)).free() } } }
 	plan := resolve(catalog, resolution_config, current, roots, operation in ['upgrade', 'deploy'])!
+	prepared.plan = plan
+	prepared.owns_buffers = true
 	if operation == 'remove' && plan.packages.any(it.package.id in names) {
-		unsafe { (&array(&plan.requested)).free(); (&array(&plan.packages)).free() }
 		if blocker := removal_blocker(current, names, '') {
 			return error('cannot remove ${blocker.id}: still required by requested package ${blocker.root}; review removal of dependent applications first')
 		}
 		return error('cannot remove a package still required by another installed application')
 	}
-	return plan
+	accepted = true
+	return prepared
 }
 
+// Independent observation; retire the returned fields with Plan.close().
+// Configuration, directory and input IDs remain borrowed from the caller.
 pub fn preview_plan(config Config, directory string, operation string, names []string) !Plan {
 	guard := acquire_reader(directory)!
 	defer { guard.release() }
@@ -110,7 +148,10 @@ pub fn preview_plan(config Config, directory string, operation string, names []s
 
 fn preview_plan_locked(config Config, directory string, operation string, names []string) !Plan {
 	current := read_state(directory, config.architecture)!
-	return operation_plan(config, directory, current, operation, names)
+	defer { if current.generation != 0 { close_decoded_state(current) } }
+	mut prepared := prepare_operation_plan(config, directory, current, operation, names)!
+	defer { prepared.close() }
+	return owned_plan(prepared.plan)
 }
 
 fn review_strings(values []string) []string {
@@ -145,6 +186,11 @@ fn review_row(installed Installed, previous_version string, requested bool, acti
 	}
 }
 
+fn review_row_previous(installed Installed, previous Installed, requested bool, action string) pkgprotocol.ReviewPackage {
+	return pkgprotocol.ReviewPackage{...review_row(installed, previous.package.version, requested, action),
+		installed_permissions_known: true, installed_permissions: review_strings(previous.package.permissions)}
+}
+
 pub fn review_operation(config Config, directory string, operation string, names []string) !pkgprotocol.Review {
 	config.validate()!
 	guard := acquire_reader(directory)!
@@ -154,21 +200,30 @@ pub fn review_operation(config Config, directory string, operation string, names
 
 fn review_operation_locked(config Config, directory string, operation string, names []string) !pkgprotocol.Review {
 	current := read_state(directory, config.architecture)!
+	defer { if current.generation != 0 { close_decoded_state(current) } }
 	mut target := u64(0)
-	plan := if operation == 'rollback' {
+	mut old := State{}
+	defer { if old.generation != 0 { close_decoded_state(old) } }
+	mut prepared := PreparedOperationPlan{}
+	defer { prepared.close() }
+	if operation == 'rollback' {
 		if names.len != 0 { return error('rollback takes no package IDs') }
-		old := rollback_target(config, directory, current)!
+		old = rollback_target(config, directory, current)!
 		target = old.generation
-		Plan{ requested: old.requested, packages: old.packages }
+		prepared.plan = Plan{ requested: old.requested, packages: old.packages }
 	} else {
-		operation_plan(config, directory, current, operation, names)!
+		prepared = prepare_operation_plan(config, directory, current, operation, names)!
 	}
+	plan := prepared.plan
 	repairs := transaction_repairs(directory, current, plan, operation)
 	defer { close_transaction_repairs(repairs) }
-	return review_plan(config, directory, current, operation, names, plan, target, repairs,
-		review_fingerprint(config, operation, names, current, plan, target, repairs))
+	fingerprint := review_fingerprint(config, operation, names, current, plan, target, repairs)
+	defer { unsafe { fingerprint.free() } }
+	return review_plan(config, directory, current, operation, names, plan, target, repairs, fingerprint)
 }
 
+// Inputs, including the fingerprint, are borrowed. Finish fallible observations
+// before allocating presentation fields; the returned review owns every field.
 fn review_plan(config Config, directory string, current State, operation string, names []string, plan Plan, target u64, repairs []string, fingerprint string) !pkgprotocol.Review {
 	changed := operation == 'rollback' || current.requested != plan.requested || current.packages != plan.packages || repairs.len > 0
 	if changed {
@@ -181,7 +236,9 @@ fn review_plan(config Config, directory string, current State, operation string,
 		})!
 		unsafe { encoded.free() }
 	}
-	mut rows := []pkgprotocol.ReviewPackage{}
+	needed := if !changed { u64(0) } else { estimate_transaction_space(plan, directory, current, operation)! }
+	available := free_bytes(directory)!
+	mut rows := []pkgprotocol.ReviewPackage{cap: plan.packages.len + current.packages.len}
 	for installed in plan.packages {
 		previous := current.packages.filter(it.package.id == installed.package.id)
 		version := if previous.len == 0 { '' } else { previous[0].package.version }
@@ -194,33 +251,30 @@ fn review_plan(config Config, directory string, current State, operation string,
 		} else {
 			'update'
 		}
-		rows << review_row(installed, version, installed.package.id in plan.requested, action)
+		rows << if previous.len == 0 { review_row(installed, version, installed.package.id in plan.requested, action) }
+			else { review_row_previous(installed, previous[0], installed.package.id in plan.requested, action) }
+		unsafe { (&array(&previous)).free() }
 	}
 	for installed in current.packages {
 		if !plan.packages.any(it.package.id == installed.package.id) {
-			rows << review_row(installed, installed.package.version, false, 'remove')
+			rows << review_row_previous(installed, installed, false, 'remove')
 		}
 	}
 	rows.sort(a.id < b.id)
-	needed := if !changed {
-		u64(0)
-	} else {
-		estimate_transaction_space(plan, directory, current, operation)!
-	}
-	review := pkgprotocol.Review{
-		format:            1
+	mut review := pkgprotocol.Review{
+		format:            2
 		operation:         operation.clone()
 		names:             review_strings(names)
 		architecture:      config.architecture.clone()
 		generation:        current.generation
 		target_generation: target
-		fingerprint:       fingerprint
+		fingerprint:       fingerprint.clone()
 		requested:         review_strings(plan.requested)
 		rows:              rows
 		disk_needed:       needed
-		disk_available:    free_bytes(directory)!
+		disk_available:    available
 		disk_reserve:      config.policy.reserve_bytes
 	}
-	review.validate()!
+	review.validate() or { review.close(); return err }
 	return review
 }
