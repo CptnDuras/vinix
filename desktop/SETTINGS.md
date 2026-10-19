@@ -33,7 +33,8 @@ power_profile=auto
 ```
 
 `scale` is `auto`, `1` (100%) or `2` (200%). The other choices are `right`/`left`,
-`standard`/`combined` and `default`/`macos`/`windows7`/`windowsxp`. `glass_color` is the
+`standard`/`combined` and a look's id (`default`, `macos`, `blue`, `win2k`, `platinum`,
+`beos`, `windows7`, `windowsxp`, `nextstep`, `amiga`, `cde`, `gnome`, `win31`, `haiku`). `glass_color` is the
 zero-based index of one of the sixteen Windows 7 glass colours, from Sky (0)
 to Frost (15); it is kept whichever theme is worn. `language` is `en` (the default),
 `ru` or `es`; see [the system language](#system-language) below. Clock choices are `true`/`false`;
@@ -113,6 +114,44 @@ and relaunch with the same volume. All choices should be restored. Change only
 the theme, clock or wallpaper and repeat to verify the scale and other values
 survive. Also check 100%, resetting the file, and migration from a legacy `2\n`
 record.
+
+## Appearance
+
+**Appearance** is one page for how windows look and what a click on their title
+bar does. A miniature window sits at the top, wearing the look in force, and
+everything below it changes the same picture.
+
+* **Drag the controls** on the miniature's title bar to place them: along the bar,
+  to the other end, or onto the row of control names under it to take one off (a
+  bar always keeps one). Tapping a name on that row puts a control on or off the
+  bar. For a look whose title is a tab (BeOS, Haiku), drag the tab to slide it to
+  the left, centre or right, and drag the grip on its edge to resize it, in steps
+  of five percent of the window. The **Title bar**, **Controls** and **Skin**
+  sections offer the same choices as buttons, for keyboards and for precision.
+* **Look** lists every look. A look is a preset of everything on this page: choosing
+  one sets the title bar, its controls, the tab, the skin and which end the
+  buttons start at from scratch (Catalina still starts with its controls at the
+  left). **Reset to the look** does the same without changing the look. What
+  clicks do (below) is the user's own and is kept.
+* **Title bar > Window buttons** is *As the look* or *Mirrored*, which turns the
+  look's own arrangement around; it works under every look, BeOS's tab included.
+* **Clicks** sets what a **double-click** and a **middle-click** on a title bar do:
+  zoom (maximize or restore), roll up (leave just the bar), minimise, or nothing.
+  By default a middle-click rolls the window up and a double-click zooms it.
+* **Skin** picks the artwork for the title bar and its controls; see
+  [skins/README.md](skins/README.md) for making one from SVG or PNG files, which go
+  in `/root/.vinix-skins/`.
+
+The page keeps its choices as overrides on the look, each written to the
+preferences file only while it is set: `ov_title_kind`, `ov_tab_align`,
+`ov_tab_width` (`0` fits the title, otherwise 10 to 100 percent), `ov_widgets` (the
+controls in the user's order, as `close@leading,maximize@trailing`),
+`ov_title_double_click`, `ov_title_middle_click` (`shade`, `hide`, `maximize` or
+`none`) and `skin=`. `button_side=left` is the mirror. Settings runs as its own
+process, so the drag reaches it as raw pointer events: its application-protocol
+factory sets `pointer_drag_only`, which hands it a left press and the drag that
+follows it and nothing else, and every other control on every page still works by
+action id.
 
 ## Taskbar controls
 
