@@ -136,3 +136,34 @@ fn test_skin_ids_are_directory_safe() {
 	assert !skin_id_valid('Skin')
 	assert !skin_id_valid('a/b')
 }
+
+// Every skin compiled into the desktop must read cleanly: its skin.cfg without a
+// problem, and every vector it names must parse into something that draws.
+fn test_every_builtin_skin_is_well_formed() {
+	assert builtin_skin_ids.len >= 5
+	for id in builtin_skin_ids {
+		assert skin_id_valid(id), id
+		cfg := builtin_skin_cfg(id) or { panic('no cfg for ${id}') }
+		skin := parse_skin(id, 'builtin:${id}', cfg)
+		assert skin.problems.len == 0, '${id}: ${skin.problems}'
+		assert skin.name == builtin_skin_name(id)
+		assert skin.widgets.len > 0, id
+		for action, widget in skin.widgets {
+			assert widget_action_from_name(action) != none, '${id}: ${action}'
+			for dr in [widget.normal, widget.hover, widget.pressed, widget.inactive] {
+				if dr.kind == .vector {
+					text := builtin_skin_asset(id, dr.file) or { panic('${id} lacks ${dr.file}') }
+					shape := parse_vector(text) or { panic('${id}/${dr.file} does not parse') }
+					// A mask at the size the skin asks for has some ink and some gap.
+					size := if widget.size > 0 { widget.size } else { 14 }
+					mask := rasterize_vector(shape, size, size)
+					ink := mask.filter(it > 127).len
+					assert ink > 0 && ink < size * size, '${id}/${dr.file}'
+				}
+			}
+		}
+	}
+	// An unknown file is simply absent.
+	assert builtin_skin_asset('beos-boxes', 'nothing.vec') == none
+	assert builtin_skin_cfg('nope') == none
+}

@@ -878,7 +878,7 @@ settings.appearance.buttons
 Кнопки окна
 -----
 settings.appearance.buttons_note
-С какой стороны заголовка стоят кнопки закрытия и масштаба.
+Зеркально разворачивает расположение кнопок, заданное видом.
 -----
 settings.appearance.combined
 Сгруппированная
@@ -1950,6 +1950,72 @@ settings.windows.skin_none
 -----
 settings.windows.reset
 Вернуть как в теме
+-----
+settings.designer.window
+Окно
+-----
+settings.designer.title
+Заголовок
+-----
+settings.designer.hint
+Перетаскивайте кнопки по заголовку; вкладку — чтобы сдвинуть, её край — чтобы изменить ширину.
+-----
+settings.designer.hint2
+Бросьте кнопку на нижний ряд, чтобы убрать её с заголовка.
+-----
+settings.appearance.tab_look
+Вид
+-----
+settings.appearance.tab_title
+Заголовок
+-----
+settings.appearance.tab_controls
+Кнопки
+-----
+settings.appearance.tab_actions
+Клики
+-----
+settings.appearance.tab_skin
+Обложка
+-----
+settings.appearance.look_note
+Вид задаёт все настройки на этих страницах; их можно изменить после.
+-----
+settings.appearance.tab_width
+Ширина вкладки
+-----
+settings.appearance.width_fit
+По тексту
+-----
+settings.appearance.width_full
+Во всю
+-----
+settings.appearance.side_look
+Как в виде
+-----
+settings.appearance.side_mirrored
+Зеркально
+-----
+settings.appearance.double_click
+Двойной щелчок
+-----
+settings.appearance.middle_click
+Средний щелчок
+-----
+settings.appearance.act_zoom
+Развернуть
+-----
+settings.appearance.act_shade
+Свернуть в строку
+-----
+settings.appearance.act_minimize
+Свернуть
+-----
+settings.appearance.act_none
+Ничего
+-----
+settings.appearance.actions_note
+Что делает щелчок по заголовку окна. «В строку» оставляет только заголовок.
 -----
 app.android_calculator
 Калькулятор Android

@@ -13,7 +13,7 @@ struct SettingsSearchEntry {
 const settings_search_limit = 128
 // Room for every entry below to match at once: SettingsApp keeps the indices
 // of its results inline. An entry added here needs one more.
-const settings_search_capacity = 51
+const settings_search_capacity = 53
 const settings_search_entries = [
 	SettingsSearchEntry{.taskbar, 'settings.appearance.overview', [
 		'desktop.overview.title', '', '', '', '', '',
@@ -298,7 +298,7 @@ const settings_search_entries = [
 	SettingsSearchEntry{.session,'Session',['startup','services','workspaces','restore','','']!},
 	SettingsSearchEntry{.shortcuts,'Shortcuts',['keyboard','customize','bindings','','','']!},
 	SettingsSearchEntry{.gestures,'Gestures',['corners','pointer','swipe','','','']!},
-	SettingsSearchEntry{.windows, 'settings.windows.titlebar', [
+	SettingsSearchEntry{.appearance, 'settings.windows.titlebar', [
 		'settings.windows.titlebar_note',
 		'settings.windows.bar',
 		'settings.windows.tab',
@@ -306,7 +306,7 @@ const settings_search_entries = [
 		'settings.windows.pos_left',
 		'settings.windows.pos_center',
 	]!},
-	SettingsSearchEntry{.windows, 'settings.windows.widgets', [
+	SettingsSearchEntry{.appearance, 'settings.windows.widgets', [
 		'settings.windows.widgets_note',
 		'settings.windows.action.close',
 		'settings.windows.action.minimize',
@@ -314,7 +314,23 @@ const settings_search_entries = [
 		'settings.windows.action.shade',
 		'settings.windows.action.menu',
 	]!},
-	SettingsSearchEntry{.windows, 'settings.windows.skin', [
+	SettingsSearchEntry{.appearance, 'settings.appearance.double_click', [
+		'settings.appearance.middle_click',
+		'settings.appearance.actions_note',
+		'settings.appearance.act_zoom',
+		'settings.appearance.act_shade',
+		'settings.appearance.act_minimize',
+		'',
+	]!},
+	SettingsSearchEntry{.appearance, 'settings.appearance.tab_width', [
+		'settings.appearance.width_fit',
+		'settings.appearance.width_full',
+		'settings.designer.hint',
+		'settings.appearance.side_mirrored',
+		'',
+		'',
+	]!},
+	SettingsSearchEntry{.appearance, 'settings.windows.skin', [
 		'settings.windows.skin_note',
 		'settings.windows.skin_none',
 		'settings.windows.follow',
@@ -404,6 +420,14 @@ fn (mut a SettingsApp) clear_search() {
 
 fn (mut a SettingsApp) choose_category(category SettingsCategory) {
 	a.clear_search()
+	// Windows is part of Appearance now; a selector for it, which a running
+	// desktop may still send, lands on the title bar section.
+	if category == .windows {
+		a.category = .appearance
+		a.appearance_tab = appearance_tab_title
+		a.category_page = 0
+		return
+	}
 	a.category = category
 	a.category_page = settings_sidebar_categories.index(category)/11
 	if category.service_name().len > 0 { a.refresh_session_settings(true) }

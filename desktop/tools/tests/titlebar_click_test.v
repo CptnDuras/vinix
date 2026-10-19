@@ -526,10 +526,10 @@ fn test_corner_resize_respects_minimum_size_and_usable_desktop() {
 	assert desktop.windows[index].y + desktop.windows[index].height == 600 - taskbar_height
 }
 
-// The look's own policy decides what a title-bar double-click does (Blue spec
-// D3): BeOS rolls the window up, where the default maximizes it. The same
-// time and distance limits apply to every look.
-fn test_titlebar_double_click_runs_the_looks_own_action() {
+// The configured policy decides what a title-bar double-click does (Blue spec
+// D3): zoom by default, and whatever the user chose (here rolling the window up)
+// otherwise. The same time and distance limits apply to every look.
+fn test_titlebar_double_click_runs_the_configured_action() {
 	mut desktop := Desktop{
 		canvas: Canvas{
 			width: 800
@@ -537,6 +537,8 @@ fn test_titlebar_double_click_runs_the_looks_own_action() {
 		}
 	}
 	desktop.settings.preset_id = 'beos'
+	assert desktop.behavior().title_double_click == .maximize
+	desktop.settings.ov_title_double_click = TitleAction.shade
 	id := desktop.spawn('Welcome', .welcome, 120, 80, 400, 260)
 	set_titlebar_test_target(mut desktop, id)
 	x := 200
@@ -555,4 +557,33 @@ fn test_titlebar_double_click_runs_the_looks_own_action() {
 	assert click.window_id == 0
 	assert desktop.windows.last().shaded
 	assert !desktop.windows.last().maximized
+}
+
+// A middle-click on a title bar rolls the window up by default, does whatever
+// the user chose instead, and leaves a press anywhere else alone.
+fn test_titlebar_middle_click_runs_the_configured_action() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 800
+			height: 600
+		}
+	}
+	id := desktop.spawn('Welcome', .welcome, 120, 80, 400, 260)
+	set_titlebar_test_target(mut desktop, id)
+	x := 200
+	y := 80 + desktop.theme().title_height / 2
+	assert desktop.title_middle_click(x, y)
+	assert desktop.windows.last().shaded
+	// Again, and it unrolls.
+	assert desktop.title_middle_click(x, y)
+	assert !desktop.windows.last().shaded
+	// Zoom instead, if the user said so.
+	desktop.settings.ov_title_middle_click = TitleAction.maximize
+	assert desktop.title_middle_click(x, y)
+	assert desktop.windows.last().maximized
+	assert !desktop.windows.last().shaded
+	// Nothing under the pointer but the taskbar.
+	desktop.settings.ov_title_middle_click = none
+	set_titlebar_test_target(mut desktop, id)
+	assert !desktop.title_middle_click(400, 595)
 }

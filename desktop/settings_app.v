@@ -55,7 +55,7 @@ const settings_categories = [SettingsCategory.appearance, .date_time, .language,
 	.windows]
 
 const settings_sidebar_categories = [SettingsCategory.appearance, .taskbar, .date_time, .language,
-	.theme, .wallpaper, .wifi, .display, .battery, .power, .keyboard, .windows, .about, .sound, .bluetooth,
+	.theme, .wallpaper, .wifi, .display, .battery, .power, .keyboard, .about, .sound, .bluetooth,
 	.printers, .users, .network, .privacy, .storage, .updates, .accessibility, .clock, .session,
 	.shortcuts, .gestures]
 
@@ -205,6 +205,9 @@ mut:
 	search_escape_len int
 	search_escape_ms u64
 	category_page int
+	// Appearance's sections, and the drag in progress on its title bar designer.
+	appearance_tab int
+	dz_drag        DzDrag
 	service_status sessioncore.SettingsStatus
 	service_poll_ms i64
 	service_value sessioncore.Text
@@ -300,9 +303,9 @@ fn (a &SettingsApp) pane(width int, height int) []ui2.Element {
 		return []ui2.Element{}
 	}
 	return match a.category {
-		.appearance { a.appearance_pane(width) }
+		.appearance { a.appearance_pane(width, height) }
 		.taskbar { a.taskbar_pane(width) }
-		.windows { a.windows_pane(width) }
+		.windows { a.appearance_pane(width, height) }
 		.date_time { a.date_time_pane(width) }
 		.language { a.language_pane(width) }
 		.theme { a.theme_pane(width) }
@@ -376,23 +379,6 @@ fn settings_choice(id string, label string, x int, y int, width int, selected bo
 		accessibility_label: label
 		accessibility_value: if selected { tr('settings.choice.selected') } else { tr('settings.choice.not_selected') }
 	}
-}
-
-fn (a &SettingsApp) appearance_pane(width int) []ui2.Element {
-	settings := a.desktop.settings
-	inner := width - 2 * settings_padding
-	half := (inner - settings_row_gap) / 2
-
-	mut out := frame_elements(4)
-	mut y := settings_padding
-
-	out << settings_heading(tr('settings.appearance.buttons'), y, width)
-	y += 22
-	out << settings_note(tr('settings.appearance.buttons_note'), y, width)
-	y += 22
-	out << settings_choice('settings.side.0', tr('settings.appearance.right'), settings_padding, y, half, settings.button_side == .right)
-	out << settings_choice('settings.side.1', tr('settings.appearance.left'), settings_padding + half + settings_row_gap, y, half, settings.button_side == .left)
-	return out
 }
 
 fn (a &SettingsApp) taskbar_pane(width int) []ui2.Element {
@@ -800,14 +786,14 @@ fn (mut a SettingsApp) handle(event_id string) ! {
 			return
 		}
 		a.desktop.settings.preset_id = id
-		if id == 'windowsxp' || id == 'windows7' {
-			// These themes' caption buttons are at the right, and a theme chosen
-			// afresh starts with its own geometry, as Catalina's does below.
-			a.desktop.settings.button_side = .right
-		} else if id == 'macos' {
-			// A freshly selected Catalina theme starts with Catalina geometry.
-			// Appearance remains independent, so the user can deliberately move
-			// the controls afterwards.
+		// A look is a preset of what Appearance lets the user arrange, so choosing
+		// one sets all of it afresh: the title bar, its controls, the tab and the
+		// skin come from the look, and the buttons start at the end it has them.
+		// What a click on a title bar does is the user's own and is kept.
+		a.reset_window_look()
+		if id == 'macos' {
+			// Catalina keeps its controls at the left; the user can mirror them
+			// again, or drag them anywhere, afterwards.
 			a.desktop.settings.button_side = .left
 		}
 		return

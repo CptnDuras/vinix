@@ -300,7 +300,7 @@ fn test_settings_search_sidebar_fits_default_content_and_keeps_pane_control_ids(
 	begin_frame_elements()
 	tree := app.build(ui2.rect(0, 0, 620, 376))!
 	assert settings_search_contains(unsafe { &tree }, 'settings.search.field')
-	assert settings_search_contains(unsafe { &tree }, 'settings.side.0')
+	assert settings_search_contains(unsafe { &tree }, 'settings.atab.0')
 	field := tree.children[0].children[0]
 	assert field.children[1].text == tr('settings.search.placeholder')
 	assert field.box.bg == body_rule

@@ -878,7 +878,7 @@ settings.appearance.buttons
 Window buttons
 -----
 settings.appearance.buttons_note
-Which end of the title bar close and zoom sit at.
+Mirrored turns the look's own arrangement of controls around.
 -----
 settings.appearance.combined
 Combined
@@ -1950,6 +1950,72 @@ None
 -----
 settings.windows.reset
 Reset to the look
+-----
+settings.designer.window
+Window
+-----
+settings.designer.title
+Title
+-----
+settings.designer.hint
+Drag the controls along the title bar; drag a tab to move it, or its edge to resize it.
+-----
+settings.designer.hint2
+Drop a control on the row below to take it off the bar.
+-----
+settings.appearance.tab_look
+Look
+-----
+settings.appearance.tab_title
+Title bar
+-----
+settings.appearance.tab_controls
+Controls
+-----
+settings.appearance.tab_actions
+Clicks
+-----
+settings.appearance.tab_skin
+Skin
+-----
+settings.appearance.look_note
+A look sets every choice on these pages; change any of them afterwards.
+-----
+settings.appearance.tab_width
+Tab width
+-----
+settings.appearance.width_fit
+Fit
+-----
+settings.appearance.width_full
+Full
+-----
+settings.appearance.side_look
+As the look
+-----
+settings.appearance.side_mirrored
+Mirrored
+-----
+settings.appearance.double_click
+Double-click
+-----
+settings.appearance.middle_click
+Middle-click
+-----
+settings.appearance.act_zoom
+Zoom
+-----
+settings.appearance.act_shade
+Roll up
+-----
+settings.appearance.act_minimize
+Minimise
+-----
+settings.appearance.act_none
+Nothing
+-----
+settings.appearance.actions_note
+What clicking a window's title bar does. Roll up leaves just the bar.
 -----
 app.android_calculator
 Android Calculator

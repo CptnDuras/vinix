@@ -1500,6 +1500,14 @@ fn (mut d Desktop) forward_pointer_to_window(x int, y int, phase AppPointerPhase
 		if !app.pointer_input_enabled() {
 			return -1
 		}
+		if d.app_pointer_drag_only(window.app_index) {
+			// Only a left press and the drag it starts: not hovering, scrolling or
+			// the other buttons, which the application sees as it always did.
+			if scroll != 0 || (phase != .move && button != .left)
+				|| (phase == .move && d.pointer_capture == 0) {
+				return -1
+			}
+		}
 		window_id := window.id
 		border := d.window_border(window)
 		body_width := window.width - 2 * border
@@ -1533,6 +1541,19 @@ fn (mut d Desktop) forward_pointer_to_window(x int, y int, phase AppPointerPhase
 		return selected
 	}
 	return -1
+}
+
+// app_pointer_drag_only is whether the application takes the raw pointer only
+// for a left press and its drag (see AppFactory.pointer_drag_only).
+fn (d &Desktop) app_pointer_drag_only(app_index int) bool {
+	if app_index < 0 || app_index >= d.apps.len {
+		return false
+	}
+	app := d.apps[app_index]
+	if app is RemoteApp {
+		return app.pointer_drag_only
+	}
+	return false
 }
 
 // app_pointer_changed reports whether the pointer event just delivered to the

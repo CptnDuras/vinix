@@ -878,7 +878,7 @@ settings.appearance.buttons
 Botones de ventana
 -----
 settings.appearance.buttons_note
-En qué extremo de la barra de título están cerrar y zoom.
+Invertido da la vuelta a la disposición de controles del aspecto.
 -----
 settings.appearance.combined
 Agrupada
@@ -1950,6 +1950,72 @@ Ninguno
 -----
 settings.windows.reset
 Restablecer al tema
+-----
+settings.designer.window
+Ventana
+-----
+settings.designer.title
+Título
+-----
+settings.designer.hint
+Arrastra los controles por la barra de título; arrastra una pestaña para moverla, o su borde para cambiar su ancho.
+-----
+settings.designer.hint2
+Suelta un control en la fila de abajo para quitarlo de la barra.
+-----
+settings.appearance.tab_look
+Aspecto
+-----
+settings.appearance.tab_title
+Barra de título
+-----
+settings.appearance.tab_controls
+Controles
+-----
+settings.appearance.tab_actions
+Clics
+-----
+settings.appearance.tab_skin
+Piel
+-----
+settings.appearance.look_note
+Un aspecto fija todas las opciones de estas páginas; cámbialas después.
+-----
+settings.appearance.tab_width
+Ancho de pestaña
+-----
+settings.appearance.width_fit
+Ajustar
+-----
+settings.appearance.width_full
+Completo
+-----
+settings.appearance.side_look
+Como el aspecto
+-----
+settings.appearance.side_mirrored
+Invertido
+-----
+settings.appearance.double_click
+Doble clic
+-----
+settings.appearance.middle_click
+Clic central
+-----
+settings.appearance.act_zoom
+Zoom
+-----
+settings.appearance.act_shade
+Enrollar
+-----
+settings.appearance.act_minimize
+Minimizar
+-----
+settings.appearance.act_none
+Nada
+-----
+settings.appearance.actions_note
+Qué hace un clic en la barra de título. Enrollar deja solo la barra.
 -----
 app.android_calculator
 Calculadora Android

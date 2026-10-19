@@ -22,10 +22,11 @@ import desktop.sessioncore
 
 const app_protocol_magic = u32(0x56415050) // VAPP
 // Version 13 carries both the power fields (11) and the Blue per-axis
-// overrides and skin (12): 136 bytes of header, plus 16, plus 128.
+// overrides and skin (12): 136 bytes of header, plus 16, plus 128. Version 14
+// adds the middle-click action and the tab width, 16 bytes more.
 const app_protocol_version = u8(14)
-const app_request_header_size = 280
-const app_response_header_size = 272
+const app_request_header_size = 296
+const app_response_header_size = 288
 const app_protocol_max_payload = 16 * 1024 * 1024
 const app_protocol_max_string = 64 * 1024
 const app_protocol_max_elements = 16 * 1024
@@ -1549,6 +1550,7 @@ mut:
 	clipboard_copy bool
 	color_sample     ColorMeterReport
 	pointer          bool
+	pointer_drag_only bool
 	us_keys          bool
 	closed           bool
 	failure_reason   string
@@ -1632,6 +1634,7 @@ fn start_remote_app_at_with_timeout(path string, factory AppFactory, mut desktop
 		desktop_services: factory.desktop_services
 		clipboard_copy: factory.clipboard_copy || hosted_session_client(factory.process_name)
 		pointer:          factory.pointer
+		pointer_drag_only: factory.pointer_drag_only
 		us_keys:          factory.us_keys
 		desktop:          desktop
 	}

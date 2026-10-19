@@ -95,7 +95,7 @@ fn test_settings_offers_visibility_choices_only_when_the_compositor_supports_the
 	mut app := SettingsApp{ desktop: &desktop }
 	defer { app_compositor_extended = app_extended }
 	appearance := app.build(ui2.rect(0, 0, 720, 400))!
-	assert visibility_element(appearance, 'settings.side.0') != none
+	assert visibility_element(appearance, 'settings.atab.0') != none
 	assert visibility_element(appearance, 'settings.taskbar.0') == none
 	assert visibility_element(appearance, 'settings.overview.0') == none
 	category_action := settings_category_actions[settings_categories.index(SettingsCategory.taskbar)]
@@ -107,7 +107,7 @@ fn test_settings_offers_visibility_choices_only_when_the_compositor_supports_the
 	assert app.category_page == 0
 	root := app.build(ui2.rect(0, 0, 720, 400))!
 	assert visibility_element(root, 'settings.taskbar.0') != none
-	assert visibility_element(root, 'settings.side.0') == none
+	assert visibility_element(root, 'settings.atab.0') == none
 	for id in ['settings.overview.1', 'settings.workspaces.1'] {
 		choice := visibility_element(root, id) or { panic('missing visibility choice') }
 		assert choice.checked

@@ -41,6 +41,10 @@ struct AppFactory {
 	poll_interval_ms  u64
 	keyboard          bool
 	pointer           bool
+	// With pointer: the application takes the raw pointer only for a left press
+	// and the drag it starts, so it can have drag handles on top of ordinary
+	// action-id buttons without a round trip for every pointer move.
+	pointer_drag_only bool
 	launch_top_right  bool
 	hide_body_cursor  bool
 	// A standalone app implements the pipe protocol in its own executable; it
@@ -144,10 +148,12 @@ const available_apps = [
 	AppFactory{
 		title: 'Settings'
 		icon: 'asset:settings'
-		width: 620
-		height: 410
+		width: 640
+		height: 520
 		process_name: 'vinix-settings'
 		keyboard: true
+		pointer: true
+		pointer_drag_only: true
 		polling: true
 		poll_interval_ms: 100
 		open: open_settings_app

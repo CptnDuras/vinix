@@ -133,6 +133,9 @@ fn test_applying_a_drop_changes_the_list() {
 	assert removed.len == 2
 	same := designer_apply(l.spec.widgets, .close, designer_drop(l, .close, 900, 900))
 	assert same == l.spec.widgets
+	// The last control stays.
+	one := [WidgetSpec{ action: .close, anchor: .leading }]
+	assert designer_apply(one, .close, DzDrop{ kind: .remove }) == one
 }
 
 fn test_dragging_the_grip_sets_the_tab_width_in_steps() {

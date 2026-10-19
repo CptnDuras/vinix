@@ -517,6 +517,123 @@ const lookandfeel_registry = [
 		description: 'Luna: blue title bars, green Start button and a blue taskbar.'
 		order: 7
 	},
+	LookAndFeel{
+		id: 'nextstep'
+		name: 'NeXTSTEP'
+		description: 'Black title bars with a miniaturise box at the left and a close box at the right, over hard grey bevels.'
+		order: 8
+		decor: DecorConfig{
+			window_radius: 0
+			accent: 0x000000
+			title_align: .left
+		}
+		behavior: BehaviorConfig{
+			shade_enabled: true
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: false
+			has_bottom_bar: true
+		}
+	},
+	LookAndFeel{
+		id: 'amiga'
+		name: 'Amiga Workbench'
+		description: 'A thin blue title bar with the close, zoom and depth gadgets, black-and-white bevels and a menu bar along the top.'
+		order: 9
+		decor: DecorConfig{
+			window_radius: 0
+			accent: 0xff8800
+			title_align: .left
+		}
+		behavior: BehaviorConfig{
+			shade_enabled: true
+			menu_placement: .global_
+		}
+		shell: ShellConfig{
+			has_top_bar: true
+			has_bottom_bar: false
+		}
+		surface: DesktopSurfaceConfig{
+			icon_source: .files
+		}
+	},
+	LookAndFeel{
+		id: 'cde'
+		name: 'CDE'
+		description: 'Slate-blue titles with a window-menu box and the minimise and maximise boxes, thick beveled frames and a front panel.'
+		order: 10
+		decor: DecorConfig{
+			window_radius: 0
+			accent: 0x5f7599
+			title_align: .center
+		}
+		behavior: BehaviorConfig{
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: false
+			has_bottom_bar: true
+		}
+	},
+	LookAndFeel{
+		id: 'gnome'
+		name: 'GNOME'
+		description: 'A light header bar with a single close button, large rounded corners and a dark top bar.'
+		order: 11
+		decor: DecorConfig{
+			window_radius: 12
+			accent: 0x3584e4
+			title_align: .center
+		}
+		behavior: BehaviorConfig{
+			menu_placement: .global_
+			snap_to_edges: true
+			snap_distance: 12
+		}
+		shell: ShellConfig{
+			has_top_bar: true
+			has_bottom_bar: false
+		}
+	},
+	LookAndFeel{
+		id: 'win31'
+		name: 'Windows 3.1'
+		description: 'A navy title with a system-menu box and the minimise and maximise arrows, grey bevelled boxes on white.'
+		order: 12
+		decor: DecorConfig{
+			window_radius: 0
+			accent: 0x000080
+			title_align: .center
+		}
+		behavior: BehaviorConfig{
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: false
+			has_bottom_bar: true
+		}
+	},
+	LookAndFeel{
+		id: 'haiku'
+		name: 'Haiku'
+		description: 'A slanted yellow tab as wide as its title, close and zoom boxes inside it, and the Deskbar folded into one corner.'
+		order: 13
+		decor: DecorConfig{
+			window_radius: 0
+			accent: 0xffc800
+			title_align: .left
+		}
+		behavior: BehaviorConfig{
+			shade_enabled: true
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: true
+			has_bottom_bar: false
+			launcher_pins: [0, 3, 4]
+		}
+	},
 ]
 
 // lookandfeel_by_id returns the preset with the given id, or the default preset

@@ -276,7 +276,8 @@ fn designer_drop(l DzLayout, dragged WidgetAction, px int, py int) DzDrop {
 fn designer_apply(widgets []WidgetSpec, dragged WidgetAction, drop DzDrop) []WidgetSpec {
 	return match drop.kind {
 		.place { widgets_moved(widgets, dragged, drop.anchor, drop.position) }
-		.remove { widgets_removed(widgets, dragged) }
+		// A bar keeps at least one control, so a window can always be closed.
+		.remove { if widgets.len <= 1 { widgets } else { widgets_removed(widgets, dragged) } }
 		.cancel { widgets }
 	}
 }

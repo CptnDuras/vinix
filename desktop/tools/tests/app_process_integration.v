@@ -2604,7 +2604,7 @@ fn check_settings_search_client(mut desktop Desktop) {
 		app.key_input('[B\r')
 	}
 	appearance := app.build(ui2.rect(0, 0, 760, 576)) or { panic(err) }
-	assert tree_has_id(appearance, 'settings.side.0') && !tree_has_id(appearance, 'settings.search.result.0')
+	assert tree_has_id(appearance, 'settings.atab.0') && !tree_has_id(appearance, 'settings.search.result.0')
 	free_tree(appearance)
 	if mut app is RemoteApp {
 		app.key_input('\x06')

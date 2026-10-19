@@ -27,6 +27,12 @@ fn preset_theme(id string) Theme {
 		'beos' { theme_beos }
 		'windows7' { theme_windows7 }
 		'windowsxp' { theme_windows_xp }
+		'nextstep' { theme_nextstep }
+		'amiga' { theme_amiga }
+		'cde' { theme_cde }
+		'gnome' { theme_gnome }
+		'win31' { theme_win31 }
+		'haiku' { theme_haiku }
 		else { theme_default }
 	}
 }
