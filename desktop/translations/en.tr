@@ -2017,6 +2017,9 @@ Nothing
 settings.appearance.actions_note
 What clicking a window's title bar does. Roll up leaves just the bar.
 -----
+settings.appearance.skin_folder
+Your own skins go in /root/.vinix-skins, one folder each with a skin.cfg; SVG and PNG artwork both work.
+-----
 app.android_calculator
 Android Calculator
 -----

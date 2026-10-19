@@ -103,20 +103,94 @@ fn (mut s PathScanner) number() ?f64 {
 	if s.pos == start {
 		return none
 	}
-	// An exponent, as in 1e-3.
+	// An exponent, as in 1e-3: only when digits follow, so the e of a unit such as
+	// em is not taken for one.
 	if s.pos < s.text.len && (s.text[s.pos] == `e` || s.text[s.pos] == `E`) {
-		s.pos++
-		if s.pos < s.text.len && (s.text[s.pos] == `-` || s.text[s.pos] == `+`) {
-			s.pos++
+		mut look := s.pos + 1
+		if look < s.text.len && (s.text[look] == `-` || s.text[look] == `+`) {
+			look++
 		}
-		for s.pos < s.text.len && s.text[s.pos] >= `0` && s.text[s.pos] <= `9` {
-			s.pos++
+		if look < s.text.len && s.text[look] >= `0` && s.text[look] <= `9` {
+			s.pos = look
+			for s.pos < s.text.len && s.text[s.pos] >= `0` && s.text[s.pos] <= `9` {
+				s.pos++
+			}
 		}
 	}
 	return s.text[start..s.pos].f64()
 }
 
 const curve_steps = 12
+
+// flag reads an arc's large-arc or sweep flag: a single 0 or 1, which SVG lets
+// follow the previous number with no separator at all.
+fn (mut s PathScanner) flag() ?bool {
+	s.skip_separators()
+	if s.pos >= s.text.len {
+		return none
+	}
+	c := s.text[s.pos]
+	if c != `0` && c != `1` {
+		return none
+	}
+	s.pos++
+	return c == `1`
+}
+
+// flatten_arc appends the straight edges of an SVG elliptical arc from p0 to p1,
+// by the endpoint-to-centre conversion the SVG specification gives. A zero
+// radius is a straight line, and a radius too small to span the endpoints is
+// grown until it does.
+fn flatten_arc(mut out []VecPoint, p0 VecPoint, rx_in f64, ry_in f64, rotation f64, large bool, sweep bool, p1 VecPoint) {
+	mut rx := math.abs(rx_in)
+	mut ry := math.abs(ry_in)
+	if (p0.x == p1.x && p0.y == p1.y) {
+		return
+	}
+	if rx == 0 || ry == 0 {
+		out << p1
+		return
+	}
+	phi := rotation * math.pi / 180.0
+	cp := math.cos(phi)
+	sp := math.sin(phi)
+	dx := (p0.x - p1.x) / 2
+	dy := (p0.y - p1.y) / 2
+	x1p := cp * dx + sp * dy
+	y1p := -sp * dx + cp * dy
+	lambda := (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry)
+	if lambda > 1 {
+		scale := math.sqrt(lambda)
+		rx *= scale
+		ry *= scale
+	}
+	num := rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p
+	den := rx * rx * y1p * y1p + ry * ry * x1p * x1p
+	mut coef := if den == 0 { 0.0 } else { math.sqrt(math.max(0.0, num / den)) }
+	if large == sweep {
+		coef = -coef
+	}
+	cxp := coef * rx * y1p / ry
+	cyp := -coef * ry * x1p / rx
+	cx := cp * cxp - sp * cyp + (p0.x + p1.x) / 2
+	cy := sp * cxp + cp * cyp + (p0.y + p1.y) / 2
+	theta1 := math.atan2((y1p - cyp) / ry, (x1p - cxp) / rx)
+	mut dtheta := math.atan2((-y1p - cyp) / ry, (-x1p - cxp) / rx) - theta1
+	if !sweep && dtheta > 0 {
+		dtheta -= 2 * math.pi
+	} else if sweep && dtheta < 0 {
+		dtheta += 2 * math.pi
+	}
+	steps := int(math.max(4.0, math.ceil(math.abs(dtheta) / (math.pi / 8))))
+	for i in 1 .. steps {
+		t := theta1 + dtheta * f64(i) / f64(steps)
+		out << VecPoint{
+			x: cx + rx * math.cos(t) * cp - ry * math.sin(t) * sp
+			y: cy + rx * math.cos(t) * sp + ry * math.sin(t) * cp
+		}
+	}
+	out << p1
+}
 
 fn flatten_cubic(mut out []VecPoint, p0 VecPoint, p1 VecPoint, p2 VecPoint, p3 VecPoint) {
 	for i in 1 .. curve_steps + 1 {
@@ -141,8 +215,7 @@ fn flatten_quad(mut out []VecPoint, p0 VecPoint, p1 VecPoint, p2 VecPoint) {
 }
 
 // parse_path_data appends the polygons of one SVG path to the shape. Anything
-// the syntax does not allow, including the arc command, makes the path
-// unusable rather than approximate.
+// the syntax does not allow makes the path unusable rather than approximate.
 fn parse_path_data(data string, mut shape VectorShape) ? {
 	mut s := PathScanner{
 		text: data
@@ -247,6 +320,18 @@ fn parse_path_data(data string, mut shape VectorShape) ? {
 				flatten_quad(mut current, cur, p1, p2)
 				last_quad_ctrl = p1
 				cur = p2
+			}
+			`A`, `a` {
+				rx := s.number()?
+				ry := s.number()?
+				rotation := s.number()?
+				large := s.flag()?
+				sweep := s.flag()?
+				x := s.number()?
+				y := s.number()?
+				p := if rel { VecPoint{ x: cur.x + x, y: cur.y + y } } else { VecPoint{ x: x, y: y } }
+				flatten_arc(mut current, cur, rx, ry, rotation, large, sweep, p)
+				cur = p
 			}
 			`Z`, `z` {
 				if current.len > 2 {

@@ -2017,6 +2017,9 @@ Nada
 settings.appearance.actions_note
 Qué hace un clic en la barra de título. Enrollar deja solo la barra.
 -----
+settings.appearance.skin_folder
+Tus propias pieles van en /root/.vinix-skins, una carpeta cada una con un skin.cfg; sirven SVG y PNG.
+-----
 app.android_calculator
 Calculadora Android
 -----

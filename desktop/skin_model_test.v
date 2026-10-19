@@ -44,7 +44,9 @@ fn test_curves_relative_commands_and_holes() {
 }
 
 fn test_unsupported_or_broken_paths_are_refused() {
-	assert parse_vector('viewbox 10 10\npath M0 0 A5 5 0 0 1 10 10 Z') == none
+	// Arcs are drawn now; a command that is not SVG's is still refused.
+	assert parse_vector('viewbox 10 10\npath M0 0 A5 5 0 0 1 10 10 Z') != none
+	assert parse_vector('viewbox 10 10\npath M0 0 X5 5 Z') == none
 	assert parse_vector('viewbox 10 10\npath M0 0 L') == none
 	assert parse_vector('path M0 0 L1 1 L0 1 Z') == none
 	assert parse_vector('viewbox 0 10\npath M0 0 L1 1 L0 1 Z') == none

@@ -15,12 +15,26 @@ import os
 import ui2
 
 const skin_default_dir = '/usr/share/vinix/skins'
+// The user's own skins, one directory each with a skin.cfg in it. Like the
+// desktop's preferences they live under /root, the image's one writable part.
+const skin_user_default_dir = '/root/.vinix-skins'
 // skin_root is where installed skins live. VINIX_SKIN_DIR moves it, which is how
 // the tests and a skin author's own checkout point the desktop at their files.
 fn skin_root() string {
 	custom := os.getenv('VINIX_SKIN_DIR')
 	return if custom.len > 0 { custom } else { skin_default_dir }
 }
+
+// skin_user_root is where the user keeps skins of their own. VINIX_USER_SKIN_DIR
+// moves it.
+fn skin_user_root() string {
+	custom := os.getenv('VINIX_USER_SKIN_DIR')
+	return if custom.len > 0 { custom } else { skin_user_default_dir }
+}
+
+// The most skins read from the user's folder, so a crowded one cannot make the
+// picker unusable.
+const skin_user_max = 48
 
 // The most a single skin asset may weigh; a window's chrome never needs more.
 const skin_asset_max = 2 * 1024 * 1024
@@ -46,7 +60,9 @@ mut:
 }
 
 // list_skins is every skin the user can pick: the compiled-in ones, then the
-// installed ones. A missing index only means none are installed.
+// installed ones, then the user's own. A missing index or folder only means there
+// are none. Later kinds are appended, so a skin that appears while the desktop
+// runs does not renumber the ones it already knows.
 fn list_skins() []SkinEntry {
 	mut out := []SkinEntry{}
 	for id in builtin_skin_ids {
@@ -55,22 +71,32 @@ fn list_skins() []SkinEntry {
 			name: builtin_skin_name(id)
 		}
 	}
+	list_installed_skins(mut out)
+	list_user_skins(mut out)
+	return out
+}
+
+fn skin_listed(entries []SkinEntry, id string) bool {
+	return entries.any(it.id == id)
+}
+
+fn list_installed_skins(mut out []SkinEntry) {
 	index := '${skin_root()}/index.txt'
-	info := desktop_stat(index) or { return out }
+	info := desktop_stat(index) or { return }
 	if info.size == 0 || info.size > 64 * 1024 {
-		return out
+		return
 	}
 	mut buffer := []u8{len: int(info.size) + 1}
 	got := desktop_read_file(index, buffer.data, info.size)
 	if got <= 0 {
-		return out
+		return
 	}
 	text := unsafe { tos(buffer.data, int(got)) }
 	for line in text.split_into_lines() {
 		trimmed := line.trim_space()
 		space := trimmed.index(' ') or { continue }
 		id := trimmed[..space]
-		if !skin_id_valid(id) || id in builtin_skin_ids {
+		if !skin_id_valid(id) || skin_listed(out, id) {
 			continue
 		}
 		out << SkinEntry{
@@ -78,7 +104,48 @@ fn list_skins() []SkinEntry {
 			name: trimmed[space + 1..].trim_space()
 		}
 	}
-	return out
+}
+
+// list_user_skins adds the directories of the user's skin folder that hold a
+// skin.cfg, by name, each under the name its skin.cfg gives.
+fn list_user_skins(mut out []SkinEntry) {
+	dir := desktop_opendir(skin_user_root())
+	if dir == unsafe { nil } {
+		return
+	}
+	mut found := []string{}
+	mut name := []u8{len: 256}
+	for found.len < skin_user_max && desktop_readdir(dir, mut name) {
+		id := unsafe { cstring_to_vstring(&char(name.data)) }.clone()
+		if skin_id_valid(id) && !skin_listed(out, id) {
+			found << id
+		}
+	}
+	desktop_closedir(dir)
+	found.sort()
+	for id in found {
+		cfg := read_skin_cfg('${skin_user_root()}/${id}') or { continue }
+		parsed := parse_skin(id, '', cfg)
+		out << SkinEntry{
+			id: id
+			name: parsed.name
+		}
+	}
+}
+
+// read_skin_cfg is the skin.cfg of a skin directory, if it has a usable one.
+fn read_skin_cfg(dir string) ?string {
+	path := '${dir}/skin.cfg'
+	info := desktop_stat(path) or { return none }
+	if info.is_dir || info.size == 0 || info.size > u64(skin_cfg_max) {
+		return none
+	}
+	mut buffer := []u8{len: int(info.size) + 1}
+	got := desktop_read_file(path, buffer.data, info.size)
+	if got <= 0 {
+		return none
+	}
+	return unsafe { tos(buffer.data, int(got)) }.clone()
 }
 
 // skin_file_name_valid keeps a skin's references to plain files in its own
@@ -124,18 +191,15 @@ fn load_skin(id string) ?Skin {
 	if cfg := builtin_skin_cfg(id) {
 		return parse_skin(id, 'builtin:${id}', cfg)
 	}
-	dir := '${skin_root()}/${id}'
-	path := '${dir}/skin.cfg'
-	info := desktop_stat(path) or { return none }
-	if info.is_dir || info.size == 0 || info.size > u64(skin_cfg_max) {
-		return none
+	// The user's own folder first, so a skin of theirs can stand in for an
+	// installed one of the same name.
+	for root in [skin_user_root(), skin_root()] {
+		dir := '${root}/${id}'
+		if cfg := read_skin_cfg(dir) {
+			return parse_skin(id, dir, cfg)
+		}
 	}
-	mut buffer := []u8{len: int(info.size) + 1}
-	got := desktop_read_file(path, buffer.data, info.size)
-	if got <= 0 {
-		return none
-	}
-	return parse_skin(id, dir, unsafe { tos(buffer.data, int(got)) }.clone())
+	return none
 }
 
 // effective_skin_id is the skin in force: the user's choice when they made one
@@ -199,12 +263,58 @@ fn (mut d Desktop) skin_bitmap(file string) ?Bitmap {
 		d.skin_state.failed[file] = true
 		return none
 	}
-	bm := parse_vbm(data) or {
+	// A skin's bitmaps are PNG files or the small VBM1 format of its own.
+	bm := (if file.ends_with('.png') { decode_skin_png(data) } else { parse_vbm(data) }) or {
 		d.skin_state.failed[file] = true
 		return none
 	}
 	d.skin_state.bitmaps[file] = bm
 	return bm
+}
+
+// decode_skin_png reads a PNG into a bitmap, for a skin that ships its artwork as
+// one. The picture is checked against the size a window's chrome can use, and
+// its compressed data against the size it claims, before any pixel is made.
+fn decode_skin_png(data []u8) ?Bitmap {
+	if data.len < 8 || data[0] != 0x89 || data[1] != `P` || data[2] != `N` || data[3] != `G` {
+		return none
+	}
+	mut width := 0
+	mut height := 0
+	mut channels := 0
+	if C.stbi_info_from_memory(data.data, data.len, &width, &height, &channels) == 0 {
+		return none
+	}
+	if width < 1 || height < 1 || width > vbm_max_side || height > vbm_max_side {
+		return none
+	}
+	if !preview_png_inflate_bounded(data, width, height) {
+		return none
+	}
+	mut dims := [3]int{}
+	pixels := C.stbi_load_from_memory(data.data, data.len, unsafe { &dims[0] }, unsafe { &dims[1] },
+		unsafe { &dims[2] }, 4)
+	if pixels == unsafe { nil } {
+		return none
+	}
+	defer {
+		C.stbi_image_free(pixels)
+	}
+	if dims[0] != width || dims[1] != height {
+		return none
+	}
+	mut out := []u32{len: width * height}
+	for i in 0 .. width * height {
+		o := i * 4
+		unsafe {
+			out[i] = u32(pixels[o + 3]) << 24 | u32(pixels[o]) << 16 | u32(pixels[o + 1]) << 8 | u32(pixels[o + 2])
+		}
+	}
+	return Bitmap{
+		width: width
+		height: height
+		pixels: out
+	}
 }
 
 fn (mut d Desktop) skin_vector(file string) ?VectorShape {
@@ -218,7 +328,12 @@ fn (mut d Desktop) skin_vector(file string) ?VectorShape {
 		d.skin_state.failed[file] = true
 		return none
 	}
-	shape := parse_vector(data.bytestr()) or {
+	// A skin's vectors are SVG files or the path text of its own.
+	shape := (if file.ends_with('.svg') {
+		parse_svg_vector(data.bytestr())
+	} else {
+		parse_vector(data.bytestr())
+	}) or {
 		d.skin_state.failed[file] = true
 		return none
 	}
@@ -372,7 +487,12 @@ fn skin_from_wire(value ?int) string {
 	if v == 0 {
 		return 'none'
 	}
-	entries := skin_catalog()
+	mut entries := skin_catalog()
+	if v - 1 >= entries.len {
+		// A skin added since the list was read: read it again, once.
+		skin_catalog_cache.loaded = false
+		entries = skin_catalog()
+	}
 	if v - 1 < entries.len {
 		return entries[v - 1].id
 	}

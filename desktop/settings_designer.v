@@ -637,5 +637,9 @@ fn (a &SettingsApp) appearance_skin(width int, top int) []ui2.Element {
 		}
 		index++
 	}
+	if index % 2 == 1 {
+		y += 28 + 6
+	}
+	out << settings_note(tr('settings.appearance.skin_folder'), y + 4, width)
 	return out
 }

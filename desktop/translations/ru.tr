@@ -2017,6 +2017,9 @@ settings.appearance.act_none
 settings.appearance.actions_note
 Что делает щелчок по заголовку окна. «В строку» оставляет только заголовок.
 -----
+settings.appearance.skin_folder
+Свои обложки кладите в /root/.vinix-skins, по папке с файлом skin.cfg; подойдут SVG и PNG.
+-----
 app.android_calculator
 Калькулятор Android
 -----
