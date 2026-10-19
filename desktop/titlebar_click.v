@@ -115,3 +115,21 @@ fn (mut d Desktop) titlebar_pointer_down_at(previous TitlebarClick, x int, y int
 	d.on_pointer_down(x, y)
 	return next
 }
+
+// title_middle_click runs the middle-click action on the title bar under
+// (x, y), and reports whether the press was on one. A press anywhere else is
+// the application's or the desktop's, as before.
+fn (mut d Desktop) title_middle_click(x int, y int) bool {
+	if d.window_overlay_active() {
+		return false
+	}
+	action, world := d.hit_action_world(x, y)
+	if world == .application {
+		return false
+	}
+	id := titlebar_action_window_id(action) or { return false }
+	d.window_index(id) or { return false }
+	d.run_title_action(id, d.behavior().title_middle_click)
+	d.dirty = true
+	return true
+}

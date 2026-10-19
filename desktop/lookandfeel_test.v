@@ -392,3 +392,19 @@ fn test_registry_index_round_trip() {
 	assert registry_id_at(-1) == default_preset_id
 	assert registry_id_at(9999) == default_preset_id
 }
+
+fn test_a_title_bar_zooms_on_double_click_and_rolls_up_on_middle_click() {
+	assert builtin_behavior.title_double_click == .maximize
+	assert builtin_behavior.title_middle_click == .shade
+	assert builtin_behavior.shade_enabled
+	// Every look inherits both, so none of them changes what a click does.
+	for lnf in lookandfeel_registry {
+		eff := resolve_behavior(lnf.behavior, none)
+		assert eff.title_double_click == .maximize, lnf.id
+		assert eff.title_middle_click == .shade, lnf.id
+	}
+	// A user's choice beats the look, field by field.
+	over := resolve_behavior(none, BehaviorConfig{ title_middle_click: TitleAction.hide })
+	assert over.title_middle_click == .hide
+	assert over.title_double_click == .maximize
+}

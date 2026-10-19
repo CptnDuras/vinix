@@ -163,6 +163,70 @@ fn layout_widgets(widgets []WidgetSpec, bar_w int, bar_h int, default_size int, 
 	return out
 }
 
+// widgets_mirrored swaps the end every widget sits at, keeping each run's order
+// (outermost first), so a look that puts its controls at both ends is turned
+// into its mirror image.
+fn widgets_mirrored(widgets []WidgetSpec) []WidgetSpec {
+	mut out := []WidgetSpec{cap: widgets.len}
+	for w in widgets {
+		out << WidgetSpec{
+			...w
+			anchor: if w.anchor == .leading { WidgetAnchor.trailing } else { WidgetAnchor.leading }
+		}
+	}
+	return out
+}
+
+// widgets_run is the widgets at one end, outermost first.
+fn widgets_run(widgets []WidgetSpec, anchor WidgetAnchor) []WidgetSpec {
+	return widgets.filter(it.anchor == anchor)
+}
+
+// widgets_moved takes a widget out of the list, wherever it was, and puts it at
+// one end of the bar as the position-th widget from the outside (zero is the
+// outermost; a position past the run's end appends). Every other widget keeps
+// its end and order. Leading widgets are listed first, then trailing ones.
+// A widget sitting at the end it already has and the position it is asked for
+// comes back unchanged.
+fn widgets_moved(widgets []WidgetSpec, action WidgetAction, anchor WidgetAnchor, position int) []WidgetSpec {
+	mut moving := WidgetSpec{
+		action: action
+		anchor: anchor
+	}
+	for w in widgets {
+		if w.action == action {
+			moving = WidgetSpec{
+				...w
+				anchor: anchor
+			}
+		}
+	}
+	rest := widgets.filter(it.action != action)
+	mut lead := widgets_run(rest, .leading)
+	mut trail := widgets_run(rest, .trailing)
+	mut run := if anchor == .leading { &lead } else { &trail }
+	at := if position < 0 { 0 } else if position > run.len { run.len } else { position }
+	run.insert(at, moving)
+	mut out := []WidgetSpec{cap: widgets.len + 1}
+	out << lead
+	out << trail
+	return out
+}
+
+// widgets_removed drops a widget from the list.
+fn widgets_removed(widgets []WidgetSpec, action WidgetAction) []WidgetSpec {
+	return widgets.filter(it.action != action)
+}
+
+// tab_sizing_for turns the percentage a user picked into the tab's sizing:
+// zero fits the content, anything else is that share of the window's width.
+fn tab_sizing_for(percent int) (TabSizing, int) {
+	if percent <= 0 {
+		return TabSizing.fit, 0
+	}
+	return TabSizing.fraction, if percent > 100 { 100 } else { percent }
+}
+
 // tab_width is how wide a tab is for a window window_w across. content is what
 // a fit tab must hold: its title and its widgets.
 fn tab_width(spec ChromeSpec, window_w int, content int) int {

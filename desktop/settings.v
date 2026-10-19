@@ -32,6 +32,7 @@ fn (s Settings) blue_overrides() BlueSettings {
 			shade_enabled:      s.ov_shade_enabled
 			menu_placement:     s.ov_menu_placement
 			title_double_click: s.ov_title_double_click
+			title_middle_click: s.ov_title_middle_click
 		}
 		shell: ShellConfig{
 			has_top_bar:     s.ov_has_top_bar

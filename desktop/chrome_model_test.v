@@ -90,3 +90,79 @@ fn test_action_names_match_element_id_parts() {
 	assert widget_action_name(.shade) == 'shade'
 	assert widget_action_name(.menu) == 'menu'
 }
+
+fn run_names(widgets []WidgetSpec, anchor WidgetAnchor) []string {
+	return widgets_run(widgets, anchor).map(widget_action_name(it.action))
+}
+
+fn test_mirroring_swaps_each_widgets_end_and_keeps_run_order() {
+	beos := [
+		WidgetSpec{ action: .close, anchor: .leading },
+		WidgetSpec{ action: .maximize, anchor: .trailing },
+		WidgetSpec{ action: .shade, anchor: .trailing },
+	]
+	mirrored := widgets_mirrored(beos)
+	assert run_names(mirrored, .leading) == ['maximize', 'shade']
+	assert run_names(mirrored, .trailing) == ['close']
+	assert widgets_mirrored(mirrored) == beos
+}
+
+fn test_moving_a_widget_places_it_among_one_ends_widgets() {
+	list := [
+		WidgetSpec{ action: .close, anchor: .leading },
+		WidgetSpec{ action: .minimize, anchor: .leading },
+		WidgetSpec{ action: .maximize, anchor: .trailing },
+	]
+	// To the other end, outermost.
+	a := widgets_moved(list, .close, .trailing, 0)
+	assert run_names(a, .leading) == ['minimize']
+	assert run_names(a, .trailing) == ['close', 'maximize']
+	// Within its own end: minimise ahead of close.
+	b := widgets_moved(list, .minimize, .leading, 0)
+	assert run_names(b, .leading) == ['minimize', 'close']
+	// A position past the run's end appends; a negative one is outermost.
+	c := widgets_moved(list, .close, .trailing, 99)
+	assert run_names(c, .trailing) == ['maximize', 'close']
+	d := widgets_moved(list, .maximize, .leading, -3)
+	assert run_names(d, .leading) == ['maximize', 'close', 'minimize']
+	assert run_names(d, .trailing) == []
+	// A widget that was absent is added.
+	e := widgets_moved(list, .shade, .trailing, 1)
+	assert run_names(e, .trailing) == ['maximize', 'shade']
+	// Putting a widget where it already is changes nothing.
+	assert widgets_moved(list, .close, .leading, 0) == list
+	// Per-widget fields survive the move.
+	sized := [WidgetSpec{ action: .close, anchor: .leading, size: 14, skin: 'x' }]
+	moved := widgets_moved(sized, .close, .trailing, 0)
+	assert moved[0].size == 14 && moved[0].skin == 'x' && moved[0].anchor == .trailing
+}
+
+fn test_removing_a_widget_leaves_the_rest_in_order() {
+	list := [
+		WidgetSpec{ action: .close, anchor: .leading },
+		WidgetSpec{ action: .minimize, anchor: .trailing },
+		WidgetSpec{ action: .maximize, anchor: .trailing },
+	]
+	assert run_names(widgets_removed(list, .minimize), .trailing) == ['maximize']
+	assert widgets_removed(list, .menu) == list
+}
+
+fn test_a_percentage_picks_the_tab_sizing() {
+	s0, p0 := tab_sizing_for(0)
+	assert s0 == .fit && p0 == 0
+	s1, p1 := tab_sizing_for(40)
+	assert s1 == .fraction && p1 == 40
+	_, p2 := tab_sizing_for(400)
+	assert p2 == 100
+	spec := ChromeSpec{ tab_sizing: s1, tab_pct: p1 }
+	assert tab_width(spec, 500, 10) == 200
+}
+
+fn test_a_widget_list_survives_packing_in_the_users_order() {
+	list := [
+		WidgetSpec{ action: .minimize, anchor: .leading },
+		WidgetSpec{ action: .close, anchor: .leading },
+		WidgetSpec{ action: .maximize, anchor: .trailing },
+	]
+	assert widgets_unpack(widgets_pack(list)) == list
+}

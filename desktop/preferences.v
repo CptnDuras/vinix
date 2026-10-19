@@ -48,7 +48,7 @@ fn desktop_preset_id_valid(id string) bool {
 const desktop_override_keys = ['ov_window_radius', 'ov_title_align', 'ov_ui_size', 'ov_title_size',
 	'ov_shade_enabled', 'ov_menu_placement', 'ov_title_double_click', 'ov_has_top_bar',
 	'ov_has_bottom_bar', 'ov_has_window_list', 'ov_icons_visible', 'ov_icon_source', 'ov_title_kind', 'ov_tab_align',
-	'ov_widgets']
+	'ov_widgets', 'ov_title_middle_click', 'ov_tab_width']
 
 // The duplicate-detection bit of an override key, after the fixed keys' bits;
 // zero for a key that is not an override.
@@ -71,6 +71,14 @@ fn desktop_parse_override(mut s Settings, key string, value string) ?bool {
 		'ov_shade_enabled' { s.ov_shade_enabled = bool_from(value)? }
 		'ov_menu_placement' { s.ov_menu_placement = menu_placement_from(value)? }
 		'ov_title_double_click' { s.ov_title_double_click = title_action_from(value)? }
+		'ov_title_middle_click' { s.ov_title_middle_click = title_action_from(value)? }
+		'ov_tab_width' {
+			width := desktop_preference_index(value)?
+			if width != 0 && (width < 10 || width > 100) {
+				return none
+			}
+			s.ov_tab_width = width
+		}
 		'ov_has_top_bar' { s.ov_has_top_bar = bool_from(value)? }
 		'ov_has_bottom_bar' { s.ov_has_bottom_bar = bool_from(value)? }
 		'ov_has_window_list' { s.ov_has_window_list = bool_from(value)? }
@@ -110,6 +118,12 @@ fn desktop_encode_overrides(s Settings) string {
 	}
 	if v := s.ov_title_double_click {
 		out += 'ov_title_double_click=${title_action_name(v)}\n'
+	}
+	if v := s.ov_title_middle_click {
+		out += 'ov_title_middle_click=${title_action_name(v)}\n'
+	}
+	if v := s.ov_tab_width {
+		out += 'ov_tab_width=${v}\n'
 	}
 	if v := s.ov_has_top_bar {
 		out += 'ov_has_top_bar=${bool_name(v)}\n'

@@ -145,11 +145,15 @@ mut:
 	ov_shade_enabled      ?bool
 	ov_menu_placement     ?MenuPlacement
 	ov_title_double_click ?TitleAction
+	ov_title_middle_click ?TitleAction
 	// Window chrome (Blue spec B5): the bar's shape, where a tab sits, and the
 	// widget set as widgets_pack() writes it.
 	ov_title_kind ?TitleKind
 	ov_tab_align  ?TitleAlign
-	ov_widgets    ?int
+	// How wide a tab is: 0 fits its title and controls, 10..100 is a percentage
+	// of the window's width.
+	ov_tab_width ?int
+	ov_widgets   ?int
 	// Shell:
 	ov_has_top_bar     ?bool
 	ov_has_bottom_bar  ?bool

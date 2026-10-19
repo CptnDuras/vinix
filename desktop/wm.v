@@ -231,6 +231,9 @@ mut:
 	overview                 WindowOverview
 	window_layout            WindowLayout
 	window_layout_right_release bool
+	// A middle press ran a title-bar action, so its release is not the
+	// application's either.
+	title_middle_swallow bool
 	snap_assist              WindowSnapAssist
 	window_actions           WindowActions
 	overlay_input            WindowOverlayInput
@@ -479,7 +482,12 @@ fn (mut d Desktop) snap_window(id int, snap WindowSnap) {
 // the double click, with its time and pointer-distance limits, is
 // titlebar_pointer_down_at's job.
 fn (mut d Desktop) run_title_double_click(id int) {
-	match d.behavior().title_double_click {
+	d.run_title_action(id, d.behavior().title_double_click)
+}
+
+// run_title_action does one of the title bar's configurable actions to a window.
+fn (mut d Desktop) run_title_action(id int, action TitleAction) {
+	match action {
 		.shade { d.toggle_shade(id) }
 		.hide { d.minimize(id) }
 		.maximize { d.toggle_maximize(id) }

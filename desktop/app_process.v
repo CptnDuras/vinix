@@ -23,7 +23,7 @@ import desktop.sessioncore
 const app_protocol_magic = u32(0x56415050) // VAPP
 // Version 13 carries both the power fields (11) and the Blue per-axis
 // overrides and skin (12): 136 bytes of header, plus 16, plus 128.
-const app_protocol_version = u8(13)
+const app_protocol_version = u8(14)
 const app_request_header_size = 280
 const app_response_header_size = 272
 const app_protocol_max_payload = 16 * 1024 * 1024
@@ -256,6 +256,12 @@ fn opt_in_range(value WireOptInt, low int, high int) bool {
 	return !value.set || (value.value >= low && value.value <= high)
 }
 
+// opt_tab_width_valid is true for none, for 0 (fit the content) and for a
+// percentage from 10 to 100.
+fn opt_tab_width_valid(value WireOptInt) bool {
+	return !value.set || value.value == 0 || (value.value >= 10 && value.value <= 100)
+}
+
 // opt_flag and opt_enum turn a range-checked wire value back into its type.
 fn opt_flag(value WireOptInt) ?bool {
 	if !value.set {
@@ -484,6 +490,7 @@ fn wire_put_state(mut out []u8, state AppWireState) {
 	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_shade_enabled))
 	wire_put_opt_i32(mut out, opt_menu_placement_i32(state.settings.ov_menu_placement))
 	wire_put_opt_i32(mut out, opt_title_action_i32(state.settings.ov_title_double_click))
+	wire_put_opt_i32(mut out, opt_title_action_i32(state.settings.ov_title_middle_click))
 	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_top_bar))
 	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_bottom_bar))
 	wire_put_opt_i32(mut out, opt_bool_i32(state.settings.ov_has_window_list))
@@ -492,6 +499,7 @@ fn wire_put_state(mut out []u8, state AppWireState) {
 	// Window chrome (Blue spec B5).
 	wire_put_opt_i32(mut out, opt_title_kind_i32(state.settings.ov_title_kind))
 	wire_put_opt_i32(mut out, opt_title_align_i32(state.settings.ov_tab_align))
+	wire_put_opt_i32(mut out, state.settings.ov_tab_width)
 	wire_put_opt_i32(mut out, state.settings.ov_widgets)
 	wire_put_opt_i32(mut out, skin_wire_value(state.settings.skin_id))
 	wire_put_i32(mut out, state.requested_scale)
@@ -539,6 +547,7 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 	ov_shade_enabled_raw := reader.take_opt_i32()!
 	ov_menu_placement_raw := reader.take_opt_i32()!
 	ov_title_double_click_raw := reader.take_opt_i32()!
+	ov_title_middle_click_raw := reader.take_opt_i32()!
 	ov_has_top_bar_raw := reader.take_opt_i32()!
 	ov_has_bottom_bar_raw := reader.take_opt_i32()!
 	ov_has_window_list_raw := reader.take_opt_i32()!
@@ -546,6 +555,7 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 	ov_icon_source_raw := reader.take_opt_i32()!
 	ov_title_kind_raw := reader.take_opt_i32()!
 	ov_tab_align_raw := reader.take_opt_i32()!
+	ov_tab_width_raw := reader.take_opt_i32()!
 	ov_widgets_raw := reader.take_opt_i32()!
 	skin_raw := reader.take_opt_i32()!
 	requested_scale := reader.take_i32()!
@@ -580,6 +590,8 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 		|| !opt_in_range(ov_shade_enabled_raw, 0, 1)
 		|| !opt_in_range(ov_menu_placement_raw, int(MenuPlacement.global_), int(MenuPlacement.none_))
 		|| !opt_in_range(ov_title_double_click_raw, int(TitleAction.shade), int(TitleAction.none_))
+		|| !opt_in_range(ov_title_middle_click_raw, int(TitleAction.shade), int(TitleAction.none_))
+		|| !opt_tab_width_valid(ov_tab_width_raw)
 		|| !opt_in_range(ov_has_top_bar_raw, 0, 1)
 		|| !opt_in_range(ov_has_bottom_bar_raw, 0, 1)
 		|| !opt_in_range(ov_has_window_list_raw, 0, 1)
@@ -627,6 +639,7 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 			ov_shade_enabled:   opt_flag(ov_shade_enabled_raw)
 			ov_menu_placement:  opt_enum[MenuPlacement](ov_menu_placement_raw)
 			ov_title_double_click: opt_enum[TitleAction](ov_title_double_click_raw)
+			ov_title_middle_click: opt_enum[TitleAction](ov_title_middle_click_raw)
 			ov_has_top_bar:     opt_flag(ov_has_top_bar_raw)
 			ov_has_bottom_bar:  opt_flag(ov_has_bottom_bar_raw)
 			ov_has_window_list: opt_flag(ov_has_window_list_raw)
@@ -634,6 +647,7 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 			ov_icon_source:     opt_enum[IconSource](ov_icon_source_raw)
 			ov_title_kind:      opt_enum[TitleKind](ov_title_kind_raw)
 			ov_tab_align:       opt_enum[TitleAlign](ov_tab_align_raw)
+			ov_tab_width:       ov_tab_width_raw.opt()
 			ov_widgets:         ov_widgets_raw.opt()
 			skin_id:            skin_from_wire(skin_raw.opt())
 		}

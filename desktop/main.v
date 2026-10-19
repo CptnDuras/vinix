@@ -674,10 +674,18 @@ fn (mut d Desktop) pump_pointer(mut pointer PointerDevice, width int, height int
 		}
 	}
 	if packet.pressed & button_middle != 0 {
-		d.on_app_pointer_button(pointer_x, pointer_y, .down, .middle)
+		if d.title_middle_click(pointer_x, pointer_y) {
+			d.title_middle_swallow = true
+		} else {
+			d.on_app_pointer_button(pointer_x, pointer_y, .down, .middle)
+		}
 	}
 	if packet.released & button_middle != 0 {
-		d.on_app_pointer_button(pointer_x, pointer_y, .up, .middle)
+		if d.title_middle_swallow {
+			d.title_middle_swallow = false
+		} else {
+			d.on_app_pointer_button(pointer_x, pointer_y, .up, .middle)
+		}
 	}
 	if packet.pressed & button_right != 0 {
 		if d.window_actions_right_down(pointer_x, pointer_y) {

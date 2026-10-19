@@ -33,10 +33,25 @@ fn (d &Desktop) chrome_spec() ChromeSpec {
 			tab_align: align
 		}
 	}
+	if percent := d.settings.ov_tab_width {
+		sizing, pct := tab_sizing_for(percent)
+		spec = ChromeSpec{
+			...spec
+			tab_sizing: sizing
+			tab_pct: pct
+		}
+	}
 	if packed := d.settings.ov_widgets {
 		spec = ChromeSpec{
 			...spec
 			widgets: widgets_unpack(u32(packed))
+		}
+	} else if spec.widgets.len > 0 && d.settings.button_side == .left {
+		// "Buttons on the left" turns whatever the look or skin arranged into
+		// its mirror image, so it means something for every look.
+		spec = ChromeSpec{
+			...spec
+			widgets: widgets_mirrored(spec.widgets)
 		}
 	}
 	if spec.widgets.len > 0 {

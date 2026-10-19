@@ -37,6 +37,7 @@ const settings_key_ov_title_size = 'ov_title_size'
 const settings_key_ov_shade_enabled = 'ov_shade_enabled'
 const settings_key_ov_menu_placement = 'ov_menu_placement'
 const settings_key_ov_title_double_click = 'ov_title_double_click'
+const settings_key_ov_title_middle_click = 'ov_title_middle_click'
 const settings_key_ov_has_top_bar = 'ov_has_top_bar'
 const settings_key_ov_has_bottom_bar = 'ov_has_bottom_bar'
 const settings_key_ov_has_window_list = 'ov_has_window_list'
@@ -93,6 +94,9 @@ fn encode_settings(s Settings) string {
 	}
 	if v := s.ov_title_double_click {
 		lines << '${settings_key_ov_title_double_click} ${title_action_name(v)}'
+	}
+	if v := s.ov_title_middle_click {
+		lines << '${settings_key_ov_title_middle_click} ${title_action_name(v)}'
 	}
 	if v := s.ov_has_top_bar {
 		lines << '${settings_key_ov_has_top_bar} ${bool_name(v)}'
@@ -191,6 +195,11 @@ fn decode_settings(blob string) Settings {
 			settings_key_ov_title_double_click {
 				if t := title_action_from(value) {
 					s.ov_title_double_click = t
+				}
+			}
+			settings_key_ov_title_middle_click {
+				if t := title_action_from(value) {
+					s.ov_title_middle_click = t
 				}
 			}
 			settings_key_ov_has_top_bar {

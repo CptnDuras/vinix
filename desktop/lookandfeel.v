@@ -52,6 +52,8 @@ struct TypographyConfig {
 struct BehaviorConfig {
 	shade_enabled      ?bool
 	title_double_click ?TitleAction
+	// What a middle-click on a title bar does.
+	title_middle_click ?TitleAction
 	focus_policy       ?FocusPolicy
 	menu_placement     ?MenuPlacement
 	// D2: maximize / restore policy — whether a maximized window respects
@@ -197,6 +199,7 @@ struct EffectiveTypography {
 struct EffectiveBehavior {
 	shade_enabled      bool
 	title_double_click TitleAction
+	title_middle_click TitleAction
 	focus_policy       FocusPolicy
 	menu_placement     MenuPlacement
 	maximize_policy    MaxPolicy
@@ -258,8 +261,11 @@ const builtin_typography = EffectiveTypography{
 }
 
 const builtin_behavior = EffectiveBehavior{
-	shade_enabled: false
+	// Rolling a window up is on everywhere: a middle-click does it unless the
+	// user (or a look) says otherwise, and a double-click zooms.
+	shade_enabled: true
 	title_double_click: .maximize
+	title_middle_click: .shade
 	focus_policy: .click_to_focus
 	menu_placement: .none_
 	// Default respects reserving panels. With the default shell (bottom taskbar
@@ -337,6 +343,7 @@ fn resolve_behavior(preset ?BehaviorConfig, over ?BehaviorConfig) EffectiveBehav
 	return EffectiveBehavior{
 		shade_enabled: o.shade_enabled or { p.shade_enabled or { builtin_behavior.shade_enabled } }
 		title_double_click: o.title_double_click or { p.title_double_click or { builtin_behavior.title_double_click } }
+		title_middle_click: o.title_middle_click or { p.title_middle_click or { builtin_behavior.title_middle_click } }
 		focus_policy: o.focus_policy or { p.focus_policy or { builtin_behavior.focus_policy } }
 		menu_placement: o.menu_placement or { p.menu_placement or { builtin_behavior.menu_placement } }
 		maximize_policy: o.maximize_policy or { p.maximize_policy or { builtin_behavior.maximize_policy } }
@@ -461,7 +468,6 @@ const lookandfeel_registry = [
 		}
 		behavior: BehaviorConfig{
 			shade_enabled: true
-			title_double_click: .shade
 			menu_placement: .global_
 		}
 		shell: ShellConfig{
@@ -485,7 +491,6 @@ const lookandfeel_registry = [
 		}
 		behavior: BehaviorConfig{
 			shade_enabled: true
-			title_double_click: .shade
 			menu_placement: .in_window
 			// BeOS classically offered focus-follows-mouse; the pointer focuses
 			// the window under it without raising it.
