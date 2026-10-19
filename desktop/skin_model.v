@@ -144,7 +144,7 @@ fn (mut s PathScanner) flag() ?bool {
 fn flatten_arc(mut out []VecPoint, p0 VecPoint, rx_in f64, ry_in f64, rotation f64, large bool, sweep bool, p1 VecPoint) {
 	mut rx := math.abs(rx_in)
 	mut ry := math.abs(ry_in)
-	if (p0.x == p1.x && p0.y == p1.y) {
+	if p0.x == p1.x && p0.y == p1.y {
 		return
 	}
 	if rx == 0 || ry == 0 {
