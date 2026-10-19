@@ -401,8 +401,8 @@ if [ -d "$BUILD_DIR/wallpapers" ]; then
 fi
 echo "==> Skins..."
 mkdir -p "$STAGING/usr/share/vinix/skins"
-python3 "$SCRIPT_DIR/desktop/tools/build_skins.py" "$SCRIPT_DIR/desktop/skins" \
-    "$STAGING/usr/share/vinix/skins" || true
+"$SCRIPT_DIR/desktop/tools/build_skins" "$SCRIPT_DIR/desktop/skins" \
+    "$STAGING/usr/share/vinix/skins"
 
 # The desktop's sources, for the V compiler to rebuild it in the guest.
 if [ "$WITH_V" -eq 1 ]; then

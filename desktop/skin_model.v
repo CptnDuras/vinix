@@ -5,13 +5,13 @@
 // the file that names them. Pure data and arithmetic, with no ui2 and no file
 // access, so every rule here is tested without a desktop.
 //
-// Vinix has no PNG or SVG decoder, so a skin's art arrives in two small
-// formats of its own, in the way wallpapers do (wallpaper.v):
+// A skin's art arrives as:
 //
-//   * a vector is a path in the SVG path syntax, restricted to straight lines
-//     and Bezier curves (M L H V C S Q T Z, absolute and relative);
-//   * a bitmap is "VBM1", two little-endian u16 for width and height, one
-//     reserved byte, then RGBA. desktop/tools/png2vbm.py makes one from a PNG.
+//   * a vector: an SVG icon (skin_svg.v), or a path in the SVG path syntax on a
+//     line of its own after a viewbox (M L H V C S Q T A Z, absolute and
+//     relative; arcs are flattened to straight edges);
+//   * a bitmap: a PNG, decoded by skin.v, or "VBM1": two little-endian u16 for
+//     width and height, one reserved byte, then RGBA.
 module main
 
 import math

@@ -1785,8 +1785,8 @@ fi
 echo "==> Skins..."
 rm -rf "$STAGING/usr/share/vinix/skins"
 mkdir -p "$STAGING/usr/share/vinix/skins"
-python3 "$SCRIPT_DIR/desktop/tools/build_skins.py" "$SCRIPT_DIR/desktop/skins" \
-    "$STAGING/usr/share/vinix/skins" || true
+"$SCRIPT_DIR/desktop/tools/build_skins" "$SCRIPT_DIR/desktop/skins" \
+    "$STAGING/usr/share/vinix/skins"
 
 # Keep a system-owned development copy outside persistent /root. It lets an
 # upgraded machine build even when its carried home predates /root/vmodules.

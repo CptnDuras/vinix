@@ -89,7 +89,8 @@ and an inner one with the opposite direction (in most editors: combine them with
 
 **PNG** is decoded as RGBA, at most 1024 by 1024. The older `.vbm` bitmap and the
 path-text `.vec` vector (`viewbox 12 12` then `path M0 0 H12 …` lines) still
-work, and `desktop/tools/png2vbm.py` makes a `.vbm` from a PNG.
+work. `desktop/tools/build_skins` assembles the skins in this directory into the
+image, copying their files as they are.
 
 ## Trying one
 
