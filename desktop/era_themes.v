@@ -68,12 +68,18 @@ const theme_win2k = Theme{
 const theme_platinum = Theme{
 	name:                'Platinum'
 	window_body:         0xdddddd
-	window_edge:         0x888888
-	window_radius:       2
+	window_edge:         0x2b2b2b
+	window_radius:       0
 	shadow_alpha:        70
+	frame_border:        2
+	frame_style:         .platinum
+	frame_face:          0xdddddd
+	frame_light:         0xffffff
+	frame_dark:          0x8c8c8c
+	title_stripes:       0x9a9a9a
 	title_height:        22
-	title_active_bg:     0xcccccc
-	title_active_bg2:    0xbbbbbb
+	title_active_bg:     0xe9e9e9
+	title_active_bg2:    0xcdcdcd
 	title_inactive_bg:   0xdddddd
 	title_inactive_bg2:  0xd4d4d4
 	title_divider:       0x999999
@@ -85,6 +91,7 @@ const theme_platinum = Theme{
 	button_look:         .flat
 	window_chrome: ChromeSpec{
 		// A close box at one end; the zoom and collapse boxes at the other.
+		skin: 'platinum-boxes'
 		widgets: [
 			WidgetSpec{ action: .close, anchor: .leading },
 			WidgetSpec{ action: .maximize, anchor: .trailing },
@@ -92,12 +99,12 @@ const theme_platinum = Theme{
 		]
 	}
 	bevel_enabled:       true
-	bevel_light:         0xf4f4f4
+	bevel_light:         0xffffff
 	bevel_dark:          0x999999
 	bevel_width:         1
-	button_size:         18
-	button_gap:          4
-	button_inset:        6
+	button_size:         13
+	button_gap:          6
+	button_inset:        8
 	button_hover:        0xcccccc
 	button_close_hover:  0xcccccc
 	button_face:         0xdddddd

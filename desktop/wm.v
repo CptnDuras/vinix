@@ -779,7 +779,8 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 	title_limit := bar_w - text_inset_left - maxi(lead_ext, trail_ext) - if lead_ext == 0
 		&& trail_ext == 0 { 14 } else { 0 }
 	// The frame's top line is not part of what the title is centred in.
-	title_top := if theme.chrome != .flat { 1 } else { 0 }
+	bar_top := if window.maximized { 0 } else { theme.bar_top() }
+	title_top := if theme.chrome != .flat { 1 } else { bar_top }
 	// A folder's title carries its icon, as Finder's does, the two centred as one.
 	title_icon_width := if toolbar.image_path.len > 0 && centered && d.fonts.len > 0 {
 		20
@@ -869,7 +870,7 @@ fn (mut d Desktop) window_element(window_index int) ui2.Element {
 			spec := widgets[slot.index]
 			id := d.widget_id(window, spec.action)
 			title_children << d.title_widget(spec, id, d.widget_glyph(spec, window.maximized),
-				slot.x, slot.size, theme.title_height, active, set_hovered)
+				slot.x, slot.size, theme.title_height, bar_top, active, set_hovered)
 		}
 	}
 	// In-window menu placement (Blue spec F2): the focused window hosts its own
@@ -1695,7 +1696,7 @@ fn aero_caption_button(id string, glyph string, x int, width int, top int) ui2.E
 // title_widget is one control in a window's bar. Its face follows its shape: a
 // flat square lights up under the pointer, a disc is coloured while its window
 // is focused and shows its glyph only while the pointer is over the set.
-fn (d &Desktop) title_widget(spec WidgetSpec, id string, glyph string, x int, size int, bar_h int, active bool, set_hovered bool) ui2.Element {
+fn (d &Desktop) title_widget(spec WidgetSpec, id string, glyph string, x int, size int, bar_h int, top int, active bool, set_hovered bool) ui2.Element {
 	theme := d.theme()
 	if theme.button_look == .luna {
 		// Where it is and which mark it carries; draw_luna_caption_button
@@ -1707,7 +1708,7 @@ fn (d &Desktop) title_widget(spec WidgetSpec, id string, glyph string, x int, si
 			color: theme.glyph_color
 		})
 	}
-	y := (bar_h - size) / 2
+	y := top + (bar_h - top - size) / 2
 	hovered := d.hover == id
 	is_close := spec.action == .close
 

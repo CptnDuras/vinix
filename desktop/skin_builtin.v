@@ -8,7 +8,7 @@
 // leaves empty.
 module main
 
-const builtin_skin_ids = ['beos-boxes', 'next-gadgets', 'amiga-gadgets', 'motif-boxes', 'win31-arrows', 'kde2-buttons']
+const builtin_skin_ids = ['beos-boxes', 'next-gadgets', 'amiga-gadgets', 'motif-boxes', 'win31-arrows', 'kde2-buttons', 'platinum-boxes']
 
 fn builtin_skin_name(id string) string {
 	return match id {
@@ -18,6 +18,7 @@ fn builtin_skin_name(id string) string {
 		'motif-boxes' { 'Motif boxes' }
 		'win31-arrows' { 'Windows 3.1' }
 		'kde2-buttons' { 'KDE 2 buttons' }
+		'platinum-boxes' { 'Platinum boxes' }
 		else { id }
 	}
 }
@@ -45,9 +46,14 @@ fn builtin_skin_cfg(id string) ?string {
 			// The raised square buttons of KDE 2's titles, each with its mark.
 			'name=KDE 2 buttons\nwidget.menu=vector:menu.vec\nwidget.minimize=vector:mini.vec\nwidget.maximize=vector:maxi.vec\nwidget.close=vector:close.vec\nwidget.shade=vector:shade.vec\nwidget.menu.size=16\nwidget.minimize.size=16\nwidget.maximize.size=16\nwidget.close.size=16\nwidget.shade.size=16\n'
 		}
+		'platinum-boxes' {
+			// Raised, lightly shaded squares: a close box that is blank until it is
+			// pressed, a zoom box of two squares and a collapse box with a rule.
+			'name=Platinum boxes\nwidget.close.plate=bevel:#eeeeee:#ffffff:#8c8c8c:#2b2b2b:#c2c2c2\nwidget.maximize.plate=bevel:#eeeeee:#ffffff:#8c8c8c:#2b2b2b:#c2c2c2\nwidget.shade.plate=bevel:#eeeeee:#ffffff:#8c8c8c:#2b2b2b:#c2c2c2\nwidget.close.pressed=vector:close.vec\nwidget.maximize=vector:zoom.vec\nwidget.shade=vector:shade.vec\nwidget.close.size=13\nwidget.maximize.size=13\nwidget.shade.size=13\n'
+		}
 		'win31-arrows' {
-			// The system-menu dash and the two arrows.
-			'name=Windows 3.1\nwidget.menu=vector:menu.vec\nwidget.minimize=vector:down.vec\nwidget.maximize=vector:up.vec\nwidget.menu.size=14\nwidget.minimize.size=14\nwidget.maximize.size=14\n'
+			// The system-menu dash and the two arrows, on grey bevelled boxes.
+			'name=Windows 3.1\nwidget.menu=vector:menu.vec\nwidget.minimize=vector:down.vec\nwidget.maximize=vector:up.vec\nwidget.menu.plate=bevel:#c0c0c0:#ffffff:#808080:#000000\nwidget.minimize.plate=bevel:#c0c0c0:#ffffff:#808080:#000000\nwidget.maximize.plate=bevel:#c0c0c0:#ffffff:#808080:#000000\nwidget.menu.size=20\nwidget.minimize.size=20\nwidget.maximize.size=20\n'
 		}
 		else {
 			none
@@ -98,6 +104,14 @@ fn builtin_skin_asset(id string, file string) ?string {
 				'maxi.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3 3 H9 V9 H3 Z M4.2 4.5 V7.8 H7.8 V4.5 Z\n' }
 				'close.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3.75 3 L6 5.25 L8.25 3 L9 3.75 L6.75 6 L9 8.25 L8.25 9 L6 6.75 L3.75 9 L3 8.25 L5.25 6 L3 3.75 Z\n' }
 				'shade.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3 3 H9 V4.5 H3 Z\n' }
+				else { none }
+			}
+		}
+		'platinum-boxes' {
+			match file {
+				'close.vec' { 'viewbox 12 12\npath M1 1 L2 0 L6 4 L10 0 L11 1 L7 5 L11 9 L10 10 L6 6 L2 10 L1 9 L5 5 Z\n' }
+				'zoom.vec' { 'viewbox 12 12\npath M0 0 H7 V7 H0 Z M1 1 V6 H6 V1 Z\npath M3 3 H12 V12 H3 Z M4 4 V11 H11 V4 Z\n' }
+				'shade.vec' { 'viewbox 12 12\npath M0 4 H12 V6 H0 Z\n' }
 				else { none }
 			}
 		}

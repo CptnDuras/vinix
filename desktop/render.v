@@ -668,7 +668,13 @@ fn (mut d Desktop) draw_surface(el &ui2.Element, x int, y int, w int, h int, dep
 		} else {
 			d.theme().window_edge
 		}
-		d.canvas.stroke_round_rect(x, y, w, h, radius, edge, 190)
+		// A period frame (Windows 3.1, Platinum) paints its own outline.
+		if d.theme().frame_style != .none_ && depth == 1 && el.id.starts_with('win.')
+			&& !d.element_window_maximized(el.id) {
+			d.draw_era_frame(d.theme(), x, y, w, h)
+		} else {
+			d.canvas.stroke_round_rect(x, y, w, h, radius, edge, 190)
+		}
 	}
 
 	// A title bar is shaded down its height. Like the shadow above, this is
@@ -680,6 +686,9 @@ fn (mut d Desktop) draw_surface(el &ui2.Element, x int, y int, w int, h int, dep
 	if el.id.ends_with('.titlebar') {
 		active := el.box.bg == theme.title_active_bg
 		if d.draw_skinned_bar(active, x, y, w, h) {
+			return
+		}
+		if d.draw_era_bar(el, theme, active, x, y, w, h) {
 			return
 		}
 		bottom := if active {

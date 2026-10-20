@@ -265,3 +265,58 @@ fn test_cascading_start_menus_are_drawn_in_their_own_colours() {
 		|| pixel_at(&d, sub.x + 1, sub.y + sub.height / 2) == look.border
 	}
 }
+
+// Windows 3.1 wears a thick grey frame: its face between a black outline and
+// the black rule round the body, with the caption inset in it.
+fn test_windows_31_has_a_grey_frame_round_a_navy_caption() {
+	mut d := snapshot_desktop('win31')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	theme := d.theme()
+	assert theme.frame_border == 5
+	// The window is at (60, 70), 360 by 240. Two pixels in from the left edge
+	// is the frame's face; the outline is the edge itself.
+	assert pixel_at(&d, 60, 200) == theme.window_edge
+	assert pixel_at(&d, 62, 200) == theme.frame_face
+	// The body starts after the frame and its black rule.
+	assert pixel_at(&d, 64, 200) == theme.window_edge
+	assert pixel_at(&d, 66, 200) == theme.window_body
+	// The caption is navy, inset by the frame, with grey above it.
+	assert pixel_at(&d, 200, 70 + theme.frame_border + 4) == theme.title_active_bg
+	assert pixel_at(&d, 200, 70 + 3) == theme.frame_face
+	// The system-menu box is a grey plate flush with the caption's left end.
+	assert pixel_at(&d, 70 + 6, 70 + 5 + 6) == 0xc0c0c0
+}
+
+// Platinum's bar is ruled with fine lines that stop short of the title and the
+// boxes, and its controls are raised squares with a light top edge.
+fn test_platinum_stripes_its_bar_and_raises_its_boxes() {
+	mut d := snapshot_desktop('platinum')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	theme := d.theme()
+	assert theme.title_stripes != 0
+	// Two rows next to each other on the bar, left of the title: one is a
+	// stripe, the other the ground.
+	mut stripes := 0
+	for row in 74 .. 88 {
+		if pixel_at(&d, 120, row) == theme.title_stripes {
+			stripes++
+		}
+	}
+	assert stripes >= 5
+	// A ruled line does not run through the title text's plate.
+	mut ruled_under_title := 0
+	for x in 200 .. 280 {
+		if pixel_at(&d, x, 75) == theme.title_stripes {
+			ruled_under_title++
+		}
+	}
+	assert ruled_under_title == 0
+	// The close box, thirteen pixels at the bar's left: dark outline, light
+	// edge inside it on the top.
+	assert pixel_at(&d, 60 + 8, 70 + 4 + 6) == 0x2b2b2b
+	assert pixel_at(&d, 60 + 8 + 3, 70 + 4 + 1) == 0xffffff
+}

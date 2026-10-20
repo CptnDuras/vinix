@@ -106,6 +106,6 @@ fn (d &Desktop) title_button(id string, glyph string, x int, active bool, set_ho
 		action: action
 		shape: if theme.button_look == .traffic { WidgetShape.disc } else { WidgetShape.square }
 	}
-	return d.title_widget(spec, id, glyph, x, theme.button_size, theme.title_height, active,
+	return d.title_widget(spec, id, glyph, x, theme.button_size, theme.title_height, 0, active,
 		set_hovered)
 }

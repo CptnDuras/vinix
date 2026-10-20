@@ -169,3 +169,35 @@ fn test_every_builtin_skin_is_well_formed() {
 	assert builtin_skin_asset('beos-boxes', 'nothing.vec') == none
 	assert builtin_skin_cfg('nope') == none
 }
+
+fn test_a_bevel_is_four_colours_and_an_optional_second_face() {
+	flat := parse_drawable('bevel:#c0c0c0:#ffffff:#808080:#000000') or { panic('parse') }
+	assert flat.kind == .bevel
+	assert flat.color == 0xc0c0c0
+	assert flat.light == 0xffffff
+	assert flat.dark == 0x808080
+	assert flat.outline == 0
+	assert flat.face2 == 0
+	shaded := parse_drawable('bevel:#eeeeee:#ffffff:#8c8c8c:#2b2b2b:#c2c2c2') or { panic('parse') }
+	assert shaded.face2 == 0xc2c2c2
+	assert shaded.outline == 0x2b2b2b
+}
+
+fn test_a_bevel_with_a_missing_or_bad_colour_is_refused() {
+	assert parse_drawable('bevel:#c0c0c0:#ffffff:#808080') == none
+	assert parse_drawable('bevel:#c0c0c0:#ffffff:#808080:red') == none
+	assert parse_drawable('bevel:#c0c0c0:#ffffff:#808080:#000000:#111111:#222222') == none
+}
+
+fn test_a_plate_sits_under_a_controls_other_art() {
+	skin := parse_skin('t', '', 'widget.maximize=vector:up.vec\nwidget.maximize.plate=bevel:#c0c0c0:#ffffff:#808080:#000000\n')
+	assert skin.problems.len == 0
+	widget := skin.widgets['maximize'] or { panic('no widget') }
+	assert widget.plate.kind == .bevel
+	assert widget.normal.kind == .vector
+}
+
+fn test_a_plate_that_is_not_a_bevel_is_a_problem() {
+	skin := parse_skin('t', '', 'widget.close.plate=fill:#c0c0c0\n')
+	assert skin.problems.len == 1
+}

@@ -43,6 +43,8 @@ const skin_cache_masks = 64
 struct SkinEntry {
 	id   string
 	name string
+	// The folder its files are in; empty for a skin compiled into the desktop.
+	dir string
 }
 
 // SkinState is the loaded skin and what it has read so far. Nothing is read
@@ -102,6 +104,7 @@ fn list_installed_skins(mut out []SkinEntry) {
 		out << SkinEntry{
 			id: id
 			name: trimmed[space + 1..].trim_space()
+			dir: '${skin_root()}/${id}'
 		}
 	}
 }
@@ -129,6 +132,7 @@ fn list_user_skins(mut out []SkinEntry) {
 		out << SkinEntry{
 			id: id
 			name: parsed.name
+			dir: '${skin_user_root()}/${id}'
 		}
 	}
 }
@@ -384,6 +388,10 @@ fn (mut d Desktop) draw_drawable(dr Drawable, x int, y int, w int, h int, ink u3
 			}
 			return true
 		}
+		.bevel {
+			d.draw_bevel_plate(dr, x, y, w, h, false)
+			return true
+		}
 		.vector {
 			mask := d.skin_mask(dr.file, w, h) or { return false }
 			color := if dr.has_color { dr.color } else { ink }
@@ -431,7 +439,47 @@ fn (mut d Desktop) draw_skinned_widget(el &ui2.Element, x int, y int, w int, h i
 	dr := sw.state_drawable(hover, pressed, inactive)
 	theme := d.theme()
 	ink := if inactive { theme.title_text_inactive } else { theme.glyph_color }
+	if sw.plate.kind == .bevel {
+		if inactive {
+			// A control of a window that is not in front is an empty, flat outline.
+			d.canvas.fill_rect(x, y, w, h, sw.plate.dark)
+			d.canvas.fill_rect(x + 1, y + 1, w - 2, h - 2, sw.plate.color)
+			return true
+		}
+		d.draw_bevel_plate(sw.plate, x, y, w, h, pressed)
+		// A held control sinks, and its mark with it. The mark sits inside the
+		// plate, a quarter of its side in from each edge.
+		margin := w / 4
+		nudge := if pressed { 1 } else { 0 }
+		d.draw_drawable(dr, x + margin + nudge, y + margin + nudge, w - 2 * margin, h - 2 * margin, ink)
+		return true
+	}
 	return d.draw_drawable(dr, x, y, w, h, ink)
+}
+
+// draw_bevel_plate paints a bevelled square: a one-pixel outline, the light and
+// dark edges inside it, and the face, shaded top to bottom when the plate has a
+// second face colour. Sunken swaps the two edges.
+fn (mut d Desktop) draw_bevel_plate(dr Drawable, x int, y int, w int, h int, sunken bool) {
+	if w < 4 || h < 4 {
+		d.canvas.fill_rect(x, y, w, h, dr.color)
+		return
+	}
+	d.canvas.fill_rect(x, y, w, h, dr.outline)
+	inner_x := x + 1
+	inner_y := y + 1
+	inner_w := w - 2
+	inner_h := h - 2
+	if dr.face2 != 0 && !sunken {
+		d.canvas.vertical_gradient(inner_x, inner_y, inner_w, inner_h, dr.color, dr.face2)
+	} else {
+		d.canvas.fill_rect(inner_x, inner_y, inner_w, inner_h, dr.color)
+	}
+	if sunken {
+		d.canvas.bevel_rect(inner_x, inner_y, inner_w, inner_h, .raised, 1, dr.dark, dr.light, 0)
+	} else {
+		d.canvas.bevel_rect(inner_x, inner_y, inner_w, inner_h, .raised, 1, dr.light, dr.dark, 0)
+	}
 }
 
 // draw_skinned_bar paints a window's title bar from the active skin.

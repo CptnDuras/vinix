@@ -2,7 +2,7 @@
 
 A skin is the artwork for a window's title bar and its controls. Settings >
 Appearance > Skin lists them; a look can wear one of its own (BeOS, NeXTSTEP,
-Amiga, CDE, Windows 3.1, Haiku, KDE 2 and Quartz do) and the user can put any on any look. A
+Amiga, CDE, Windows 3.1, Platinum, Haiku, KDE 2 and Quartz do) and the user can put any on any look. A
 skin changes how things are drawn, never what they do: the controls and where
 they sit come from the look, or from what the user arranged on the title bar
 designer, unless the skin's own `chrome.*` lines say otherwise.
@@ -59,7 +59,16 @@ control a skin does not name keeps the look's own face.
 * `vector:<file>[:#rrggbb]`, an SVG (or the plain path text below), filled in the
   colour given, or in the look's glyph colour when none is;
 * `bitmap:<file>[:left,top,right,bottom]`, a PNG, stretched as a nine-slice with
-  those edges kept unstretched (all zero stretches the whole picture).
+  those edges kept unstretched (all zero stretches the whole picture);
+* `bevel:#face:#light:#dark:#outline[:#face2]`, the raised square of a period
+  control: a one-pixel outline, a light edge on the top and left and a dark one on
+  the bottom and right, and the face, shaded down to `face2` when that is given.
+
+A control can have a **plate**, `widget.<name>.plate=bevel:...`, drawn under its
+other art. The art is then drawn inside it, a quarter of the control's side in
+from each edge, and the plate sinks, art and all, while the control is held and
+goes flat in a window that is not in front. Windows 3.1's grey boxes and
+Platinum's raised squares are plates.
 
 **chrome.\*** takes `kind` (`full` or `tab`), `tab_sizing` (`fit`, `fixed`,
 `fraction`), `tab_px`, `tab_pct`, `tab_align` (`left`, `center`, `right`),

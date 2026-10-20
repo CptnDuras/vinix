@@ -532,11 +532,12 @@ enum DrawKind {
 	fill
 	bitmap
 	vector
+	bevel
 }
 
 // Drawable is one thing a skin can paint: a flat colour, a bitmap (stretched as
-// a nine-slice) or a vector (filled in a colour, which defaults to the
-// widget's glyph colour).
+// a nine-slice), a vector (filled in a colour, which defaults to the widget's
+// glyph colour) or a bevel, the raised square of a period control.
 struct Drawable {
 	kind DrawKind
 	file string
@@ -544,10 +545,19 @@ struct Drawable {
 	slice     [4]int
 	color     u32
 	has_color bool
+	// A bevel: the face (shaded down to face2 when that is not 0), the light and
+	// the dark edge, and a one-pixel outline round the lot.
+	light   u32
+	dark    u32
+	outline u32
+	face2   u32
 }
 
+// SkinWidget is a control's art by state. `plate` goes under whatever those
+// draw, and turns sunken while the control is held.
 struct SkinWidget {
 mut:
+	plate    Drawable
 	normal   Drawable
 	hover    Drawable
 	pressed  Drawable
@@ -568,8 +578,8 @@ mut:
 	problems    []string
 }
 
-// parse_drawable reads "fill:#rrggbb", "bitmap:<file>[:l,t,r,b]" or
-// "vector:<file>[:#rrggbb]".
+// parse_drawable reads "fill:#rrggbb", "bitmap:<file>[:l,t,r,b]",
+// "vector:<file>[:#rrggbb]" or "bevel:#face:#light:#dark:#outline[:#face2]".
 fn parse_drawable(text string) ?Drawable {
 	v := text.trim_space()
 	parts := v.split(':')
@@ -626,6 +636,28 @@ fn parse_drawable(text string) ?Drawable {
 				}
 			}
 			return d
+		}
+		'bevel' {
+			if parts.len < 5 || parts.len > 6 {
+				return none
+			}
+			face := parse_hex_color(parts[1]) or { return none }
+			light := parse_hex_color(parts[2]) or { return none }
+			dark := parse_hex_color(parts[3]) or { return none }
+			outline := parse_hex_color(parts[4]) or { return none }
+			mut face2 := u32(0)
+			if parts.len >= 6 && parts[5] != '-' {
+				face2 = parse_hex_color(parts[5]) or { return none }
+			}
+			return Drawable{
+				kind: .bevel
+				color: face
+				has_color: true
+				light: light
+				dark: dark
+				outline: outline
+				face2: face2
+			}
 		}
 		else {
 			return none
@@ -747,6 +779,15 @@ fn (mut skin Skin) apply_widget_key(rest string, value string) {
 	}
 	d := parse_drawable(value) or {
 		skin.problems << 'bad drawable for widget.${rest}'
+		return
+	}
+	if state == 'plate' {
+		if d.kind != .bevel {
+			skin.problems << 'widget.${rest} must be a bevel'
+			return
+		}
+		w.plate = d
+		skin.widgets[action] = w
 		return
 	}
 	match state {

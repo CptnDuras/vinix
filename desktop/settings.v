@@ -73,6 +73,20 @@ enum Chrome {
 	luna
 }
 
+// FrameStyle is which period frame a flat look paints round its windows.
+enum FrameStyle {
+	none_
+	// Windows 3.1: a thick grey frame, black rules, the bar inset in it.
+	win31
+	// Mac OS Platinum: a black outline and a bevel, striped bar.
+	platinum
+}
+
+// bar_top is how many rows of frame lie above the bar proper, which sits in it.
+fn (t Theme) bar_top() int {
+	return if t.frame_style == .win31 { t.frame_border } else { 0 }
+}
+
 // Theme is every colour and measurement that changes between looks. Anything
 // the same in all of them stays a plain constant in theme.v.
 struct Theme {
@@ -93,6 +107,16 @@ struct Theme {
 	// The frame around a window's body on its left, right and bottom. Zero is a
 	// body that reaches the window's edges; Windows 7's glass is 8 pixels.
 	frame_border int
+	// A period frame (era_frames.v) is painted over a flat window's border and
+	// bar: the colours of its face and its two bevel edges. The outline is
+	// window_edge. `none_` leaves the frame to the box styles, as it has been.
+	frame_style FrameStyle
+	frame_face  u32
+	frame_light u32
+	frame_dark  u32
+	// Pinstripes across a focused bar: a line this colour every other row, left
+	// out round the title and the controls. 0 is a plain bar.
+	title_stripes u32
 	// The window's 16-pixel icon leads its title: how far in from the body's
 	// left edge it starts, the gap between it and the text, and the colour a
 	// builtin glyph is drawn in (an application's own artwork keeps its own).

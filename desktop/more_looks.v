@@ -267,7 +267,12 @@ const theme_win31 = Theme{
 	window_edge: 0x000000
 	window_radius: 0
 	shadow_alpha: 0
-	title_height: 20
+	title_height: 25
+	frame_border: 5
+	frame_style: .win31
+	frame_face: 0xc0c0c0
+	frame_light: 0xffffff
+	frame_dark: 0x808080
 	title_active_bg: 0x000080
 	title_active_bg2: 0x000080
 	title_inactive_bg: 0xffffff
@@ -291,15 +296,15 @@ const theme_win31 = Theme{
 	bevel_light: 0xffffff
 	bevel_dark: 0x808080
 	bevel_width: 1
-	button_size: 16
+	button_size: 20
 	button_gap: 0
-	button_inset: 0
+	button_inset: 5
 	button_hover: 0xdfdfdf
 	button_close_hover: 0xdfdfdf
 	button_face: 0xc0c0c0
 	button_edge: 0x000000
-	glyph_color: 0xffffff
-	glyph_on_close: 0xffffff
+	glyph_color: 0x000000
+	glyph_on_close: 0x000000
 	traffic_close: 0xff5f57
 	traffic_minimize: 0xfebc2e
 	traffic_zoom: 0x28c840
