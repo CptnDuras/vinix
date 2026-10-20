@@ -91,23 +91,25 @@ fn designer_glyph(action WidgetAction, x int, y int, size int, color u32) []ui2.
 	}
 	match action {
 		.close {
-			// An x: two thin diagonals cannot be drawn from rectangles, so the
-			// control gets a plus turned into a small square cross.
-			out << ui2.view('', ui2.rect(f64(x + size / 2 - unit), f64(y + 3), f64(2 * unit), f64(size - 6)), box, [])
-			out << ui2.view('', ui2.rect(f64(x + 3), f64(y + size / 2 - unit), f64(size - 6), f64(2 * unit)), box, [])
+			// Diagonals cannot be drawn from rectangles, so the cross is a letter.
+			out << ui2.label('', 'x', ui2.rect(f64(x), f64(y), f64(size), f64(size)), ui2.TextStyle{
+				color: color
+				size: 13
+				bold: true
+				align: .center
+				vertical_align: 'middle'
+			})
 		}
 		.minimize {
 			out << ui2.view('', ui2.rect(f64(x + 3), f64(y + size - 5 - unit), f64(size - 6), f64(2 * unit)), box, [])
 		}
 		.maximize {
-			out << ui2.view('', ui2.rect(f64(x + 3), f64(y + 3), f64(size - 6), f64(size - 6)), ui2.BoxStyle{
-				transparent: true
-				border_color: color
-				border_left: f64(unit)
-				border_top: f64(unit)
-				border_right: f64(unit)
-				border_bottom: f64(unit)
-			}, [])
+			// A hollow square from four bars; a transparent box draws no border.
+			side := size - 6
+			out << ui2.view('', ui2.rect(f64(x + 3), f64(y + 3), f64(side), f64(unit)), box, [])
+			out << ui2.view('', ui2.rect(f64(x + 3), f64(y + 3 + side - unit), f64(side), f64(unit)), box, [])
+			out << ui2.view('', ui2.rect(f64(x + 3), f64(y + 3), f64(unit), f64(side)), box, [])
+			out << ui2.view('', ui2.rect(f64(x + 3 + side - unit), f64(y + 3), f64(unit), f64(side)), box, [])
 		}
 		.shade {
 			out << ui2.view('', ui2.rect(f64(x + 3), f64(y + size / 2 - 3), f64(size - 6), f64(unit)), box, [])

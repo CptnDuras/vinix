@@ -587,3 +587,26 @@ fn test_titlebar_middle_click_runs_the_configured_action() {
 	set_titlebar_test_target(mut desktop, id)
 	assert !desktop.title_middle_click(400, 595)
 }
+
+// The session's middle-button gestures see every middle press first; a click that
+// goes nowhere still reaches the title bar, and a swipe does not roll anything up.
+fn test_a_middle_click_reaches_a_title_bar_through_the_session_gesture() {
+	mut desktop := Desktop{
+		canvas: Canvas{
+			width: 800
+			height: 600
+		}
+	}
+	desktop.hub.policy.gestures = true
+	id := desktop.spawn('Welcome', .welcome, 120, 80, 400, 260)
+	set_titlebar_test_target(mut desktop, id)
+	x := 200
+	y := 80 + desktop.theme().title_height / 2
+	assert desktop.session_gesture(PointerPacket{ pressed: button_middle, buttons: button_middle }, x, y)
+	assert desktop.session_gesture(PointerPacket{ released: button_middle }, x + 3, y)
+	assert desktop.windows.last().shaded
+	// A swipe along the bar changes workspace instead and leaves the window alone.
+	assert desktop.session_gesture(PointerPacket{ pressed: button_middle, buttons: button_middle }, x, y)
+	assert desktop.session_gesture(PointerPacket{ released: button_middle }, x + 200, y)
+	assert desktop.windows.last().shaded
+}

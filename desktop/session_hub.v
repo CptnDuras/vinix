@@ -607,7 +607,8 @@ fn (mut d Desktop) session_gesture(packet PointerPacket, x int, y int) bool {
 			d.switch_workspace((d.current_workspace + d.workspace_total() - 1) % d.workspace_total())
 		} else if dy < -100 {
 			d.open_window_overview()
-		} else {
+		} else if !d.title_middle_click(x, y) {
+			// Not a swipe, and not on a title bar: an ordinary middle click.
 			d.on_app_pointer_button(x, y, .down, .middle)
 			d.on_app_pointer_button(x, y, .up, .middle)
 		}
