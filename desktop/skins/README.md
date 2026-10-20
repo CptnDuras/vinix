@@ -7,6 +7,8 @@ skin changes how things are drawn, never what they do: the controls and where
 they sit come from the look, or from what the user arranged on the title bar
 designer, unless the skin's own `chrome.*` lines say otherwise.
 
+Theme Studio (`THEME_STUDIO.md`) draws a skin's pictures and writes its skin.cfg.
+
 ## Where skins live
 
 | Where | What |

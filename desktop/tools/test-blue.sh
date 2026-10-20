@@ -35,6 +35,7 @@ for f in \
     chrome_model.v chrome_model_test.v \
     appearance_designer.v appearance_designer_test.v \
     skin_model.v skin_model_test.v skin_builtin.v skin_svg.v skin_svg_test.v \
+    paint_model.v paint_model_test.v studio_skin.v studio_skin_test.v \
     canvas.v canvas_bevel.v canvas_bevel_test.v
 do
     cp "$d/$f" "$work/"

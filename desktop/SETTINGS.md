@@ -143,7 +143,7 @@ everything below it changes the same picture.
   read from: `/usr/share/vinix/skins/` for installed ones and `/root/.vinix-skins/`
   for your own (`VINIX_SKIN_DIR` and `VINIX_USER_SKIN_DIR` move them). Open the tab
   again to see a folder added meanwhile. See [skins/README.md](skins/README.md) for
-  making one from SVG or PNG files.
+  making one from SVG or PNG files, or draw one in [Theme Studio](THEME_STUDIO.md).
 * **Start menu** picks which Start menu opens. *Follow the look* takes the look's
   own: BeOS and Haiku have the **Deskbar** menu, and the KDE 2, Quartz and Keramik
   looks have the **K menu**. The others are the **Windows** menu (the two-column

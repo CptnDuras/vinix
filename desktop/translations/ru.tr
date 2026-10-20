@@ -5082,3 +5082,146 @@ Zed не установлен.
 wine.zed.exited
 Zed завершил работу.
 -----
+app.theme_studio
+Студия тем
+-----
+studio.tab.paint
+Рисунок
+-----
+studio.tab.skin
+Обложка
+-----
+studio.skin_id
+Папка обложки
+-----
+studio.tool.pencil
+Карандаш
+-----
+studio.tool.eraser
+Ластик
+-----
+studio.tool.fill
+Заливка
+-----
+studio.tool.picker
+Пипетка
+-----
+studio.tool.line
+Линия
+-----
+studio.tool.rect
+Рамка
+-----
+studio.tool.rect_filled
+Блок
+-----
+studio.tool.ellipse
+Овал
+-----
+studio.tool.ellipse_filled
+Заливной овал
+-----
+studio.brush
+Кисть
+-----
+studio.grid
+Сетка
+-----
+studio.undo
+Отменить
+-----
+studio.redo
+Повторить
+-----
+studio.clear
+Очистить
+-----
+studio.size
+Размер
+-----
+studio.preview
+Просмотр
+-----
+studio.file
+Имя файла
+-----
+studio.save
+Сохранить
+-----
+studio.open
+Открыть
+-----
+studio.colour
+Цвет (#rrggbb)
+-----
+studio.set
+Задать
+-----
+studio.skin_name
+Название обложки
+-----
+studio.plate
+Подложка под кнопками
+-----
+studio.plate.none
+Нет
+-----
+studio.plate.grey
+Серая фаска
+-----
+studio.plate.shaded
+Объёмная фаска
+-----
+studio.use
+Взять рисунок
+-----
+studio.edit
+Правка
+-----
+studio.remove
+Убрать
+-----
+studio.no_art
+Нет рисунка
+-----
+studio.save_skin
+Сохранить обложку
+-----
+studio.open_skin
+Открыть обложку
+-----
+studio.ready
+Рисуйте инструментами, затем дайте кнопке рисунок на вкладке «Обложка».
+-----
+studio.saved
+Сохранено.
+-----
+studio.save_failed
+Не удалось сохранить.
+-----
+studio.opened
+Открыто.
+-----
+studio.open_failed
+Не удалось открыть.
+-----
+studio.skin_saved
+Обложка сохранена. Выберите её в Настройках, Оформление, Обложки.
+-----
+studio.skin_save_failed
+Не удалось сохранить обложку.
+-----
+studio.skin_opened
+Обложка открыта.
+-----
+studio.skin_open_failed
+В папке нет skin.cfg.
+-----
+studio.bad_id
+В названии папки: a-z, 0-9, - и _.
+-----
+studio.bad_file
+В именах файлов: буквы, цифры, - и _.
+-----
+studio.bad_colour
+Цвета: #rrggbb или none.

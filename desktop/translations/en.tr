@@ -5091,3 +5091,146 @@ Emacs is not installed. Stage the Emacs runtime first.
 wine.emacs.exited
 Emacs exited.
 -----
+app.theme_studio
+Theme Studio
+-----
+studio.tab.paint
+Paint
+-----
+studio.tab.skin
+Skin
+-----
+studio.skin_id
+Skin folder
+-----
+studio.tool.pencil
+Pencil
+-----
+studio.tool.eraser
+Eraser
+-----
+studio.tool.fill
+Fill
+-----
+studio.tool.picker
+Picker
+-----
+studio.tool.line
+Line
+-----
+studio.tool.rect
+Box
+-----
+studio.tool.rect_filled
+Filled box
+-----
+studio.tool.ellipse
+Oval
+-----
+studio.tool.ellipse_filled
+Filled oval
+-----
+studio.brush
+Brush
+-----
+studio.grid
+Grid
+-----
+studio.undo
+Undo
+-----
+studio.redo
+Redo
+-----
+studio.clear
+Clear picture
+-----
+studio.size
+Picture size
+-----
+studio.preview
+Preview
+-----
+studio.file
+File name
+-----
+studio.save
+Save
+-----
+studio.open
+Open
+-----
+studio.colour
+Colour (#rrggbb)
+-----
+studio.set
+Set
+-----
+studio.skin_name
+Skin name
+-----
+studio.plate
+Plate under each control
+-----
+studio.plate.none
+None
+-----
+studio.plate.grey
+Grey bevel
+-----
+studio.plate.shaded
+Shaded bevel
+-----
+studio.use
+Use drawing
+-----
+studio.edit
+Edit
+-----
+studio.remove
+Remove
+-----
+studio.no_art
+No picture
+-----
+studio.save_skin
+Save skin
+-----
+studio.open_skin
+Open skin
+-----
+studio.ready
+Draw with the tools, then give a control its picture on the Skin tab.
+-----
+studio.saved
+Saved.
+-----
+studio.save_failed
+Could not save.
+-----
+studio.opened
+Opened.
+-----
+studio.open_failed
+Could not open that.
+-----
+studio.skin_saved
+Skin saved. Choose it in Settings, Appearance, Skins.
+-----
+studio.skin_save_failed
+Could not save the skin.
+-----
+studio.skin_opened
+Skin opened.
+-----
+studio.skin_open_failed
+No skin.cfg in that folder.
+-----
+studio.bad_id
+The skin folder may use a-z, 0-9, - and _ only.
+-----
+studio.bad_file
+File names may use letters, digits, - and _ only.
+-----
+studio.bad_colour
+Colours are #rrggbb, or none.

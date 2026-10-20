@@ -1662,6 +1662,20 @@ fn (mut d Desktop) draw_builtin_glyph(path string, x int, y int, w int, h int, c
 			d.canvas.draw_line(left + body / 4, top + tall * 4 / 5,
 				left + body * 4 / 5, top + tall / 6, 0x343b4b, if w > 24 { 3 } else { 2 })
 		}
+		'studio' {
+			// A little picture of pixels: a grid of coloured squares on a board.
+			body := w * 3 / 4
+			tall := h * 3 / 4
+			left := cx - body / 2
+			top := cy - tall / 2
+			d.canvas.fill_round_rect(left, top, body, tall, 3, 0xe7edf4)
+			cell := (if body < tall { body } else { tall }) / 4
+			colours := [u32(0xe76568), 0xf2c65a, 0x62a6df, 0x62a6df, 0x7cf0ab, 0xe76568, 0xf2c65a, 0x343b4b, 0x7cf0ab]!
+			for index in 0 .. 9 {
+				d.canvas.fill_rect(cx - cell * 3 / 2 + (index % 3) * cell,
+					cy - cell * 3 / 2 + (index / 3) * cell, cell - 1, cell - 1, colours[index])
+			}
+		}
 		'archive' {
 			body := w * 3 / 5
 			tall := h * 3 / 4

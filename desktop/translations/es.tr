@@ -5082,3 +5082,146 @@ Zed no está instalado.
 wine.zed.exited
 Zed se ha cerrado.
 -----
+app.theme_studio
+Estudio de temas
+-----
+studio.tab.paint
+Dibujo
+-----
+studio.tab.skin
+Piel
+-----
+studio.skin_id
+Carpeta de la piel
+-----
+studio.tool.pencil
+Lápiz
+-----
+studio.tool.eraser
+Borrador
+-----
+studio.tool.fill
+Relleno
+-----
+studio.tool.picker
+Cuentagotas
+-----
+studio.tool.line
+Línea
+-----
+studio.tool.rect
+Caja
+-----
+studio.tool.rect_filled
+Caja llena
+-----
+studio.tool.ellipse
+Óvalo
+-----
+studio.tool.ellipse_filled
+Óvalo lleno
+-----
+studio.brush
+Pincel
+-----
+studio.grid
+Cuadrícula
+-----
+studio.undo
+Deshacer
+-----
+studio.redo
+Rehacer
+-----
+studio.clear
+Borrar dibujo
+-----
+studio.size
+Tamaño
+-----
+studio.preview
+Vista previa
+-----
+studio.file
+Nombre del archivo
+-----
+studio.save
+Guardar
+-----
+studio.open
+Abrir
+-----
+studio.colour
+Color (#rrggbb)
+-----
+studio.set
+Aplicar
+-----
+studio.skin_name
+Nombre de la piel
+-----
+studio.plate
+Placa bajo cada control
+-----
+studio.plate.none
+Ninguna
+-----
+studio.plate.grey
+Bisel gris
+-----
+studio.plate.shaded
+Bisel sombreado
+-----
+studio.use
+Usar dibujo
+-----
+studio.edit
+Editar
+-----
+studio.remove
+Quitar
+-----
+studio.no_art
+Sin imagen
+-----
+studio.save_skin
+Guardar piel
+-----
+studio.open_skin
+Abrir piel
+-----
+studio.ready
+Dibuja con las herramientas y da su imagen a cada control en la pestaña Piel.
+-----
+studio.saved
+Guardado.
+-----
+studio.save_failed
+No se pudo guardar.
+-----
+studio.opened
+Abierto.
+-----
+studio.open_failed
+No se pudo abrir.
+-----
+studio.skin_saved
+Piel guardada. Elígela en Ajustes, Apariencia, Pieles.
+-----
+studio.skin_save_failed
+No se pudo guardar la piel.
+-----
+studio.skin_opened
+Piel abierta.
+-----
+studio.skin_open_failed
+No hay skin.cfg en esa carpeta.
+-----
+studio.bad_id
+La carpeta solo admite a-z, 0-9, - y _.
+-----
+studio.bad_file
+Los nombres solo admiten letras, cifras, - y _.
+-----
+studio.bad_colour
+Los colores son #rrggbb, o none.

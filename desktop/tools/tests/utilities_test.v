@@ -769,7 +769,7 @@ fn test_terminal_can_edit_a_file_with_vim_over_its_real_pty() {
 }
 
 fn test_available_utility_applications_and_shortcut_layouts() {
-	assert available_apps.len == 49
+	assert available_apps.len == 50
 	assert available_apps[31].process_name == 'vinix-preview'
 	assert available_apps[31].keyboard && available_apps[31].pointer
 	assert available_apps[32].process_name == 'vinix-console'
@@ -944,7 +944,7 @@ fn test_available_utility_applications_and_shortcut_layouts() {
 	assert available_apps[28].keyboard && available_apps[28].pointer
 	assert available_apps[28].polling && available_apps[28].poll_interval_ms == 50
 	assert available_apps[28].hide_body_cursor && available_apps[28].us_keys
-	assert available_apps.len == 49
+	assert available_apps.len == 50
 	assert app_start_actions.len == available_apps.len
 	assert app_start_jump_actions.len == available_apps.len
 	assert app_shortcut_actions.len == available_apps.len
