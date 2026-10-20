@@ -211,6 +211,19 @@ fn test_every_program_is_reachable() {
 	}
 }
 
+fn test_the_kde_looks_wear_the_k_menu() {
+	for id in ['kde2', 'quartz', 'keramik']! {
+		assert lookandfeel_by_id(id).id == id
+		assert preset_theme(id).start_menu == .kmenu
+		mut d := cascade_desktop(.follow_look)
+		d.settings.preset_id = id
+		assert d.start_menu_style() == .kmenu
+	}
+	assert preset_theme('kde2').name == 'KDE 2'
+	assert preset_theme('quartz').name == 'Quartz'
+	assert preset_theme('keramik').name == 'Keramik'
+}
+
 fn test_the_k_menu_has_its_banner() {
 	mut d := cascade_desktop(.kmenu)
 	d.toggle_start_menu()

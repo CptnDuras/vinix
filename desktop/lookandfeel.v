@@ -634,6 +634,63 @@ const lookandfeel_registry = [
 			launcher_pins: [0, 3, 4]
 		}
 	},
+	LookAndFeel{
+		id: 'kde2'
+		name: 'KDE 2'
+		description: 'A deep blue gradient title, a window-menu button and raised minimise, maximise and close buttons, and the K menu.'
+		order: 14
+		decor: DecorConfig{
+			window_radius: 0
+			accent: 0x3d63a8
+			title_align: .left
+		}
+		behavior: BehaviorConfig{
+			shade_enabled: true
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: false
+			has_bottom_bar: true
+		}
+	},
+	LookAndFeel{
+		id: 'quartz'
+		name: 'Quartz'
+		description: 'KDE 2 Quartz: a pale blue title with the name centred, raised buttons on both sides, and the K menu.'
+		order: 15
+		decor: DecorConfig{
+			window_radius: 3
+			accent: 0x4f7bd0
+			title_align: .center
+		}
+		behavior: BehaviorConfig{
+			shade_enabled: true
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: false
+			has_bottom_bar: true
+		}
+	},
+	LookAndFeel{
+		id: 'keramik'
+		name: 'Keramik'
+		description: 'Brushed silver title bars with rounded corners, three round buttons, and the K menu.'
+		order: 16
+		decor: DecorConfig{
+			window_radius: 7
+			accent: 0x4b78c8
+			title_align: .left
+		}
+		behavior: BehaviorConfig{
+			shade_enabled: true
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: false
+			has_bottom_bar: true
+		}
+	},
 ]
 
 // lookandfeel_by_id returns the preset with the given id, or the default preset

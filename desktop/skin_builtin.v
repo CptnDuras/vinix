@@ -8,7 +8,7 @@
 // leaves empty.
 module main
 
-const builtin_skin_ids = ['beos-boxes', 'next-gadgets', 'amiga-gadgets', 'motif-boxes', 'win31-arrows']
+const builtin_skin_ids = ['beos-boxes', 'next-gadgets', 'amiga-gadgets', 'motif-boxes', 'win31-arrows', 'kde2-buttons']
 
 fn builtin_skin_name(id string) string {
 	return match id {
@@ -17,6 +17,7 @@ fn builtin_skin_name(id string) string {
 		'amiga-gadgets' { 'Amiga gadgets' }
 		'motif-boxes' { 'Motif boxes' }
 		'win31-arrows' { 'Windows 3.1' }
+		'kde2-buttons' { 'KDE 2 buttons' }
 		else { id }
 	}
 }
@@ -39,6 +40,10 @@ fn builtin_skin_cfg(id string) ?string {
 		'motif-boxes' {
 			// The window menu box, the minimise dot and the maximise square.
 			'name=Motif boxes\nwidget.menu=vector:menu.vec\nwidget.minimize=vector:mini.vec\nwidget.maximize=vector:maxi.vec\nwidget.menu.size=14\nwidget.minimize.size=14\nwidget.maximize.size=14\n'
+		}
+		'kde2-buttons' {
+			// The raised square buttons of KDE 2's titles, each with its mark.
+			'name=KDE 2 buttons\nwidget.menu=vector:menu.vec\nwidget.minimize=vector:mini.vec\nwidget.maximize=vector:maxi.vec\nwidget.close=vector:close.vec\nwidget.shade=vector:shade.vec\nwidget.menu.size=16\nwidget.minimize.size=16\nwidget.maximize.size=16\nwidget.close.size=16\nwidget.shade.size=16\n'
 		}
 		'win31-arrows' {
 			// The system-menu dash and the two arrows.
@@ -81,6 +86,18 @@ fn builtin_skin_asset(id string, file string) ?string {
 				'menu.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.5 1.5 V10.5 H10.5 V1.5 Z\npath M3 5 H9 V7 H3 Z\n' }
 				'mini.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.5 1.5 V10.5 H10.5 V1.5 Z\npath M4 4 H8 V8 H4 Z\n' }
 				'maxi.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M3 3 V9 H9 V3 Z\n' }
+				else { none }
+			}
+		}
+		'kde2-buttons' {
+			match file {
+				// Each is the button's outline, then its mark, wound the same way as
+				// the outline so the non-zero fill keeps both and leaves the face open.
+				'menu.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3 3.5 H9 V4.7 H3 Z M3 5.4 H9 V6.6 H3 Z M3 7.3 H9 V8.5 H3 Z\n' }
+				'mini.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3 7.5 H9 V9 H3 Z\n' }
+				'maxi.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3 3 H9 V9 H3 Z M4.2 4.5 V7.8 H7.8 V4.5 Z\n' }
+				'close.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3.75 3 L6 5.25 L8.25 3 L9 3.75 L6.75 6 L9 8.25 L8.25 9 L6 6.75 L3.75 9 L3 8.25 L5.25 6 L3 3.75 Z\n' }
+				'shade.vec' { 'viewbox 12 12\npath M0 0 H12 V12 H0 Z M1.2 1.2 V10.8 H10.8 V1.2 Z\npath M3 3 H9 V4.5 H3 Z\n' }
 				else { none }
 			}
 		}

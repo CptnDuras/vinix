@@ -33,6 +33,9 @@ fn preset_theme(id string) Theme {
 		'gnome' { theme_gnome }
 		'win31' { theme_win31 }
 		'haiku' { theme_haiku }
+		'kde2' { theme_kde2 }
+		'quartz' { theme_quartz }
+		'keramik' { theme_keramik }
 		else { theme_default }
 	}
 }

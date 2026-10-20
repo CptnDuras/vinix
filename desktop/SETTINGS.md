@@ -141,13 +141,24 @@ everything below it changes the same picture.
 * **Skin** picks the artwork for the title bar and its controls; see
   [skins/README.md](skins/README.md) for making one from SVG or PNG files, which go
   in `/root/.vinix-skins/`.
+* **Start menu** picks which Start menu opens. *Follow the look* takes the look's
+  own: BeOS and Haiku have the **Deskbar** menu, and the KDE 2, Quartz and Keramik
+  looks have the **K menu**. The others are the **Windows** menu (the two-column
+  one with search) and **Fluxbox**'s plain dark root menu. The Deskbar, K and
+  Fluxbox menus cascade: a column of rows from which submenus open to the side as
+  the pointer rests on a row with an arrow, and a menu taller than the screen wraps
+  into more columns instead of running off it. They list Programs, Recent
+  programs, the places, Preferences and the session; they have no search, and
+  Escape or a click away closes them. Choosing a look sets this back to *Follow the
+  look* along with the rest.
 
 The page keeps its choices as overrides on the look, each written to the
 preferences file only while it is set: `ov_title_kind`, `ov_tab_align`,
 `ov_tab_width` (`0` fits the title, otherwise 10 to 100 percent), `ov_widgets` (the
 controls in the user's order, as `close@leading,maximize@trailing`),
 `ov_title_double_click`, `ov_title_middle_click` (`shade`, `hide`, `maximize` or
-`none`) and `skin=`. `button_side=left` is the mirror. Settings runs as its own
+`none`), `skin=` and `start_menu=` (`windows`, `fluxbox`, `deskbar` or `kmenu`; absent
+follows the look). `button_side=left` is the mirror. Settings runs as its own
 process, so the drag reaches it as raw pointer events: its application-protocol
 factory sets `pointer_drag_only`, which hands it a left press and the drag that
 follows it and nothing else, and every other control on every page still works by

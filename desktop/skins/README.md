@@ -2,7 +2,7 @@
 
 A skin is the artwork for a window's title bar and its controls. Settings >
 Appearance > Skin lists them; a look can wear one of its own (BeOS, NeXTSTEP,
-Amiga, CDE, Windows 3.1 and Haiku do) and the user can put any on any look. A
+Amiga, CDE, Windows 3.1, Haiku, KDE 2 and Quartz do) and the user can put any on any look. A
 skin changes how things are drawn, never what they do: the controls and where
 they sit come from the look, or from what the user arranged on the title bar
 designer, unless the skin's own `chrome.*` lines say otherwise.
