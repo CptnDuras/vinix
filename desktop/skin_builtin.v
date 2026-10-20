@@ -117,9 +117,11 @@ fn builtin_skin_asset(id string, file string) ?string {
 		}
 		'win31-arrows' {
 			match file {
-				'menu.vec' { 'viewbox 12 12\npath M1 5 H11 V7 H1 Z\n' }
-				'down.vec' { 'viewbox 12 12\npath M1 3 H11 L6 9 Z\n' }
-				'up.vec' { 'viewbox 12 12\npath M6 3 L11 9 H1 Z\n' }
+				// Drawn on a 10 unit box, which the 20 pixel plate shows at one unit to
+				// the pixel, so the edges stay crisp.
+				'menu.vec' { 'viewbox 10 10\npath M0 4 H10 V7 H0 Z\n' }
+				'down.vec' { 'viewbox 10 10\npath M0 2 H10 L5 8 Z\n' }
+				'up.vec' { 'viewbox 10 10\npath M5 2 L10 8 H0 Z\n' }
 				else { none }
 			}
 		}

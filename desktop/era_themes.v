@@ -94,8 +94,9 @@ const theme_platinum = Theme{
 		skin: 'platinum-boxes'
 		widgets: [
 			WidgetSpec{ action: .close, anchor: .leading },
-			WidgetSpec{ action: .maximize, anchor: .trailing },
+			// The collapse box is outermost, the zoom box beside it.
 			WidgetSpec{ action: .shade, anchor: .trailing },
+			WidgetSpec{ action: .maximize, anchor: .trailing },
 		]
 	}
 	bevel_enabled:       true
