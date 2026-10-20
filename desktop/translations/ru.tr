@@ -1940,10 +1940,10 @@ settings.windows.action.menu
 Меню
 -----
 settings.windows.skin
-Оформление
+Темы кнопок окна
 -----
 settings.windows.skin_note
-Графика для заголовка и его кнопок: растровая или векторная.
+Вид заголовка и его кнопок. Выберите тему для любого оформления.
 -----
 settings.windows.skin_none
 Без оформления
@@ -1976,7 +1976,7 @@ settings.appearance.tab_actions
 Клики
 -----
 settings.appearance.tab_skin
-Обложка
+Обложки
 -----
 settings.appearance.tab_start
 Пуск
@@ -2050,8 +2050,20 @@ settings.appearance.act_none
 settings.appearance.actions_note
 Что делает щелчок по заголовку окна. «В строку» оставляет только заголовок.
 -----
-settings.appearance.skin_folder
-Свои обложки кладите в /root/.vinix-skins, по папке с файлом skin.cfg; подойдут SVG и PNG.
+settings.appearance.skin_inuse
+Сейчас: {0}, {1}
+-----
+settings.appearance.skin_builtin
+встроена
+-----
+settings.appearance.skin_installed
+Установленные темы: {0}
+-----
+settings.appearance.skin_yours
+Ваши темы: {0}
+-----
+settings.appearance.skin_howto
+Тема — папка с skin.cfg и графикой SVG или PNG. Добавьте её и снова откройте вкладку.
 -----
 app.android_calculator
 Калькулятор Android

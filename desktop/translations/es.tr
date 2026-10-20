@@ -1940,10 +1940,10 @@ settings.windows.action.menu
 Menú
 -----
 settings.windows.skin
-Aspecto
+Temas de los controles de ventana
 -----
 settings.windows.skin_note
-Imágenes para la barra de título y sus controles, en mapa de bits o vectores.
+El aspecto de la barra de título y sus botones. Elige uno para cualquier estilo.
 -----
 settings.windows.skin_none
 Ninguno
@@ -1976,7 +1976,7 @@ settings.appearance.tab_actions
 Clics
 -----
 settings.appearance.tab_skin
-Piel
+Pieles
 -----
 settings.appearance.tab_start
 Inicio
@@ -2050,8 +2050,20 @@ Nada
 settings.appearance.actions_note
 Qué hace un clic en la barra de título. Enrollar deja solo la barra.
 -----
-settings.appearance.skin_folder
-Tus propias pieles van en /root/.vinix-skins, una carpeta cada una con un skin.cfg; sirven SVG y PNG.
+settings.appearance.skin_inuse
+En uso: {0}, {1}
+-----
+settings.appearance.skin_builtin
+incluido
+-----
+settings.appearance.skin_installed
+Temas instalados: {0}
+-----
+settings.appearance.skin_yours
+Tus temas: {0}
+-----
+settings.appearance.skin_howto
+Un tema es una carpeta con skin.cfg y arte SVG o PNG. Añade uno y reabre esta pestaña.
 -----
 app.android_calculator
 Calculadora Android

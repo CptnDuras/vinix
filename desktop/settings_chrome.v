@@ -113,6 +113,10 @@ fn (mut a SettingsApp) handle_windows(event_id string) bool {
 		tab := event_id[settings_action_atab.len..].int()
 		if tab >= 0 && tab < appearance_tab_count {
 			a.appearance_tab = tab
+			if tab == appearance_tab_skin {
+				// A theme dropped in a folder since the list was read shows now.
+				skin_catalog_cache.loaded = false
+			}
 		}
 		return true
 	}

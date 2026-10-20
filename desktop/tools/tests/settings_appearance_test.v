@@ -359,3 +359,27 @@ fn test_the_start_menu_style_crosses_the_protocol_and_the_preferences_file() {
 	assert !plain.contains('start_menu')
 	assert desktop_parse_preferences(plain + 'start_menu=gnome\n') == none
 }
+
+fn texts_of(root ui2.Element, mut out []string) {
+	if root.text.len > 0 {
+		out << root.text
+	}
+	for child in root.children {
+		texts_of(child, mut out)
+	}
+}
+
+fn test_the_theme_page_says_where_themes_live() {
+	_, mut app := appearance_fixture('win31')
+	app.appearance_tab = appearance_tab_skin
+	root := app.build(ui2.rect(0, 0, 620, 410)) or { panic(err) }
+	mut texts := []string{}
+	texts_of(root, mut texts)
+	joined := texts.join('\n')
+	// The folders, where themes are installed and where the user's go.
+	assert joined.contains(skin_root())
+	assert joined.contains(skin_user_root())
+	// The theme in use, and that it is built in.
+	assert joined.contains('Windows 3.1')
+	assert joined.contains(tr('settings.appearance.skin_builtin'))
+}

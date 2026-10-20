@@ -1940,10 +1940,10 @@ settings.windows.action.menu
 Menu
 -----
 settings.windows.skin
-Skin
+Window control themes
 -----
 settings.windows.skin_note
-Artwork for the title bar and its controls, as bitmaps or vectors.
+The look of the title bar and its buttons. Pick one to wear on any look.
 -----
 settings.windows.skin_none
 None
@@ -1976,7 +1976,7 @@ settings.appearance.tab_actions
 Clicks
 -----
 settings.appearance.tab_skin
-Skin
+Skins
 -----
 settings.appearance.tab_start
 Start
@@ -2050,8 +2050,20 @@ Nothing
 settings.appearance.actions_note
 What clicking a window's title bar does. Roll up leaves just the bar.
 -----
-settings.appearance.skin_folder
-Your own skins go in /root/.vinix-skins, one folder each with a skin.cfg; SVG and PNG artwork both work.
+settings.appearance.skin_inuse
+In use: {0}, {1}
+-----
+settings.appearance.skin_builtin
+built in
+-----
+settings.appearance.skin_installed
+Installed themes: {0}
+-----
+settings.appearance.skin_yours
+Your themes: {0}
+-----
+settings.appearance.skin_howto
+A theme is a folder with a skin.cfg and SVG or PNG art. Add one, then reopen this tab.
 -----
 app.android_calculator
 Android Calculator

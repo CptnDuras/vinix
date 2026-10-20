@@ -614,7 +614,7 @@ fn (a &SettingsApp) appearance_skin(width int, top int) []ui2.Element {
 	settings := a.desktop.settings
 	catalog := skin_catalog()
 	inner := width - 2 * settings_padding
-	half := (inner - settings_row_gap) / 2
+	third := (inner - 2 * settings_row_gap) / 3
 	mut out := []ui2.Element{cap: catalog.len + 6}
 	mut y := top
 	out << settings_note(tr('settings.windows.skin_note'), y - 4, width)
@@ -635,19 +635,65 @@ fn (a &SettingsApp) appearance_skin(width int, top int) []ui2.Element {
 		} else {
 			settings.skin_id == catalog[choice - 2].id
 		}
-		col := index % 2
-		x := if col == 0 { settings_padding } else { settings_padding + half + settings_row_gap }
-		out << settings_choice('${settings_action_skin}${choice}', label, x, y, half, selected)
-		if col == 1 {
+		col := index % 3
+		x := settings_padding + col * (third + settings_row_gap)
+		out << settings_choice('${settings_action_skin}${choice}', label, x, y, third, selected)
+		if col == 2 {
 			y += 28 + 6
 		}
 		index++
 	}
-	if index % 2 == 1 {
+	if index % 3 != 0 {
 		y += 28 + 6
 	}
-	out << settings_note(tr('settings.appearance.skin_folder'), y + 4, width)
+	// Where the themes are: the one in use, then the two folders to look in or
+	// add to.
+	text := skin_page_text(a.desktop.effective_skin_id())
+	out << settings_note(text.in_use, y + 4, width)
+	out << settings_note(text.installed, y + 22, width)
+	out << settings_note(text.yours, y + 40, width)
+	out << settings_note(tr('settings.appearance.skin_howto'), y + 62, width)
 	return out
+}
+
+// SkinPageText is the page's three lines about where themes live. They are
+// filled in once per theme in use and folder, not per frame: this process has
+// no garbage collector, so a line built each frame would never go back.
+struct SkinPageText {
+mut:
+	key       string
+	in_use    string
+	installed string
+	yours     string
+}
+
+__global skin_page_cache = SkinPageText{}
+
+fn skin_page_text(skin_id string) SkinPageText {
+	installed_dir := skin_root()
+	yours_dir := skin_user_root()
+	key := '${skin_id}|${installed_dir}|${yours_dir}'
+	if skin_page_cache.key == key && skin_page_cache.in_use.len > 0 {
+		return skin_page_cache
+	}
+	mut name := tr('settings.windows.skin_none')
+	mut where := ''
+	for entry in skin_catalog() {
+		if entry.id == skin_id {
+			name = entry.name
+			where = entry.dir
+		}
+	}
+	if where.len == 0 {
+		where = tr('settings.appearance.skin_builtin')
+	}
+	skin_page_cache = SkinPageText{
+		key: key
+		in_use: tr_substitute(tr('settings.appearance.skin_inuse'), name, where, '')
+		installed: tr_substitute(tr('settings.appearance.skin_installed'), installed_dir, '', '')
+		yours: tr_substitute(tr('settings.appearance.skin_yours'), yours_dir, '', '')
+	}
+	return skin_page_cache
 }
 
 // The Start menu's styles, in the order of StartMenuStyle: the look's own,

@@ -126,7 +126,7 @@ everything below it changes the same picture.
   bar always keeps one). Tapping a name on that row puts a control on or off the
   bar. For a look whose title is a tab (BeOS, Haiku), drag the tab to slide it to
   the left, centre or right, and drag the grip on its edge to resize it, in steps
-  of five percent of the window. The **Title bar**, **Controls** and **Skin**
+  of five percent of the window. The **Title bar**, **Controls** and **Skins**
   sections offer the same choices as buttons, for keyboards and for precision.
 * **Look** lists every look. A look is a preset of everything on this page: choosing
   one sets the title bar, its controls, the tab, the skin and which end the
@@ -138,9 +138,12 @@ everything below it changes the same picture.
 * **Clicks** sets what a **double-click** and a **middle-click** on a title bar do:
   zoom (maximize or restore), roll up (leave just the bar), minimise, or nothing.
   By default a middle-click rolls the window up and a double-click zooms it.
-* **Skin** picks the artwork for the title bar and its controls; see
-  [skins/README.md](skins/README.md) for making one from SVG or PNG files, which go
-  in `/root/.vinix-skins/`.
+* **Skins** picks the artwork for the title bar and its controls, on any look. The
+  page names the skin in use and where it lives, and the two folders themes are
+  read from: `/usr/share/vinix/skins/` for installed ones and `/root/.vinix-skins/`
+  for your own (`VINIX_SKIN_DIR` and `VINIX_USER_SKIN_DIR` move them). Open the tab
+  again to see a folder added meanwhile. See [skins/README.md](skins/README.md) for
+  making one from SVG or PNG files.
 * **Start menu** picks which Start menu opens. *Follow the look* takes the look's
   own: BeOS and Haiku have the **Deskbar** menu, and the KDE 2, Quartz and Keramik
   looks have the **K menu**. The others are the **Windows** menu (the two-column
