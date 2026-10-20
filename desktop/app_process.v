@@ -24,9 +24,9 @@ const app_protocol_magic = u32(0x56415050) // VAPP
 // Version 13 carries both the power fields (11) and the Blue per-axis
 // overrides and skin (12): 136 bytes of header, plus 16, plus 128. Version 14
 // adds the middle-click action and the tab width, 16 bytes more.
-const app_protocol_version = u8(14)
-const app_request_header_size = 296
-const app_response_header_size = 288
+const app_protocol_version = u8(15)
+const app_request_header_size = 304
+const app_response_header_size = 296
 const app_protocol_max_payload = 16 * 1024 * 1024
 const app_protocol_max_string = 64 * 1024
 const app_protocol_max_elements = 16 * 1024
@@ -503,6 +503,8 @@ fn wire_put_state(mut out []u8, state AppWireState) {
 	wire_put_opt_i32(mut out, state.settings.ov_tab_width)
 	wire_put_opt_i32(mut out, state.settings.ov_widgets)
 	wire_put_opt_i32(mut out, skin_wire_value(state.settings.skin_id))
+	wire_put_i32(mut out, int(state.settings.start_menu))
+	wire_put_i32(mut out, 0)
 	wire_put_i32(mut out, state.requested_scale)
 	wire_put_u32(mut out, state.capture_request.sequence)
 	wire_put_i32(mut out, int(state.capture_request.command))
@@ -559,6 +561,8 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 	ov_tab_width_raw := reader.take_opt_i32()!
 	ov_widgets_raw := reader.take_opt_i32()!
 	skin_raw := reader.take_opt_i32()!
+	start_menu_raw := reader.take_i32()!
+	reader.take_i32()!
 	requested_scale := reader.take_i32()!
 	capture_sequence := reader.take_u32()!
 	capture_command := reader.take_i32()!
@@ -593,6 +597,7 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 		|| !opt_in_range(ov_title_double_click_raw, int(TitleAction.shade), int(TitleAction.none_))
 		|| !opt_in_range(ov_title_middle_click_raw, int(TitleAction.shade), int(TitleAction.none_))
 		|| !opt_tab_width_valid(ov_tab_width_raw)
+		|| start_menu_raw < int(StartMenuStyle.follow_look) || start_menu_raw > int(StartMenuStyle.kmenu)
 		|| !opt_in_range(ov_has_top_bar_raw, 0, 1)
 		|| !opt_in_range(ov_has_bottom_bar_raw, 0, 1)
 		|| !opt_in_range(ov_has_window_list_raw, 0, 1)
@@ -651,6 +656,7 @@ fn wire_take_state_flags(mut reader WireReader, state_flags u8) !AppWireState {
 			ov_tab_width:       ov_tab_width_raw.opt()
 			ov_widgets:         ov_widgets_raw.opt()
 			skin_id:            skin_from_wire(skin_raw.opt())
+			start_menu:         unsafe { StartMenuStyle(start_menu_raw) }
 		}
 		requested_scale: requested_scale
 		capture_request: CaptureRequest{

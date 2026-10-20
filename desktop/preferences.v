@@ -149,6 +149,9 @@ fn desktop_encode_overrides(s Settings) string {
 	if v := s.ov_widgets {
 		out += 'ov_widgets=${widgets_to_text(widgets_unpack(u32(v)))}\n'
 	}
+	if s.start_menu != .follow_look {
+		out += 'start_menu=${start_menu_style_id(s.start_menu)}\n'
+	}
 	if s.skin_id.len > 0 {
 		out += 'skin=${s.skin_id}\n'
 	}
@@ -338,6 +341,7 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 			'taskbar_show_overview' { u64(524288) }
 			'taskbar_show_workspaces' { u64(1048576) }
 			'skin' { u64(1) << 40 }
+			'start_menu' { u64(1) << 41 }
 			else { desktop_override_bit(key) }
 		}
 		if seen & bit != 0 {
@@ -394,6 +398,9 @@ fn desktop_parse_preferences(record string) ?DesktopPreferences {
 			}
 			'language' {
 				p.settings.language = desktop_language_from_code(value)?
+			}
+			'start_menu' {
+				p.settings.start_menu = start_menu_style_parse(value)?
 			}
 			'skin' {
 				if value != 'none' && !skin_id_valid(value) {

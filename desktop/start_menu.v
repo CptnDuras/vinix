@@ -148,6 +148,7 @@ fn (mut d Desktop) toggle_start_menu() {
 	d.close_tray_flyout()
 	d.refresh_package_apps()
 	d.start_menu_open = true
+	d.start_cascade_reset()
 	d.start_menu_all_apps = false
 	d.start_menu_page = 0
 	d.start_menu_searching = false
@@ -165,6 +166,7 @@ fn (mut d Desktop) close_start_menu() {
 		return
 	}
 	d.start_menu_open = false
+	d.start_cascade_reset()
 	d.start_menu_all_apps = false
 	d.start_menu_page = 0
 	d.start_menu_searching = false
@@ -189,6 +191,9 @@ fn (d &Desktop) start_menu_query_text() string {
 }
 
 fn (mut d Desktop) start_menu_element() ui2.Element {
+	if d.start_menu_cascades() {
+		return d.cascade_start_menu_element()
+	}
 	if d.start_menu_luna() {
 		return d.luna_start_menu_element()
 	}
@@ -660,6 +665,10 @@ fn (mut d Desktop) update_start_menu_hover() {
 	if !d.start_menu_open {
 		return
 	}
+	if d.start_menu_cascades() {
+		d.update_start_cascade_hover()
+		return
+	}
 	if d.hover.starts_with(action_start_jump_prefix) {
 		d.set_start_menu_recent(d.hover[action_start_jump_prefix.len..].int())
 		return
@@ -830,6 +839,10 @@ fn (mut d Desktop) start_menu_key_input(keys string) {
 			continue
 		}
 		ch := keys[i]
+		// A cascading menu has no search; only Escape means anything to it.
+		if ch != 0x1b && d.start_menu_cascades() {
+			continue
+		}
 		match ch {
 			0x1b {
 				d.close_start_menu()
@@ -946,7 +959,9 @@ fn (mut d Desktop) handle_start_action(action string) {
 			d.request_sleep()
 		}
 		else {
-			if action.starts_with('start.package.') {
+			if action.starts_with(cascade_prefix) {
+				d.cascade_action(action)
+			} else if action.starts_with('start.package.') {
 				id := unsafe { tos(action.str + 'start.package.'.len, action.len - 'start.package.'.len).clone() }
 				defer { unsafe { id.free() } }
 				d.close_start_menu()

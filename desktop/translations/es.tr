@@ -1978,6 +1978,39 @@ Clics
 settings.appearance.tab_skin
 Piel
 -----
+settings.appearance.tab_start
+Inicio
+-----
+settings.appearance.start_note
+Elige cómo se ve y se abre el menú Inicio. Seguir el aspecto deja que cada aspecto traiga el suyo: BeOS y Haiku usan el menú Deskbar.
+-----
+settings.appearance.start_resolved
+Mostrando: %s
+-----
+settings.start.windows
+Windows
+-----
+settings.start.fluxbox
+Fluxbox
+-----
+settings.start.deskbar
+Deskbar de BeOS
+-----
+settings.start.kmenu
+Menú K de KDE
+-----
+start.programs
+Programas
+-----
+start.recent_programs
+Programas recientes
+-----
+start.preferences
+Preferencias
+-----
+start.about
+Acerca de Vinix
+-----
 settings.appearance.look_note
 Un aspecto fija todas las opciones de estas páginas; cámbialas después.
 -----

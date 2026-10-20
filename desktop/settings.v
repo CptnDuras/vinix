@@ -77,6 +77,8 @@ enum Chrome {
 // the same in all of them stays a plain constant in theme.v.
 struct Theme {
 	name string
+	// The Start menu the look wears unless the user chose another.
+	start_menu StartMenuStyle
 	// Windows
 	window_body   u32
 	window_edge   u32

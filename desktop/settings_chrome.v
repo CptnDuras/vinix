@@ -102,6 +102,13 @@ fn (mut a SettingsApp) handle_windows(event_id string) bool {
 		}
 		return true
 	}
+	if event_id.starts_with(settings_action_startmenu) {
+		choice := event_id[settings_action_startmenu.len..].int()
+		if choice >= int(StartMenuStyle.follow_look) && choice <= int(StartMenuStyle.kmenu) {
+			a.desktop.settings.start_menu = unsafe { StartMenuStyle(choice) }
+		}
+		return true
+	}
 	if event_id.starts_with(settings_action_atab) {
 		tab := event_id[settings_action_atab.len..].int()
 		if tab >= 0 && tab < appearance_tab_count {
@@ -149,4 +156,5 @@ fn (mut a SettingsApp) reset_window_look() {
 	a.desktop.settings.ov_widgets = none
 	a.desktop.settings.skin_id = ''
 	a.desktop.settings.button_side = .right
+	a.desktop.settings.start_menu = .follow_look
 }

@@ -131,6 +131,7 @@ const theme_platinum = Theme{
 // title accent, square corners, and a title that is a tab rather than a bar.
 const theme_beos = Theme{
 	name:                'BeOS'
+	start_menu:          .deskbar
 	window_body:         0xdedede
 	window_edge:         0x9a9a9a
 	window_radius:       0

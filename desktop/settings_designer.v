@@ -14,6 +14,7 @@ const settings_action_atab = 'settings.atab.'
 const settings_action_tabwidth = 'settings.tabwidth.'
 const settings_action_title_dbl = 'settings.titleact.dbl.'
 const settings_action_title_mid = 'settings.titleact.mid.'
+const settings_action_startmenu = 'settings.startmenu.'
 
 // The page's sections, in tab order.
 const appearance_tab_look = 0
@@ -21,7 +22,8 @@ const appearance_tab_title = 1
 const appearance_tab_controls = 2
 const appearance_tab_actions = 3
 const appearance_tab_skin = 4
-const appearance_tab_count = 5
+const appearance_tab_start = 5
+const appearance_tab_count = 6
 
 // How far a pointer must travel between press and release for the press to have
 // been a drag rather than a click.
@@ -401,6 +403,7 @@ fn (a &SettingsApp) appearance_tab_title(tab int) string {
 		appearance_tab_title { tr('settings.appearance.tab_title') }
 		appearance_tab_controls { tr('settings.appearance.tab_controls') }
 		appearance_tab_actions { tr('settings.appearance.tab_actions') }
+		appearance_tab_start { tr('settings.appearance.tab_start') }
 		else { tr('settings.appearance.tab_skin') }
 	}
 }
@@ -429,6 +432,7 @@ fn (a &SettingsApp) appearance_pane(width int, height int) []ui2.Element {
 		appearance_tab_title { out << a.appearance_title(width, y) }
 		appearance_tab_controls { out << a.appearance_controls(width, y) }
 		appearance_tab_actions { out << a.appearance_actions(width, y) }
+		appearance_tab_start { out << a.appearance_start_menu(width, y) }
 		else { out << a.appearance_skin(width, y) }
 	}
 	return out
@@ -643,5 +647,38 @@ fn (a &SettingsApp) appearance_skin(width int, top int) []ui2.Element {
 		y += 28 + 6
 	}
 	out << settings_note(tr('settings.appearance.skin_folder'), y + 4, width)
+	return out
+}
+
+// The Start menu's styles, in the order of StartMenuStyle: the look's own,
+// then Windows, Fluxbox and the BeOS Deskbar.
+fn start_menu_style_label(style StartMenuStyle) string {
+	return match style {
+		.follow_look { tr('settings.windows.follow') }
+		.windows { tr('settings.start.windows') }
+		.fluxbox { tr('settings.start.fluxbox') }
+		.deskbar { tr('settings.start.deskbar') }
+		.kmenu { tr('settings.start.kmenu') }
+	}
+}
+
+fn (a &SettingsApp) appearance_start_menu(width int, top int) []ui2.Element {
+	inner := width - 2 * settings_padding
+	half := (inner - settings_row_gap) / 2
+	mut out := []ui2.Element{cap: 8}
+	mut y := top
+	out << settings_note(tr('settings.appearance.start_note'), y - 4, width)
+	y += 18
+	for choice in 0 .. 5 {
+		style := unsafe { StartMenuStyle(choice) }
+		col := choice % 2
+		x := if col == 0 { settings_padding } else { settings_padding + half + settings_row_gap }
+		out << settings_choice('${settings_action_startmenu}${choice}', start_menu_style_label(style), x, y, half,
+			a.desktop.settings.start_menu == style)
+		if col == 1 {
+			y += 28 + 6
+		}
+	}
+	out << settings_note(tr('settings.appearance.start_resolved').replace('%s', start_menu_style_label(a.desktop.start_menu_style())), y + 4, width)
 	return out
 }

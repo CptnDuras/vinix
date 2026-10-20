@@ -1978,6 +1978,39 @@ settings.appearance.tab_actions
 settings.appearance.tab_skin
 Обложка
 -----
+settings.appearance.tab_start
+Пуск
+-----
+settings.appearance.start_note
+Выберите вид и поведение меню Пуск. Вариант «как у оформления» берёт меню оформления: BeOS и Haiku используют меню Deskbar.
+-----
+settings.appearance.start_resolved
+Сейчас: %s
+-----
+settings.start.windows
+Windows
+-----
+settings.start.fluxbox
+Fluxbox
+-----
+settings.start.deskbar
+Deskbar из BeOS
+-----
+settings.start.kmenu
+Меню K из KDE
+-----
+start.programs
+Программы
+-----
+start.recent_programs
+Недавние программы
+-----
+start.preferences
+Настройки
+-----
+start.about
+О Vinix
+-----
 settings.appearance.look_note
 Вид задаёт все настройки на этих страницах; их можно изменить после.
 -----

@@ -327,6 +327,7 @@ const theme_win31 = Theme{
 //  a close box and a zoom box inside it, and a light grey window.
 const theme_haiku = Theme{
 	name: 'Haiku'
+	start_menu: .deskbar
 	window_body: 0xd8d8d8
 	window_edge: 0x7f7f7f
 	window_radius: 0

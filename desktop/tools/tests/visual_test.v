@@ -213,3 +213,55 @@ fn test_choosing_none_removes_a_looks_own_skin() {
 	}
 	assert !d.skin_active()
 }
+
+// The cascading Start menus, opened with the program list beside them: each
+// shows its own title, strip or plain frame, and stays inside the screen.
+fn cascade_snapshot(style StartMenuStyle, width int, height int) Desktop {
+	mut d := Desktop{
+		canvas: new_canvas(width, height)
+		fonts:  load_fonts()
+	}
+	d.settings.start_menu = style
+	d.update_taskbar_clock_at(0)
+	d.toggle_start_menu()
+	root := d.start_cascade_root()
+	for index, row in root {
+		if row.children.len > 0 && row.title == tr('start.programs') {
+			d.start_cascade_path = [index]
+		}
+	}
+	tree := d.build_tree()
+	d.render(tree)
+	free_tree(tree)
+	return d
+}
+
+fn test_cascading_start_menus_are_drawn_in_their_own_colours() {
+	for style in [StartMenuStyle.fluxbox, .deskbar, .kmenu] {
+		mut d := cascade_snapshot(style, 800, 600)
+		defer {
+			unsafe { free(d.canvas.pixels) }
+		}
+		look := cascade_look(style)
+		maybe_dump(&d, 'startmenu-${start_menu_style_id(style)}')
+		boxes := d.start_cascade_boxes()
+		assert boxes.len == 2
+		root := boxes[0]
+		// The frame's own colour, between the rows' text and the edge.
+		assert pixel_at(&d, root.x + root.width - 3, root.y + root.height - 4) == look.frame
+		// The outline.
+		assert pixel_at(&d, root.x, root.y + root.height / 2) == look.border
+		|| pixel_at(&d, root.x + 1, root.y + root.height / 2) == look.border
+		if look.metrics.header_height > 0 {
+			assert pixel_at(&d, root.x + root.width - 4, root.y + 3) == look.header
+		}
+		if look.banner != 0 {
+			assert pixel_at(&d, root.x + 4, root.y + root.height / 2) == look.banner
+		}
+		// The submenu is beside the root, on the screen.
+		sub := boxes[1]
+		assert sub.x >= 0 && sub.x + sub.width <= 800 && sub.y >= 0 && sub.y + sub.height <= 600
+		assert pixel_at(&d, sub.x, sub.y + sub.height / 2) == look.border
+		|| pixel_at(&d, sub.x + 1, sub.y + sub.height / 2) == look.border
+	}
+}

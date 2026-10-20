@@ -164,6 +164,8 @@ mut:
 	// The window skin: empty follows the look, 'none' wears no skin, anything
 	// else is a skin id (skin.v).
 	skin_id string
+	// The Start menu: follow_look takes the look's own.
+	start_menu StartMenuStyle
 	// The input sources Ctrl-Space moves between, one KeyboardLayout.bit()
 	// each, and the one typing uses now. The current one is always enabled.
 	keyboard_layouts u32 = keyboard_layout_default_mask

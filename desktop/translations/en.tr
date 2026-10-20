@@ -1978,6 +1978,39 @@ Clicks
 settings.appearance.tab_skin
 Skin
 -----
+settings.appearance.tab_start
+Start
+-----
+settings.appearance.start_note
+Choose how the Start menu looks and opens. Follow the look lets each look bring its own: BeOS and Haiku have the Deskbar menu.
+-----
+settings.appearance.start_resolved
+Showing: %s
+-----
+settings.start.windows
+Windows
+-----
+settings.start.fluxbox
+Fluxbox
+-----
+settings.start.deskbar
+BeOS Deskbar
+-----
+settings.start.kmenu
+KDE K menu
+-----
+start.programs
+Programs
+-----
+start.recent_programs
+Recent programs
+-----
+start.preferences
+Preferences
+-----
+start.about
+About Vinix
+-----
 settings.appearance.look_note
 A look sets every choice on these pages; change any of them afterwards.
 -----

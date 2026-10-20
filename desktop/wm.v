@@ -222,6 +222,11 @@ mut:
 	start_menu_recent_items  []RecentItem
 	start_menu_recent_titles []string
 	start_menu_recent_dirs   []bool
+	// The cascading Start menus (start_cascade.v): the rows built for the open
+	// menu, what they were built from, and the path of submenus that are open.
+	start_cascade_rows  []CascadeEntry
+	start_cascade_built u64
+	start_cascade_path  []int
 	// Taskbar interaction beyond plain clicks: dragging buttons, thumbnails and
 	// peeking, Show Desktop and the notification area.
 	taskbar_press            TaskbarPress

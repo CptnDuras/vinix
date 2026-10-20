@@ -283,3 +283,79 @@ fn test_the_new_choices_cross_the_application_protocol_and_the_preferences_file(
 	assert desktop_parse_override(mut refused, 'ov_tab_width', '7') == none
 	assert desktop_parse_override(mut refused, 'ov_tab_width', '0') != none
 }
+
+fn test_the_start_menu_page_offers_every_style_and_marks_the_one_in_force() {
+	desktop, mut app := appearance_fixture('beos')
+	app.appearance_tab = appearance_tab_start
+	begin_frame_elements()
+	tree := app.build(ui2.rect(0, 0, 640, 520))!
+	mut ids := []string{}
+	tree_ids(tree, mut ids)
+	for choice in 0 .. 5 {
+		assert '${settings_action_startmenu}${choice}' in ids
+	}
+	free_tree(tree)
+	// The BeOS look brings the Deskbar menu; choosing another style overrides it.
+	assert desktop.start_menu_style() == .deskbar
+	app.handle('${settings_action_startmenu}${int(StartMenuStyle.fluxbox)}')!
+	assert desktop.settings.start_menu == .fluxbox
+	assert desktop.start_menu_style() == .fluxbox
+	app.handle('${settings_action_startmenu}${int(StartMenuStyle.kmenu)}')!
+	assert desktop.start_menu_style() == .kmenu
+	app.handle('${settings_action_startmenu}0')!
+	assert desktop.start_menu_style() == .deskbar
+	// A number outside the list changes nothing.
+	app.handle('${settings_action_startmenu}9')!
+	assert desktop.settings.start_menu == .follow_look
+}
+
+fn test_choosing_a_look_gives_its_start_menu_back() {
+	mut desktop, mut app := appearance_fixture('default')
+	desktop.settings.start_menu = .fluxbox
+	app.reset_window_look()
+	assert desktop.settings.start_menu == .follow_look
+}
+
+fn test_the_start_menu_style_crosses_the_protocol_and_the_preferences_file() {
+	for style in [StartMenuStyle.follow_look, .windows, .fluxbox, .deskbar, .kmenu] {
+		state := AppWireState{
+			settings: Settings{
+				start_menu: style
+			}
+		}
+		mut out := []u8{}
+		wire_put_state(mut out, state)
+		mut reader := WireReader{
+			data: out
+		}
+		decoded := wire_take_state(mut reader) or { panic(err) }
+		assert decoded.settings.start_menu == style
+	}
+	// A style number the desktop has no menu for is damage.
+	mut out := []u8{}
+	wire_put_state(mut out, AppWireState{
+		settings: Settings{
+			start_menu: unsafe { StartMenuStyle(9) }
+		}
+	})
+	mut reader := WireReader{
+		data: out
+	}
+	if _ := wire_take_state(mut reader) {
+		assert false, 'a Start menu style of 9 was accepted'
+	}
+
+	prefs := DesktopPreferences{
+		settings: Settings{
+			start_menu: .deskbar
+		}
+	}
+	text := desktop_encode_preferences(prefs) or { panic('not encoded') }
+	assert text.contains('start_menu=deskbar')
+	round := desktop_parse_preferences(text) or { panic('not parsed') }
+	assert round.settings.start_menu == .deskbar
+	// The default writes nothing, and an unknown name is refused.
+	plain := desktop_encode_preferences(DesktopPreferences{}) or { panic('not encoded') }
+	assert !plain.contains('start_menu')
+	assert desktop_parse_preferences(plain + 'start_menu=gnome\n') == none
+}
