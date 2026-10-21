@@ -563,6 +563,9 @@ mut:
 	pressed  Drawable
 	inactive Drawable
 	size     int
+	// The mark moves a pixel down and right while the control is held, as
+	// Windows 2000's do; Platinum's and Windows 3.1's stay where they are.
+	nudge bool
 }
 
 struct Skin {
@@ -774,6 +777,11 @@ fn (mut skin Skin) apply_widget_key(rest string, value string) {
 			return
 		}
 		w.size = n
+		skin.widgets[action] = w
+		return
+	}
+	if state == 'nudge' {
+		w.nudge = value == '1'
 		skin.widgets[action] = w
 		return
 	}

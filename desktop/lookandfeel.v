@@ -691,6 +691,25 @@ const lookandfeel_registry = [
 			has_bottom_bar: true
 		}
 	},
+	LookAndFeel{
+		id: 'win98'
+		name: 'Windows 98'
+		description: 'A darker grey Windows 98: hard raised bevels, a navy-to-cyan title, square corners and one bottom taskbar.'
+		order: 17
+		decor: DecorConfig{
+			window_radius: 0
+			accent: 0x000080
+			title_align: .left
+		}
+		behavior: BehaviorConfig{
+			title_double_click: .maximize
+			menu_placement: .in_window
+		}
+		shell: ShellConfig{
+			has_top_bar: false
+			has_bottom_bar: true
+		}
+	},
 ]
 
 // lookandfeel_by_id returns the preset with the given id, or the default preset

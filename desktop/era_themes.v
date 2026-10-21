@@ -11,32 +11,46 @@ module main
 // gradient active title, square corners, right-side buttons.
 const theme_win2k = Theme{
 	name:                'Windows 2000'
-	window_body:         0xc0c0c0
-	window_edge:         0x808080
+	window_body:         0xd4d0c8
+	window_edge:         0x404040
 	window_radius:       0
 	shadow_alpha:        60
-	title_height:        24
+	title_height:        22
 	title_active_bg:     0x0a246a
 	title_active_bg2:    0xa6caf0
 	title_inactive_bg:   0x808080
-	title_inactive_bg2:  0xc0c0c0
-	title_divider:       0x808080
+	title_inactive_bg2:  0xd4d0c8
+	title_divider:       0x404040
 	title_text_active:   0xffffff
 	title_text_inactive: 0xd4d0c8
+	frame_border:        3
+	frame_style:         .bevel
+	frame_face:          0xd4d0c8
+	frame_light:         0xffffff
+	frame_dark:          0x808080
+	title_across:        true
 	title_align:         .left
 	title_bold:          true
 	title_size:          12
 	button_look:         .flat
+	window_chrome: ChromeSpec{
+		skin: 'win2k-buttons'
+		widgets: [
+			WidgetSpec{ action: .close, anchor: .trailing },
+			WidgetSpec{ action: .maximize, anchor: .trailing },
+			WidgetSpec{ action: .minimize, anchor: .trailing },
+		]
+	}
 	bevel_enabled:       true
 	bevel_light:         0xffffff
 	bevel_dark:          0x404040
 	bevel_width:         1
-	button_size:         18
+	button_size:         16
 	button_gap:          2
-	button_inset:        4
+	button_inset:        5
 	button_hover:        0xd4d0c8
 	button_close_hover:  0xd4d0c8
-	button_face:         0xc0c0c0
+	button_face:         0xd4d0c8
 	button_edge:         0x808080
 	glyph_color:         0x000000
 	glyph_on_close:      0x000000
@@ -45,15 +59,15 @@ const theme_win2k = Theme{
 	traffic_zoom:        0x28c840
 	traffic_idle:        0x808080
 	dock:                false
-	dock_bg:             0xc0c0c0
+	dock_bg:             0xd4d0c8
 	dock_radius:         0
 	dock_padding:        6
-	taskbar_bg:          0xc0c0c0
+	taskbar_bg:          0xd4d0c8
 	taskbar_edge:        0xffffff
 	taskbar_text:        0x000000
 	taskbar_text_active: 0x000000
 	taskbar_muted:       0x808080
-	taskbar_item_bg:     0xc0c0c0
+	taskbar_item_bg:     0xd4d0c8
 	taskbar_item_hover:  0xd4d0c8
 	taskbar_item_active: 0xa0a0a0
 	accent:              0x0a246a
@@ -61,6 +75,76 @@ const theme_win2k = Theme{
 	shortcut_label:      0xffffff
 	shortcut_hover:      0xffffff
 	shortcut_panel:      0x000000
+}
+
+// Windows 98: a darker, flatter grey than 2000, a navy-to-cyan caption, hard
+// raised bevels and square corners, the buttons on the right.
+const theme_win98 = Theme{
+	name:                'Windows 98'
+	window_body:         0xb4b4b4
+	window_edge:         0x404040
+	window_radius:       0
+	shadow_alpha:        60
+	title_height:        22
+	title_active_bg:     0x000080
+	title_active_bg2:    0x1084d0
+	title_inactive_bg:   0x7b7b7b
+	title_inactive_bg2:  0xbdbdbd
+	title_divider:       0x404040
+	title_text_active:   0xffffff
+	title_text_inactive: 0xb4b4b4
+	frame_border:        3
+	frame_style:         .bevel
+	frame_face:          0xb4b4b4
+	frame_light:         0xffffff
+	frame_dark:          0x808080
+	title_across:        true
+	title_align:         .left
+	title_bold:          true
+	title_size:          12
+	button_look:         .flat
+	window_chrome: ChromeSpec{
+		skin: 'win98-buttons'
+		widgets: [
+			WidgetSpec{ action: .close, anchor: .trailing },
+			WidgetSpec{ action: .maximize, anchor: .trailing },
+			WidgetSpec{ action: .minimize, anchor: .trailing },
+		]
+	}
+	bevel_enabled:       true
+	bevel_light:         0xffffff
+	bevel_dark:          0x404040
+	bevel_width:         1
+	button_size:         16
+	button_gap:          2
+	button_inset:        5
+	button_hover:        0xb4b4b4
+	button_close_hover:  0xb4b4b4
+	button_face:         0xb4b4b4
+	button_edge:         0x808080
+	glyph_color:         0x000000
+	glyph_on_close:      0x000000
+	traffic_close:       0xff5f57
+	traffic_minimize:    0xfebc2e
+	traffic_zoom:        0x28c840
+	traffic_idle:        0x808080
+	dock:                false
+	dock_bg:             0xb4b4b4
+	dock_radius:         0
+	dock_padding:        6
+	taskbar_bg:          0xb4b4b4
+	taskbar_edge:        0xffffff
+	taskbar_text:        0x000000
+	taskbar_text_active: 0x000000
+	taskbar_muted:       0x808080
+	taskbar_item_bg:     0xb4b4b4
+	taskbar_item_hover:  0xb4b4b4
+	taskbar_item_active: 0xa0a0a0
+	accent:              0x000080
+	accent_dim:          0x7f9db9
+	shortcut_label:      0xffffff
+	shortcut_hover:      0xffffff
+	shortcut_panel:      0x008080
 }
 
 // Mac OS Platinum: cool gray, a pinstriped/quiet title bar, grooved dividers,

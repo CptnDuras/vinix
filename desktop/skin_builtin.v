@@ -8,7 +8,7 @@
 // leaves empty.
 module main
 
-const builtin_skin_ids = ['beos-boxes', 'next-gadgets', 'amiga-gadgets', 'motif-boxes', 'win31-arrows', 'kde2-buttons', 'platinum-boxes']
+const builtin_skin_ids = ['beos-boxes', 'next-gadgets', 'amiga-gadgets', 'motif-boxes', 'win31-arrows', 'kde2-buttons', 'platinum-boxes', 'win2k-buttons', 'win98-buttons']
 
 fn builtin_skin_name(id string) string {
 	return match id {
@@ -19,6 +19,8 @@ fn builtin_skin_name(id string) string {
 		'win31-arrows' { 'Windows 3.1' }
 		'kde2-buttons' { 'KDE 2 buttons' }
 		'platinum-boxes' { 'Platinum boxes' }
+		'win2k-buttons' { 'Windows 2000' }
+		'win98-buttons' { 'Windows 98' }
 		else { id }
 	}
 }
@@ -50,6 +52,16 @@ fn builtin_skin_cfg(id string) ?string {
 			// Raised, lightly shaded squares: a close box that is blank until it is
 			// pressed, a zoom box of two squares and a collapse box with a rule.
 			'name=Platinum boxes\nwidget.close.plate=bevel:#eeeeee:#ffffff:#8c8c8c:#2b2b2b:#c2c2c2\nwidget.maximize.plate=bevel:#eeeeee:#ffffff:#8c8c8c:#2b2b2b:#c2c2c2\nwidget.shade.plate=bevel:#eeeeee:#ffffff:#8c8c8c:#2b2b2b:#c2c2c2\nwidget.close.pressed=vector:close.vec\nwidget.maximize=vector:zoom.vec\nwidget.shade=vector:shade.vec\nwidget.close.size=13\nwidget.maximize.size=13\nwidget.shade.size=13\n'
+		}
+		'win2k-buttons' {
+			// Raised grey buttons with a thin cross, an underscore and a square
+			// with a heavy top, drawn at one unit to the pixel on a 16 pixel plate.
+			'name=Windows 2000\nwidget.minimize=vector:mini.vec\nwidget.maximize=vector:maxi.vec\nwidget.close=vector:close.vec\nwidget.minimize.plate=bevel:#d4d0c8:#ffffff:#808080:#404040\nwidget.maximize.plate=bevel:#d4d0c8:#ffffff:#808080:#404040\nwidget.close.plate=bevel:#d4d0c8:#ffffff:#808080:#404040\nwidget.minimize.size=16\nwidget.maximize.size=16\nwidget.close.size=16\nwidget.minimize.nudge=1\nwidget.maximize.nudge=1\nwidget.close.nudge=1\n'
+		}
+		'win98-buttons' {
+			// Raised grey buttons with a thin cross, an underscore and a square
+			// with a heavy top, drawn at one unit to the pixel on a 16 pixel plate.
+			'name=Windows 98\nwidget.minimize=vector:mini.vec\nwidget.maximize=vector:maxi.vec\nwidget.close=vector:close.vec\nwidget.minimize.plate=bevel:#b4b4b4:#ffffff:#7b7b7b:#000000\nwidget.maximize.plate=bevel:#b4b4b4:#ffffff:#7b7b7b:#000000\nwidget.close.plate=bevel:#b4b4b4:#ffffff:#7b7b7b:#000000\nwidget.minimize.size=16\nwidget.maximize.size=16\nwidget.close.size=16\nwidget.minimize.nudge=1\nwidget.maximize.nudge=1\nwidget.close.nudge=1\n'
 		}
 		'win31-arrows' {
 			// The system-menu dash and the two arrows, on grey bevelled boxes.
@@ -112,6 +124,14 @@ fn builtin_skin_asset(id string, file string) ?string {
 				'close.vec' { 'viewbox 12 12\npath M1 1 L2 0 L6 4 L10 0 L11 1 L7 5 L11 9 L10 10 L6 6 L2 10 L1 9 L5 5 Z\n' }
 				'zoom.vec' { 'viewbox 12 12\npath M0 0 H7 V7 H0 Z M1 1 V6 H6 V1 Z\npath M3 3 H12 V12 H3 Z M4 4 V11 H11 V4 Z\n' }
 				'shade.vec' { 'viewbox 12 12\npath M0 4 H12 V6 H0 Z\n' }
+				else { none }
+			}
+		}
+		'win2k-buttons', 'win98-buttons' {
+			match file {
+				'mini.vec' { 'viewbox 8 8\npath M0 6 H6 V8 H0 Z\n' }
+				'maxi.vec' { 'viewbox 8 8\npath M0 0 H8 V8 H0 Z M1 2 V7 H7 V2 Z\n' }
+				'close.vec' { 'viewbox 8 8\npath M1 0 L4 3 L7 0 L8 1 L5 4 L8 7 L7 8 L4 5 L1 8 L0 7 L3 4 L0 1 Z\n' }
 				else { none }
 			}
 		}

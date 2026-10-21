@@ -440,8 +440,9 @@ fn (mut d Desktop) draw_skinned_widget(el &ui2.Element, x int, y int, w int, h i
 	theme := d.theme()
 	ink := if inactive { theme.title_text_inactive } else { theme.glyph_color }
 	if sw.plate.kind == .bevel {
-		if inactive {
-			// A control of a window that is not in front is an empty, flat outline.
+		if inactive && sw.plate.face2 != 0 {
+			// Platinum's controls on a window that is not in front are empty, flat
+			// outlines; the others keep their faces and only the bar changes.
 			d.canvas.fill_rect(x, y, w, h, sw.plate.dark)
 			d.canvas.fill_rect(x + 1, y + 1, w - 2, h - 2, sw.plate.color)
 			return true
@@ -450,9 +451,14 @@ fn (mut d Desktop) draw_skinned_widget(el &ui2.Element, x int, y int, w int, h i
 		// A held control sinks, and its mark with it. The mark sits inside the
 		// plate, a quarter of its side in from each edge.
 		margin := w / 4
-		nudge := if pressed { 1 } else { 0 }
+		nudge := if pressed && sw.nudge { 1 } else { 0 }
 		d.draw_drawable(dr, x + margin + nudge, y + margin + nudge, w - 2 * margin, h - 2 * margin, ink)
 		return true
+	}
+	if pressed && dr.kind == sw.normal.kind && dr.file == sw.normal.file {
+		// A control with one picture for every state still shows it is held: its
+		// box fills in, dark, behind the mark.
+		d.canvas.fill_rect(x, y, w, h, mix(theme.title_active_bg, 0, 110))
 	}
 	return d.draw_drawable(dr, x, y, w, h, ink)
 }
@@ -472,6 +478,9 @@ fn (mut d Desktop) draw_bevel_plate(dr Drawable, x int, y int, w int, h int, sun
 	inner_h := h - 2
 	if dr.face2 != 0 && !sunken {
 		d.canvas.vertical_gradient(inner_x, inner_y, inner_w, inner_h, dr.color, dr.face2)
+	} else if dr.face2 != 0 {
+		// A shaded plate fills in when it is held, Platinum's way.
+		d.canvas.fill_rect(inner_x, inner_y, inner_w, inner_h, mix(dr.face2, dr.dark, 150))
 	} else {
 		d.canvas.fill_rect(inner_x, inner_y, inner_w, inner_h, dr.color)
 	}

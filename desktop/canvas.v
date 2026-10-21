@@ -1050,3 +1050,13 @@ fn (mut c Canvas) draw_line(x0 int, y0 int, x1 int, y1 int, color u32, thickness
 fn abs_int(v int) int {
 	return if v < 0 { -v } else { v }
 }
+
+// horizontal_gradient fades left to right, one fill per column.
+fn (mut c Canvas) horizontal_gradient(x int, y int, w int, h int, left u32, right u32) {
+	if w <= 0 {
+		return
+	}
+	for col := 0; col < w; col++ {
+		c.fill_rect(x + col, y, 1, h, mix(left, right, u32(col * 255 / if w > 1 { w - 1 } else { 1 })))
+	}
+}

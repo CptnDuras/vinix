@@ -31,6 +31,10 @@ fn (mut d Desktop) draw_era_frame(theme Theme, x int, y int, w int, h int) {
 	if b < 2 || w < 2 * b + 2 || h < b + theme.title_height {
 		return
 	}
+	if theme.frame_style == .bevel {
+		d.draw_bevel_ring(theme, x, y, w, h, true)
+		return
+	}
 	// The face first, under the body that covers its middle.
 	d.canvas.fill_rect(x, y, w, h, theme.frame_face)
 	d.canvas.fill_rect(x, y, w, 1, theme.window_edge)
@@ -55,6 +59,41 @@ fn (mut d Desktop) draw_era_frame(theme Theme, x int, y int, w int, h int) {
 			d.canvas.fill_rect(x + win31_notch, y + h - b, 1, b, theme.window_edge)
 			d.canvas.fill_rect(x + w - win31_notch, y + h - b, 1, b, theme.window_edge)
 		}
+	}
+}
+
+// draw_bevel_ring paints a raised frame over a rectangle: the face, light along
+// the top and left and shadow along the bottom and right. A frame two pixels
+// wide has one edge (light, then the outline); a wider one has two (the face
+// and the light inside it, the shadow and the outline beyond). `bottom` is
+// false for a bar, which leaves the window's bottom edge to the frame.
+fn (mut d Desktop) draw_bevel_ring(theme Theme, x int, y int, w int, h int, bottom bool) {
+	d.canvas.fill_rect(x, y, w, h, theme.frame_face)
+	outer_light := if theme.frame_border >= 3 { theme.frame_face } else { theme.frame_light }
+	d.canvas.fill_rect(x, y, w, 1, outer_light)
+	d.canvas.fill_rect(x, y, 1, h, outer_light)
+	d.canvas.fill_rect(x + w - 1, y, 1, h, theme.window_edge)
+	if bottom {
+		d.canvas.fill_rect(x, y + h - 1, w, 1, theme.window_edge)
+	}
+	if theme.frame_border >= 3 {
+		d.canvas.fill_rect(x + 1, y + 1, w - 2, 1, theme.frame_light)
+		d.canvas.fill_rect(x + 1, y + 1, 1, h - 2, theme.frame_light)
+		d.canvas.fill_rect(x + w - 2, y + 1, 1, h - 2, theme.frame_dark)
+		if bottom {
+			d.canvas.fill_rect(x + 1, y + h - 2, w - 2, 1, theme.frame_dark)
+		}
+	}
+}
+
+// fade paints a bar's colours: down, or across when the look fades that way.
+fn (mut d Desktop) fade(theme Theme, x int, y int, w int, h int, first u32, second u32) {
+	if first == second {
+		d.canvas.fill_rect(x, y, w, h, first)
+	} else if theme.title_across {
+		d.canvas.horizontal_gradient(x, y, w, h, first, second)
+	} else {
+		d.canvas.vertical_gradient(x, y, w, h, first, second)
 	}
 }
 
@@ -85,6 +124,15 @@ fn (mut d Desktop) draw_era_bar(bar &ui2.Element, theme Theme, active bool, x in
 				d.canvas.fill_rect(x + w - b, y + b - 1, 1, h - b + 1, theme.window_edge)
 			}
 			d.canvas.fill_rect(x + b, y + b, w - 2 * b, h - b, top)
+		}
+		.bevel {
+			if maximized {
+				d.fade(theme, x, y, w, h, top, bottom)
+			} else {
+				b := theme.frame_border
+				d.draw_bevel_ring(theme, x, y, w, h, false)
+				d.fade(theme, x + b, y + b, w - 2 * b, h - b, top, bottom)
+			}
 		}
 		.platinum {
 			d.canvas.fill_rect(x, y, w, h, theme.window_edge)

@@ -320,3 +320,72 @@ fn test_platinum_stripes_its_bar_and_raises_its_boxes() {
 	assert pixel_at(&d, 60 + 8, 70 + 4 + 6) == 0x2b2b2b
 	assert pixel_at(&d, 60 + 8 + 3, 70 + 4 + 1) == 0xffffff
 }
+
+// A bevelled look (Windows 2000, KDE 2, NeXTSTEP, the Amiga) has a frame round
+// the whole window, bar included, rather than a light edge on the bar alone.
+fn test_bevelled_looks_frame_the_window_without_a_white_bar() {
+	for id in ['win2k', 'win98', 'kde2', 'nextstep', 'amiga', 'cde'] {
+		mut d := snapshot_desktop(id)
+		defer {
+			unsafe { free(d.canvas.pixels) }
+		}
+		theme := d.theme()
+		assert theme.frame_style == .bevel
+		// The right edge is the outline, down the bar as well as the body.
+		assert pixel_at(&d, 60 + 359, 70 + 3) == theme.window_edge
+		assert pixel_at(&d, 60 + 359, 200) == theme.window_edge
+		// Along the bar's top, the frame's light, not a stripe of the bar's own.
+		outer_light := if theme.frame_border >= 3 { theme.frame_face } else { theme.frame_light }
+		assert pixel_at(&d, 200, 70) == outer_light
+		// And the bar's colour starts inside the frame.
+		assert pixel_at(&d, 60 + theme.frame_border, 70 + theme.frame_border) != theme.frame_light
+	}
+}
+
+// Windows 2000 fades its caption across, navy into light blue.
+fn test_windows_2000_caption_fades_left_to_right() {
+	mut d := snapshot_desktop('win2k')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	theme := d.theme()
+	assert theme.title_across
+	left := pixel_at(&d, 60 + 3, 70 + 10)
+	right := pixel_at(&d, 60 + 300, 70 + 10)
+	assert left == pixel_at(&d, 60 + 3, 70 + 15)
+	assert left != right
+}
+
+// macOS's bottom bar is a panel as wide as its contents, centred.
+fn test_macos_bottom_bar_is_a_centred_panel() {
+	mut d := snapshot_desktop('macos')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	root := d.build_tree()
+	bar := visual_element_named(root, 'taskbar') or {
+		assert false
+		return
+	}
+	left := int(bar.frame.x)
+	right := d.canvas.width - int(bar.frame.x + bar.frame.width)
+	assert left > 0
+	assert left - right <= 1 && right - left <= 1
+	assert int(bar.frame.width) < d.canvas.width
+	free_tree(root)
+}
+
+// A window that is not in front keeps its controls as they were in Windows
+// 3.1 and 98: only the bar's colour changes.
+fn test_win31_controls_keep_their_faces_when_the_window_is_not_in_front() {
+	mut d := snapshot_desktop('win31')
+	defer {
+		unsafe { free(d.canvas.pixels) }
+	}
+	front := pixel_at(&d, 70 + 6, 70 + 5 + 6)
+	d.focus = -1
+	root := d.build_tree()
+	d.render(root)
+	free_tree(root)
+	assert pixel_at(&d, 70 + 6, 70 + 5 + 6) == front
+}

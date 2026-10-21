@@ -80,11 +80,14 @@ enum FrameStyle {
 	win31
 	// Mac OS Platinum: a black outline and a bevel, striped bar.
 	platinum
+	// A raised two-edge frame in the look's face colours: Windows 2000, KDE 2,
+	// NeXTSTEP and the Amiga, whose bars sit inside it.
+	bevel
 }
 
 // bar_top is how many rows of frame lie above the bar proper, which sits in it.
 fn (t Theme) bar_top() int {
-	return if t.frame_style == .win31 { t.frame_border } else { 0 }
+	return if t.frame_style in [.win31, .bevel] { t.frame_border } else { 0 }
 }
 
 // Theme is every colour and measurement that changes between looks. Anything
@@ -117,6 +120,8 @@ struct Theme {
 	// Pinstripes across a focused bar: a line this colour every other row, left
 	// out round the title and the controls. 0 is a plain bar.
 	title_stripes u32
+	// The bar fades from its left to its right rather than top to bottom.
+	title_across bool
 	// The window's 16-pixel icon leads its title: how far in from the body's
 	// left edge it starts, the gap between it and the text, and the colour a
 	// builtin glyph is drawn in (an application's own artwork keeps its own).
@@ -312,9 +317,9 @@ const theme_macos = Theme{
 	traffic_close_glyph: 0x4d0000
 	traffic_minimize_glyph: 0x995700
 	traffic_zoom_glyph: 0x006500
-	// Keep the Catalina window chrome, but give its desktop a practical
-	// Windows-7-style taskbar: it spans the bottom edge and uses large icons.
-	dock: false
+	// Keep the Catalina window chrome, but give its desktop a dock: a rounded
+	// panel centred at the bottom, as wide as what is in it, with large icons.
+	dock: true
 	taskbar_icon_only: true
 	dock_bg: 0x4d6f91
 	dock_radius: 12

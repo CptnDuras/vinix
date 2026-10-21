@@ -201,3 +201,10 @@ fn test_a_plate_that_is_not_a_bevel_is_a_problem() {
 	skin := parse_skin('t', '', 'widget.close.plate=fill:#c0c0c0\n')
 	assert skin.problems.len == 1
 }
+
+fn test_a_widget_can_ask_for_its_mark_to_nudge_when_held() {
+	skin := parse_skin('t', '', 'widget.close=vector:x.vec\nwidget.close.nudge=1\nwidget.maximize=vector:y.vec\n')
+	assert skin.problems.len == 0
+	assert skin.widgets['close'].nudge
+	assert !skin.widgets['maximize'].nudge
+}

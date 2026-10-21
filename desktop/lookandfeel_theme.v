@@ -23,6 +23,7 @@ fn preset_theme(id string) Theme {
 		'blue' { theme_blue }
 		'macos' { theme_macos }
 		'win2k' { theme_win2k }
+		'win98' { theme_win98 }
 		'platinum' { theme_platinum }
 		'beos' { theme_beos }
 		'windows7' { theme_windows7 }

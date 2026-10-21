@@ -27,6 +27,12 @@ const theme_kde2 = Theme{
 	title_divider: 0x4a4a4a
 	title_text_active: 0xffffff
 	title_text_inactive: 0x303030
+	frame_border: 3
+	frame_style: .bevel
+	frame_face: 0xdcdcdc
+	frame_light: 0xffffff
+	frame_dark: 0x8a8a8a
+	title_across: true
 	title_align: .left
 	title_bold: true
 	title_size: 12

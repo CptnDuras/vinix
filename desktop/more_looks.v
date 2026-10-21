@@ -23,6 +23,11 @@ const theme_nextstep = Theme{
 	title_divider: 0x000000
 	title_text_active: 0xffffff
 	title_text_inactive: 0x000000
+	frame_border: 2
+	frame_style: .bevel
+	frame_face: 0xaaaaaa
+	frame_light: 0xffffff
+	frame_dark: 0x555555
 	title_align: .left
 	title_bold: false
 	title_size: 12
@@ -38,7 +43,7 @@ const theme_nextstep = Theme{
 	bevel_light: 0xffffff
 	bevel_dark: 0x555555
 	bevel_width: 2
-	button_size: 16
+	button_size: 14
 	button_gap: 4
 	button_inset: 4
 	button_hover: 0x333333
@@ -86,6 +91,11 @@ const theme_amiga = Theme{
 	title_divider: 0x000000
 	title_text_active: 0xffffff
 	title_text_inactive: 0x000000
+	frame_border: 2
+	frame_style: .bevel
+	frame_face: 0xaaaaaa
+	frame_light: 0xffffff
+	frame_dark: 0x555555
 	title_align: .left
 	title_bold: false
 	title_size: 12
@@ -102,7 +112,7 @@ const theme_amiga = Theme{
 	bevel_light: 0xffffff
 	bevel_dark: 0x000000
 	bevel_width: 1
-	button_size: 14
+	button_size: 12
 	button_gap: 2
 	button_inset: 2
 	button_hover: 0x0066cc
@@ -150,6 +160,11 @@ const theme_cde = Theme{
 	title_divider: 0x4f5367
 	title_text_active: 0xffffff
 	title_text_inactive: 0x000000
+	frame_border: 4
+	frame_style: .bevel
+	frame_face: 0xaeb2c3
+	frame_light: 0xe0e3ed
+	frame_dark: 0x7c8199
 	title_align: .center
 	title_bold: true
 	title_size: 12
