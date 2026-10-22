@@ -93,7 +93,7 @@ fn build(root string, prefix string, arch string) ! {
 			options << '-DCMAKE_OSX_ARCHITECTURES=' + arch
 		}
 		checked(['cmake', '-S', source, '-B', output, '-DCMAKE_BUILD_TYPE=Release',
-			'-DCMAKE_INSTALL_PREFIX=' + stage, '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_TESTING=OFF',
+			'-DCMAKE_INSTALL_PREFIX=' + stage, '-DCMAKE_INSTALL_LIBDIR=lib', '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_TESTING=OFF',
 			'-DCMAKE_DISABLE_FIND_PACKAGE_Python3=TRUE',
 			'-DCMAKE_DISABLE_FIND_PACKAGE_PythonInterp=TRUE', ...options], root + '/' + name + '-configure.log')!
 		checked(['cmake', '--build', output, '--parallel', '4'], root + '/' + name + '-build.log')!
