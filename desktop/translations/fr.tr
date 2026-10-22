@@ -4937,3 +4937,336 @@ Fermer la session
 -----
 start.xp.internet
 Internet
+-----
+settings.wallpaper.inherited
+Fond d'écran : hérité du style
+-----
+settings.wallpaper.overridden
+Fond d'écran : remplacé par vous
+-----
+settings.wallpaper.reset
+Réinitialiser le fond d'écran
+-----
+settings.category.windows
+Fenêtres
+-----
+settings.windows.titlebar
+Barre de titre
+-----
+settings.windows.titlebar_note
+Une barre sur toute la largeur de la fenêtre, ou un onglet sur son bord supérieur.
+-----
+settings.windows.follow
+Suivre le style
+-----
+settings.windows.bar
+Barre
+-----
+settings.windows.tab
+Onglet
+-----
+settings.windows.tab_position
+Position de l'onglet
+-----
+settings.windows.pos_left
+Gauche
+-----
+settings.windows.pos_center
+Centre
+-----
+settings.windows.pos_right
+Droite
+-----
+settings.windows.widgets
+Contrôles de la barre de titre
+-----
+settings.windows.widgets_note
+Les contrôles d'une fenêtre et le côté de la barre de titre où chacun se place.
+-----
+settings.windows.off
+Désactivé
+-----
+settings.windows.action.close
+Fermer
+-----
+settings.windows.action.minimize
+Réduire
+-----
+settings.windows.action.maximize
+Agrandir
+-----
+settings.windows.action.shade
+Enrouler
+-----
+settings.windows.action.menu
+Menu
+-----
+settings.windows.skin
+Thèmes des contrôles de fenêtre
+-----
+settings.windows.skin_note
+L'aspect de la barre de titre et de ses boutons. Choisissez-en un pour n'importe quel style.
+-----
+settings.windows.skin_none
+Aucun
+-----
+settings.windows.reset
+Revenir au style
+-----
+settings.designer.window
+Fenêtre
+-----
+settings.designer.title
+Titre
+-----
+settings.designer.hint
+Faites glisser les contrôles le long de la barre de titre ; faites glisser un onglet pour le déplacer, ou son bord pour le redimensionner.
+-----
+settings.designer.hint2
+Déposez un contrôle sur la ligne du dessous pour le retirer de la barre.
+-----
+settings.appearance.tab_look
+Style
+-----
+settings.appearance.tab_title
+Barre de titre
+-----
+settings.appearance.tab_controls
+Contrôles
+-----
+settings.appearance.tab_actions
+Clics
+-----
+settings.appearance.tab_skin
+Thèmes
+-----
+settings.appearance.tab_start
+Démarrer
+-----
+settings.appearance.start_note
+Choisissez l'aspect et le comportement du menu Démarrer. « Suivre le style » laisse chaque style apporter le sien : BeOS et Haiku ont le menu Deskbar.
+-----
+settings.appearance.start_resolved
+Affiché : %s
+-----
+settings.start.windows
+Windows
+-----
+settings.start.fluxbox
+Fluxbox
+-----
+settings.start.deskbar
+Deskbar BeOS
+-----
+settings.start.kmenu
+Menu K de KDE
+-----
+start.programs
+Programmes
+-----
+start.recent_programs
+Programmes récents
+-----
+start.preferences
+Préférences
+-----
+start.about
+À propos de Vinix
+-----
+settings.appearance.look_note
+Un style définit tous les choix de ces pages ; modifiez-en ensuite n'importe lequel.
+-----
+settings.appearance.tab_width
+Largeur de l'onglet
+-----
+settings.appearance.width_fit
+Ajustée
+-----
+settings.appearance.width_full
+Pleine
+-----
+settings.appearance.side_look
+Comme le style
+-----
+settings.appearance.side_mirrored
+Inversé
+-----
+settings.appearance.double_click
+Double-clic
+-----
+settings.appearance.middle_click
+Clic central
+-----
+settings.appearance.act_zoom
+Agrandir
+-----
+settings.appearance.act_shade
+Enrouler
+-----
+settings.appearance.act_minimize
+Réduire
+-----
+settings.appearance.act_none
+Rien
+-----
+settings.appearance.actions_note
+Ce que fait un clic sur la barre de titre d'une fenêtre. « Enrouler » ne laisse que la barre.
+-----
+settings.appearance.skin_inuse
+Utilisé : {0}, {1}
+-----
+settings.appearance.skin_builtin
+intégré
+-----
+settings.appearance.skin_installed
+Thèmes installés : {0}
+-----
+settings.appearance.skin_yours
+Vos thèmes : {0}
+-----
+settings.appearance.skin_howto
+Un thème est un dossier contenant un skin.cfg et des images SVG ou PNG. Ajoutez-en un, puis rouvrez cet onglet.
+-----
+app.theme_studio
+Studio de thèmes
+-----
+studio.tab.paint
+Dessin
+-----
+studio.tab.skin
+Thème
+-----
+studio.skin_id
+Dossier du thème
+-----
+studio.tool.pencil
+Crayon
+-----
+studio.tool.eraser
+Gomme
+-----
+studio.tool.fill
+Remplissage
+-----
+studio.tool.picker
+Pipette
+-----
+studio.tool.line
+Ligne
+-----
+studio.tool.rect
+Rectangle
+-----
+studio.tool.rect_filled
+Rectangle plein
+-----
+studio.tool.ellipse
+Ovale
+-----
+studio.tool.ellipse_filled
+Ovale plein
+-----
+studio.brush
+Pinceau
+-----
+studio.grid
+Grille
+-----
+studio.undo
+Annuler
+-----
+studio.redo
+Rétablir
+-----
+studio.clear
+Effacer l'image
+-----
+studio.size
+Taille de l'image
+-----
+studio.preview
+Aperçu
+-----
+studio.file
+Nom du fichier
+-----
+studio.save
+Enregistrer
+-----
+studio.open
+Ouvrir
+-----
+studio.colour
+Couleur (#rrggbb)
+-----
+studio.set
+Appliquer
+-----
+studio.skin_name
+Nom du thème
+-----
+studio.plate
+Plaque sous chaque contrôle
+-----
+studio.plate.none
+Aucune
+-----
+studio.plate.grey
+Biseau gris
+-----
+studio.plate.shaded
+Biseau ombré
+-----
+studio.use
+Utiliser le dessin
+-----
+studio.edit
+Modifier
+-----
+studio.remove
+Retirer
+-----
+studio.no_art
+Aucune image
+-----
+studio.save_skin
+Enregistrer le thème
+-----
+studio.open_skin
+Ouvrir un thème
+-----
+studio.ready
+Dessinez avec les outils, puis donnez son image à un contrôle dans l'onglet Thème.
+-----
+studio.saved
+Enregistré.
+-----
+studio.save_failed
+Enregistrement impossible.
+-----
+studio.opened
+Ouvert.
+-----
+studio.open_failed
+Ouverture impossible.
+-----
+studio.skin_saved
+Thème enregistré. Choisissez-le dans Paramètres, Apparence, Thèmes.
+-----
+studio.skin_save_failed
+Impossible d'enregistrer le thème.
+-----
+studio.skin_opened
+Thème ouvert.
+-----
+studio.skin_open_failed
+Aucun skin.cfg dans ce dossier.
+-----
+studio.bad_id
+Le dossier du thème ne peut contenir que a-z, 0-9, - et _.
+-----
+studio.bad_file
+Les noms de fichier ne peuvent contenir que des lettres, chiffres, - et _.
+-----
+studio.bad_colour
+Les couleurs s'écrivent #rrggbb, ou none.

@@ -93,8 +93,8 @@ fn designer_glyph(action WidgetAction, x int, y int, size int, color u32) []ui2.
 	}
 	match action {
 		.close {
-			// Diagonals cannot be drawn from rectangles, so the cross is a letter.
-			out << ui2.label('', 'x', ui2.rect(f64(x), f64(y), f64(size), f64(size)), ui2.TextStyle{
+			// Diagonals cannot be drawn from rectangles, so the cross is a multiplication sign.
+			out << ui2.label('', '×', ui2.rect(f64(x), f64(y), f64(size), f64(size)), ui2.TextStyle{
 				color: color
 				size: 13
 				bold: true
