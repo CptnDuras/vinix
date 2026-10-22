@@ -152,7 +152,68 @@ gray bitmap storage, custom ICC/pattern/indexed spaces, non-finite components
 and blend modes beyond normal source-over remain unsupported.
 User defaults use an atomically replaced per-bundle plist under
 `Documents/Library/Preferences`; `VINIX_IOS_DOCUMENTS` selects the document root.
+`CFPreferencesAppSynchronize` flushes that same store for the current application
+or its bundle identifier and reports write failures. Other domains return false.
+`CFPreferencesCopyAppValue` returns an owned immutable snapshot, with registered
+defaults as a fallback; unsupported application domains fail explicitly.
+`CFPreferencesSetAppValue` stages copied values or removes keys; synchronization
+flushes these changes through the shared standard-defaults store.
 App groups, custom preference suites and security-scoped bookmarks are unsupported.
+`CFRunLoopGetMain` returns a borrowed main-loop handle shared with Foundation's
+`mainRunLoop`, main-thread `currentRunLoop` and `getCFRunLoop`. Workers can retrieve
+the main loop; background Foundation current loops remain unsupported.
+`CFStringCompare` supports zero-option literal UTF-16 ordering of valid strings,
+including embedded NULs and registered image constants. Other comparison options
+fail explicitly.
+`CFUUIDCreate` returns an owned, distinct CFUUID object with secure version-4
+bytes, accepting the null or system-default allocator. `CFUUIDCreateFromString`
+returns owned values using the measured native parser, including its permissive
+separator and incomplete-input handling. UUIDs compare and hash by value.
+`CFUUIDCreateFromUUIDBytes` copies a by-value sixteen-byte payload into an owned
+CFUUID without changing any bits. `CFUUIDCreateString` returns owned uppercase
+canonical text for live CFUUID values. `CFUUIDGetUUIDBytes` returns an independent
+sixteen-byte value without changing ownership. Additional CFUUID constructors
+and the CFUUID-specific type-ID accessor remain unimplemented.
+`NSCalendarIdentifierISO8601` exposes a shared immutable NSString pointer cell
+through Foundation and CoreFoundation, with the native value `iso8601`.
+Objective-C NSCalendar construction and calendar arithmetic remain unsupported.
+`NSInternalInconsistencyException` exposes its native exception-name NSString
+cell through Foundation and CoreFoundation, including use as an NSError domain.
+`NSInvalidArgumentException` exports its distinct NSString name through both
+frameworks and shares the same sealed storage lifetime.
+Exception throwing and unwinding remain unsupported.
+`NSLocaleCountryCode` and `kCFLocaleCountryCode` share one immutable NSString
+pointer cell through Foundation and CoreFoundation, with the native value
+`kCFLocaleCountryCodeKey`. Both spellings work with the existing NSLocale
+`objectForKey:` and `CFLocaleGetValue` country queries.
+`NSLocaleCurrencyCode` and `kCFLocaleCurrencyCode` share a distinct immutable
+NSString cell with the native value `currency` in the same sealed page.
+`NSLocaleCurrencySymbol` and `kCFLocaleCurrencySymbol` share a third cell with
+the native NSString value `kCFLocaleCurrencySymbolKey`.
+Currency-value queries remain explicitly unsupported.
+`NSURLCreationDateKey` and `kCFURLCreationDateKey` expose one immutable NSString
+cell through Foundation and CoreFoundation, with the native value
+`NSURLCreationDateKey`. `NSURLFileSizeKey` and `kCFURLFileSizeKey` share a
+distinct cell in the same sealed page, with the native value `NSURLFileSizeKey`.
+`NSURLIsExcludedFromBackupKey` and `kCFURLIsExcludedFromBackupKey` share a third
+cell with the native NSString value `NSURLIsExcludedFromBackupKey`.
+`NSURLIsRegularFileKey` and `kCFURLIsRegularFileKey` share a fourth cell with
+the native NSString value `NSURLIsRegularFileKey`.
+`NSURLVolumeAvailableCapacityForImportantUsageKey` and
+`kCFURLVolumeAvailableCapacityForImportantUsageKey` share a fifth cell with
+the native NSString value `NSURLVolumeAvailableCapacityForImportantUsageKey`.
+`NSURLVolumeAvailableCapacityKey` and `kCFURLVolumeAvailableCapacityKey` share
+a sixth cell with the native NSString value `NSURLVolumeAvailableCapacityKey`.
+`NSURLVolumeTotalCapacityKey` and `kCFURLVolumeTotalCapacityKey` share a seventh
+cell with the native NSString value `NSURLVolumeTotalCapacityKey`.
+URL resource-date, file-size, file-type and volume-capacity lookup, and
+backup-exclusion metadata reads and writes, remain unsupported.
+`OBJC_EHTYPE_$_NSException` exposes shared exception type-info through
+Foundation and CoreFoundation, with a vtable/name/Class record and an
+NSException class descriptor inheriting NSObject. Direct catch matching
+supports the default class hierarchy, foreign type rejection and pointer
+adjustment. NSException methods, exception throwing and Mach-O unwinding
+remain unsupported.
 UIKit typography/fit-to-width is approximate and UIKit accessibility labels
 are accepted but not exposed through a Vinix accessibility service.
 The Mach VM adapter supports allocations up to 4 GiB in the current process,
@@ -2076,12 +2137,12 @@ The heap probe now exits with status 1 before entry at EOSSDK's
 real CFError reference counts and final domain disposal. Full regression remains
 unpassed, and the five published runners retain their last passing hashes.
 
-V now supplies `_swift_errorRetain` and `_swift_errorRelease` through the existing
-Objective-C ownership functions, matching Darwin's ordinary C error ARC ABI.
+V supplies `_swift_errorRetain` and `_swift_errorRelease` with Darwin's ordinary
+C error ARC ABI. Toll-free owners use the existing Objective-C ownership functions;
+generic value boxes use the native heap lifetime described below.
 Error retain returns the same owner; final release runs the existing dealloc,
-weak-slot and owned-field cleanup. These exports add no Swift arenas, allocation
-registries or ARC adapters. Native Swift error boxes remain unsupported;
-the CFError extraction support below adds concrete Error protocol witnesses.
+weak-slot and owned-field cleanup. The CFError extraction support below adds
+concrete Error protocol witnesses without allocating generic error boxes.
 
 Installed SwiftCore and V error ARC, String and typed Array suites pass
 ASAN/UBSAN in both seed modes. Error checks cover real native CFErrors, reference
@@ -2108,8 +2169,9 @@ borrows a live VinixCFError into caller scratch and returns that address, its
 canonical type metadata and a complete Error witness table. The four witnesses
 return an owned domain String, signed code, owned user-info dictionary and owned
 embedded error. Long domain text is copied into owned Swift storage so it remains
-valid after the error and its NSString are destroyed. Native Swift error boxes,
-arbitrary NSError subclasses and general conformance discovery remain unsupported.
+valid after the error and its NSString are destroyed. Generic value boxes return
+their borrowed payload directly, as described below. Arbitrary NSError subclasses
+and general conformance discovery remain unsupported.
 
 Objective-C class metadata uses sealed wrapper kind `0x305`, the actual registered
 class pointer and a complete eight-byte reference value witness table. Swift
@@ -9335,18 +9397,6948 @@ Fortnite probe clears `_nextafterf` and stops before entry at
 `_os_unfair_lock_lock`. Fortnite remains unplayable; the full iOS regression
 is unpassed.
 
+The unfair-lock family now uses the caller's aligned, zero-initialized
+four-byte word, with native thread ownership and sequentially consistent V
+atomics. Lock, try-lock, unlock, owner assertions and the flagged lock entry
+are exported. Contention parks on a private futex on Vinix or the measured
+native address-wait API on macOS. Unlock publishes zero and wakes one waiter;
+interrupted waits and changed values retry acquisition. No per-lock native
+mutex, address registry or heap allocation is needed. The macOS
+`pthread_self` declaration now matches the native pointer return type and
+the current V library; Linux retains its integer handle declaration.
+
+Native checks confirm ownership, nonrecursive misuse, bool try-lock ABI,
+errno preservation and flags zero/`0x40000` (adaptive spinning). The adaptive
+flag uses the blocking path; priority inheritance and owner-death recovery
+are unsupported. Locks remain process-private and address-stable. Unknown
+flags, unaligned/null words, recursive acquisition and non-owner unlocks fail
+explicitly. Fork preserves inherited lock words and obtains fresh native
+thread identities in the child.
+
+`tests/ios/native-checks.v build-unfair-lock` builds the fixture. Six host
+ASan/UBSan runs cover unfair locks, atomic queues and libSystem, with the lock
+fixture optimized. The ARM64 fixture also passes: guarded word boundaries,
+errno, blocked/spurious wakeups, protected-data publication, eight callers,
+fork behavior, isolated misuse rejection and two runtime lifetimes. Generated
+C and optimized ARM64 review check the four-byte atomics, stack CAS expected
+value, native identities, blocking paths and absence of lock-path allocation.
+Seven generated-C/executable pairs and joined validation evidence are retained
+under `build/ios/fortnite/unfair-lock-checks`. The interrupted RAM-backed
+attempt had no persisted results; the complete validation was rebuilt in
+persistent storage. The fresh Fortnite probe clears the unfair-lock imports
+and stops before entry at `_pause`, called at `0x104862d48`. Fortnite remains
+unplayable; the full iOS regression is unpassed.
+
+`_pause` now calls native libc through a V adapter with an int32 return value
+and Darwin errno translation. The calling thread keeps its signal mask and
+sleeps until a caught signal makes the call return `-1`/`EINTR`, including
+handlers installed with `SA_RESTART`. Ignored and blocked signals leave the
+wait asleep. The adapter holds no runtime lock, changes no dispositions and
+allocates no storage, so the existing signal bridge can deliver callbacks.
+
+`tests/ios/native-checks.v build-pause` builds the fixture. Six host
+ASan/UBSan runs cover pause, signal delivery and libSystem; the optimized pause
+fixture also runs eight native Mac reference profiles. The ARM64 fixture
+passes ignored/blocked/caught delivery, pending signals, mask preservation,
+eight callers, fork and two runtime lifetimes. Generated C and optimized
+ARM64 review verify the native call, return ABI and errno path. Seven
+generated-C/executable pairs and joined probe/audit evidence are retained
+under `build/ios/fortnite/pause-checks`. The fresh Fortnite probe clears
+`_pause` and stops before entry at `_proc_pid_rusage`. Its actual consumer at
+`0x1005a77a8` requests flavor 5 for the current process and reads the
+physical-footprint field. Fortnite remains unplayable; the full iOS regression
+is unpassed.
+
+`_proc_pid_rusage` now implements flavors 0 through 6 with measured record
+sizes 96, 144, 160, 232, 296, 304 and 464 bytes. The footprint field is at byte
+72. macOS supplies native process records; their Mach tick fields are scaled
+to the runner's nanosecond clock/timebase while byte, energy and instruction
+fields keep their native units. Native probes verify error ordering, unchanged
+failure buffers, errno preservation, child queries, mapped-memory changes and
+the CPU time conversion against `getrusage`.
+
+The Linux subset queries the calling process. CPU and child times come from
+`getrusage`; process start and RSS come from `/proc/self/stat`, with a statm
+fallback for older kernels. Wired/swap and I/O values use available status/io
+counters. The footprint is an explicit Linux approximation: RSS plus swapped
+bytes. Its lifetime maximum uses native peak RSS, bounded below by the current
+footprint. UUID, Darwin QoS, wakeup, hardware energy/cycle and unavailable
+interval counters remain zero. Other live PIDs return `ENOTSUP`; invalid PID,
+flavor and null-buffer validation follow the measured native ordering.
+
+Each proc record uses one bounded read: Vinix regenerates text per read, so an
+EOF probe could append a changed snapshot's suffix. The atomic RSS field also
+avoids statm's temporary zero result when its mapping walk cannot acquire the
+page-map lock. These cases were found with concurrent ARM64 queries. Parsers
+and snapshots stay on the stack; descriptors close on every path, and output
+is copied only after a successful complete query. Unavailable required
+counters fail instead of reporting a successful zero footprint.
+
+`tests/ios/native-checks.v build-proc-rusage` builds the fixture. Six host
+ASan/UBSan runs cover resource usage, system queries and libSystem, with the
+new fixture optimized. The ARM64 fixture passes guarded/unaligned layouts,
+native error order, real CPU/memory changes, malformed records, eight callers,
+descriptor reuse, fork and two runtime lifetimes. Native measurements, failed
+concurrency diagnostics and final evidence are retained separately under
+`build/ios/fortnite/proc-rusage-checks`.
+
+Seven final generated-C/executable pairs, optimized ARM64 call-path review and
+fresh probe/audit results are retained there. The probe clears
+`_proc_pid_rusage` and stops before entry at `_raise`. Fortnite remains
+unplayable; the full iOS regression is unpassed.
+
+`_raise` now uses native thread-directed signal delivery with the existing
+Darwin signal-number mapping. Native macOS measurements confirm signal zero,
+`-1/EINVAL` for invalid signals, synchronous delivery on the calling thread,
+and preservation of errno changes made by a caught handler. The adapter
+retains the calling thread's mask, leaves blocked signals pending and allows
+nested raises from callbacks without a runtime lock or allocation. Linux
+continues to reject Darwin-only SIGEMT/SIGINFO with `ENOTSUP`.
+
+`tests/ios/native-checks.v build-raise` builds the fixture. Six host ASan/UBSan
+runs cover raise, pause and signal-registry regressions; the raise fixture is
+optimized and compares eight native macOS profiles. ARM64 checks cover
+zero/invalid/ignored signals, handler errno, masks/pending delivery, nested
+callbacks, eight callers, fatal ABRT/BUS/SYS/KILL fork children and two runtime
+lifetimes. The fixture restores sanitizer-owned fault handlers using complete
+native disposition records. Evidence, seven generated-C/executable pairs and
+optimized ARM64 call-path review are retained under
+`build/ios/fortnite/raise-checks`.
+
+The fresh probe clears `_raise` and stops before entry at `_setrlimit`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_setrlimit` now accepts Darwin's 16-byte limit record. macOS forwards to the
+native API. Linux maps the nine Darwin resources to native CPU, file-size,
+data, stack, core, address-space, locked-memory, process-count and descriptor
+limits, strips the strict POSIX resource flag, and translates Darwin infinity
+(`INT64_MAX`) to Linux infinity (`UINT64_MAX`). It copies unaligned inputs to
+the stack without changing caller bytes. Native ceilings, permissions and
+enforcement remain authoritative; the adapter adds no per-image limit cache.
+Linux rejects values above Darwin's canonical infinity with `ENOTSUP`; that
+range includes a collision with Linux's infinity sentinel. Native measurements
+verify the null-pointer error priority, invalid resources, soft/hard ordering
+and success errno preservation.
+
+The actual Fortnite call at `0x10062777c` requests
+`NOFILE={10240, infinity}`, using the literal at `0x10d3220b0`. The fixture
+compares this request with the native backend, including real permission
+failures. It also checks guarded/unaligned inputs, all nine resource mappings,
+descriptor exhaustion at a lowered soft limit, hard-limit permissions, fork
+inheritance, unchanged parent limits, eight callers and two runtime lifetimes.
+
+`tests/ios/native-checks.v build-setrlimit` builds the fixture. Six host
+ASan/UBSan runs cover resource limits, process resource usage and raise; the
+new fixture is optimized and compares four native macOS profiles. The ARM64
+fixture passes. Native probes, actual IPA evidence, seven final generated-C/
+executable pairs and optimized ARM64 call-path review are retained under
+`build/ios/fortnite/setrlimit-checks`.
+
+The fresh probe clears `_setrlimit` and stops before entry at `_sigaltstack`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_sigaltstack` now translates Darwin's 24-byte `{sp, size, flags}` record to
+the native layout and maps Darwin `SS_DISABLE=4`. Native macOS probes establish
+the 32 KiB minimum even for disable requests, size-error priority, old-record
+writes before flag/on-stack errors, and old-before-new behavior for aliased
+records. The Linux adapter reproduces these cases, including the distinct
+on-stack enable/disable errors. macOS forwards to its native API.
+
+Darwin keeps the last pointer/size while disabled; Linux clears them. Two
+native TSD slots, reserved once before bridge callbacks are enabled, retain
+only those scalar values per thread. They allocate no stack storage and use
+no registry lock on the callback path. Fork-child handling clears the history
+to match the measured native fork path; the child can install its own stack.
+The signal bridge now accepts `SA_ONSTACK` with the existing one-argument,
+restart and nodefer handlers. Stack mappings remain caller-owned: restore or
+disable native delivery before freeing them.
+
+`tests/ios/native-checks.v build-sigaltstack` builds the fixture. Six host
+ASan/UBSan runs cover alternate stacks, signal-registry and raise regressions;
+the optimized new fixture compares eight native macOS profiles. ARM64 checks
+pass guarded/unaligned records, output/error/alias ordering, disabled history,
+actual callback frame addresses inside guarded stack mappings, eight threads,
+fork reset/reinstallation, restoration before unmap and two runtime lifetimes.
+
+Evidence under `build/ios/fortnite/sigaltstack-checks` includes native probes,
+the retired initial fork diagnostic, seven final generated-C/executable pairs,
+native TSD and optimized ARM64 call-path review, and fresh probe/audit results.
+The probe clears `_sigaltstack` and stops before entry at `_swscanf`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_swscanf` and `_vswscanf` now bridge Darwin ARM64's anonymous pointer slots
+to native wide scanning. macOS forwards the native `va_list`; Linux builds
+the native AAPCS64 record with empty register ranges. Both use four-byte
+wide characters. The V adapter validates the complete input in the current
+locale before writing outputs, preserves Darwin's match-failure `errno`, and
+maps encoding errors to Darwin `EILSEQ` (92). It rewrites eight-byte Darwin
+long-double conversions and narrow `h` character modifiers in one temporary
+format copy, freed before return. The game's common formats borrow their
+original storage without allocating.
+
+All fifteen fixed formats recovered from the actual IPA are checked,
+including suppressed fields, short version/build components, 64-bit
+addresses, bounded wide strings and five output pointers. Additional native
+comparisons cover scalar widths, floats, positional arguments, character
+sets, counts, C/UTF-8 locale behavior and unchanged input/format/argument
+storage. Full Darwin scanf conformance outside these fixtures remains
+unfinished, including libc edge behavior for range character sets and
+incomplete floating exponents.
+
+`tests/ios/native-checks.v build-swscanf` builds the fixture. Six host
+ASan/UBSan runs cover wide scanning, libSystem and NSLogv; the new fixture
+also passes in the ARM64 guest with protected input, format, argument and
+output boundaries, a real Darwin variadic caller, eight concurrent workers
+and two runtime lifetimes. Generated C and optimized ARM64 paths were
+reviewed for the ABI, format ownership and unintended allocations.
+
+Evidence under `build/ios/fortnite/swscanf-checks` retains native measurements,
+the initial errno/character-modifier diagnostics, seven generated-C/executable
+pairs and fresh probe/audit results. The probe clears `_swscanf` and stops
+before entry at `_task_get_exception_ports`. Fortnite remains unplayable;
+the full iOS regression is unpassed.
+
+`_task_get_exception_ports` now queries the current task's exception actions.
+macOS maps the compatibility self-task name to the native task and forwards
+the query, including inherited handler ports and their caller-owned send
+rights. Linux reports its initial unset actions: a nonzero mask returns one
+group containing the requested bits, a null handler, zero behavior and zero
+flavor; a zero mask returns no groups. Mach handler installation and kernel
+fault delivery remain unsupported on Vinix.
+
+Native measurements confirm that the count is output-only, even when its
+incoming value is zero or uninitialized. The V adapter accepts exception
+bits 1 through 13, validates destination kinds before touching output,
+preserves `errno`, and copies masks, count, handlers, behaviors and flavors
+in native order with exact four-byte writes. Invalid destinations and masks
+leave all outputs unchanged. Compatibility receive queues reject typed MIG
+queries with `KERN_NOT_SUPPORTED`.
+
+`tests/ios/native-checks.v build-task-exception-ports` builds the fixture.
+Six host ASan/UBSan runs pass current-task queries and Mach exception/message
+regressions; eight native profiles compare live kernel inventories while
+retaining and releasing every returned send right. The optimized ARM64
+fixture passes unset-action grouping, arbitrary incoming counts, all output
+extents, guard pages, unaligned and overlapping outputs, namespace errors,
+eight concurrent workers, fork and two runtime lifetimes.
+
+Native characterization, seven generated-C/executable pairs, optimized ARM64
+and allocation review, and fresh probe/audit evidence are retained under
+`build/ios/fortnite/task-exception-ports-checks`. The probe clears
+`_task_get_exception_ports` and stops before entry at `_task_info`. Fortnite
+remains unplayable; the full iOS regression is unpassed.
+
+`_task_info` now supports the current task's `MACH_TASK_BASIC_INFO` (20)
+and `TASK_VM_INFO` (22) memory records on Vinix. macOS maps the compatibility
+self-task name and forwards queries to the native API. Linux samples live
+RSS and the native resident high-water mark, streams the process's mapping
+snapshot for virtual size and region count, and reports RSS plus swap as
+physical footprint, matching the existing process-usage adapter. Descriptors
+close on every path; the V snapshot and record packing use stack storage.
+
+Native measurements establish a twelve-word basic record and VM revisions
+of 36, 38, 42, 84, 86, 87, 89 and 93 four-byte words. Short counts and
+unsupported Linux flavors return `KERN_INVALID_ARGUMENT`; failed snapshots
+return `KERN_FAILURE`, with caller outputs unchanged. The adapter reads the
+input count before resolving the destination, releases the namespace lock
+before collecting data or writing outputs, preserves `errno`, and copies
+the record before its count, including unaligned and overlapping spans.
+
+Darwin-only tagged/compressor ledgers, map bounds, remaining task limit and
+terminated-thread CPU times remain unavailable on Linux and stay zero.
+The basic record describes the runner's timesharing policy and zero Mach
+task suspension count. Other task-info flavors and foreign Linux tasks are
+unsupported; this adapter does not install exception handlers or deliver
+kernel faults.
+
+`tests/ios/native-checks.v build-task-info` builds the fixture. Six host
+ASan/UBSan runs pass task-info, task-exception-port and process-usage checks;
+eight native profiles compare counts, memory fields, page size and output
+extents. The optimized ARM64 fixture passes every count through 105, VM
+revision boundaries, guarded/unaligned/aliased writes, port kinds, live
+32 MiB allocation and persistent peak RSS, eight workers, fork and two
+runtime lifetimes. Native caller-memory fault measurements, seven
+generated-C/executable pairs and fresh probe/audit evidence are retained in
+`build/ios/fortnite/task-info-checks`.
+
+The probe clears `_task_info` and stops before entry at
+`_task_swap_exception_ports`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+`_task_swap_exception_ports` now forwards native Mach swaps on macOS,
+including caller-owned send references returned for previous handlers.
+Vinix supports valid empty-mask requests and clearing already-unset actions
+to a null handler, zero behavior and zero flavor. Otherwise valid nonempty
+requests that install a handler or change policy return `KERN_NOT_SUPPORTED`,
+with all outputs unchanged. No handler state or successful fault delivery
+is fabricated.
+
+The ten-argument V adapter resolves the destination and `COPY_SEND` right
+before checking the receiving object and scalar arguments. Kernel-object
+ports cannot become handlers, even for an empty mask: native measurements
+establish `KERN_INVALID_RIGHT` after mask/behavior validation and before
+thread-flavor validation. Compatibility receive queues continue to reject
+typed MIG transport. The adapter preserves `errno`, never reads the incoming
+output count, releases the namespace lock before native calls or caller
+writes, and copies masks, count, handlers, behaviors and flavors in native
+order with exact four-byte extents.
+
+`tests/ios/native-checks.v build-task-swap-exception-ports` builds the fixture.
+Six host ASan/UBSan runs cover swap, query and exception-RPC regressions;
+eight native profiles compare old-action grouping and release every returned
+send reference. The optimized ARM64 fixture checks both stack-passed output
+pointers, unaligned and overlapping arrays/counts, guard pages, output-only
+counts, port kinds and error precedence, unchanged references after refused
+installation, eight workers, fork and two runtime lifetimes.
+
+Native measurements, seven generated-C/executable pairs, optimized ARM64
+review and fresh probe/audit results are retained under
+`build/ios/fortnite/task-swap-exception-ports-checks`. The probe clears
+`_task_swap_exception_ports` and stops before entry at `_task_threads`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_task_threads` now returns an independently owned VM array of 32-bit thread
+port names and one send reference per listed thread. On macOS it enumerates
+native Mach threads and moves the array into the runner's VM registry while
+retaining the returned rights. On Vinix it snapshots the current-task thread
+namespace under its lock, including entry/callback threads, Darwin pthreads,
+NSThreads and dispatch/network workers. Foreign native pthreads that never
+enter the adapter and foreign Linux tasks remain outside this support.
+
+The count is output-only. The V adapter preserves `errno` and copies the
+eight-byte pointer before the four-byte count after unlocking, including
+unaligned and overlapping outputs. Invalid destinations and wrong port kinds
+leave outputs unchanged. Array storage can be released with `vm_deallocate`
+independently of its send rights; held rights become dead-name references
+after exit. Enumeration excludes retired threads, can recreate a live send
+right with zero references, and preserves saturated reference counts. Existing
+robust-mutex lifetimes keep a thread visible through native TLS destructors.
+
+`tests/ios/native-checks.v build-task-threads` builds the fixture. Six host
+ASan/UBSan runs cover enumeration, thread namespace and VM-entry regressions.
+The optimized ARM64 fixture passes exact guarded/unaligned/aliased outputs,
+independent VM/right ownership, eight concurrent workers, retired names,
+TLS-destructor lifetime, zero/saturated references, dispatch workers, fork and
+two runtime lifetimes. Native stress measurements also observed 331 null
+entries among 8,041 entries during thread-exit races; native copyout is
+preserved, including these null entries.
+
+Native measurements, seven generated-C/executable pairs, optimized ARM64
+review and fresh probe/audit results are retained under
+`build/ios/fortnite/task-threads-checks`, with earlier fixture diagnostics kept
+separately. The probe clears `_task_threads` and stops before entry at
+`_thread_get_exception_ports`. Thread state, suspension and exception-handler
+delivery remain unsupported. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+`_thread_get_exception_ports` now forwards live native queries on macOS,
+including caller-owned send references for installed handlers. Vinix queries
+the initial state of live threads in its Mach namespace: no exception-action
+table, zero returned groups and untouched output arrays for every valid mask.
+Native measurements distinguish this absent table from an explicitly cleared
+table, which returns null-action groups. Thread handlers are not inherited
+from the creating thread; the query does not substitute task actions.
+
+The V adapter checks the destination before the mask, preserves `errno`,
+releases the namespace lock before native calls or caller writes, and writes
+exactly the four-byte output-only count on Vinix. Invalid masks, missing send
+rights and retired names leave all outputs unchanged. Wrong kernel-object
+kinds return `KERN_INVALID_ARGUMENT`; compatibility receive queues with send
+rights return `KERN_NOT_SUPPORTED`. Thread handler installation and kernel
+exception delivery remain unsupported.
+
+`tests/ios/native-checks.v build-thread-exception-ports` builds the fixture.
+Six host ASan/UBSan runs pass query, task-query and exception-RPC regressions;
+eight native profiles compare absent/allocated tables, two distinct handler
+groups, overlapping output order and balanced returned send references. The
+optimized ARM64 fixture passes guarded, unaligned and aliased counts, unused
+inaccessible arrays, dirty upper argument bits, mask/destination precedence,
+eight live and retired threads, unchanged send references, fork and two
+runtime lifetimes. Generated C and optimized ARM64 review confirm no adapter
+allocation and only the count write after unlocking on Vinix.
+
+Native measurements, seven generated-C/executable pairs and fresh
+probe/audit evidence are retained in
+`build/ios/fortnite/thread-exception-ports-checks`. The probe clears
+`_thread_get_exception_ports` and stops before entry at `_thread_get_state`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_thread_get_state` now forwards live native Mach queries on macOS. On ARM64
+Vinix it captures the executing thread's NEON registers `q0` through `q31`,
+FPSR and FPCR with V inline assembly for `ARM_NEON_STATE64` (flavor 17).
+The 528-byte record includes eight zeroed alignment bytes and returns a count
+of 132 four-byte words. General registers, debug and exception state, page-in
+counters, SME state and remote-thread snapshots return
+`KERN_NOT_SUPPORTED`; no register record is manufactured for those requests.
+
+Native measurements establish the accepted flavors and minimum counts, and
+show that the four-byte input count is read before destination validation.
+The adapter preserves `errno`, checks flavor/count after the destination,
+releases the namespace lock before native queries or caller writes, and
+copies a successful record before its four-byte count. Invalid flavors,
+short counts, missing rights, wrong object kinds and retired names preserve
+the caller's outputs. The capture uses stack storage and changes neither
+signal dispositions nor signal masks.
+
+`tests/ios/native-checks.v build-thread-state` builds the fixture. Six host
+ASan/UBSan runs pass state-query, thread-exception-query and exception-RPC
+regressions. Twelve native profiles compare flavor/count/error behavior and
+exact records from a suspended native thread. The optimized ARM64 guest
+fixture passes seeded hardware-register capture, guarded/unaligned/aliased
+outputs, dirty upper argument bits, eight concurrent and retired workers,
+fork and two runtime lifetimes. Generated C and ARM64 disassembly confirm
+stack-only copyout and the complete register-store sequence.
+
+Native measurements, seven generated-C/executable pairs and fresh probe/audit
+evidence are retained in `build/ios/fortnite/thread-state-checks`. The probe
+clears `_thread_get_state` and stops before entry at `_thread_resume`.
+Fortnite's inspected call sites request general registers, including unified
+flavor 1; those requests still return unsupported on Vinix. Suspension,
+register mutation and kernel exception delivery remain unsupported. Fortnite
+remains unplayable; the full iOS regression is unpassed.
+
+`_thread_resume` now forwards native Mach resumes on macOS, including real
+nested suspension counts. Native measurements show a count of two becoming
+one and then zero; another resume returns `KERN_FAILURE`. Vinix has no
+individual-thread suspension backend, so its live Mach threads have zero
+user suspension counts and return that same underflow error. The adapter
+does not report a successful resume, alter a count or send process-wide
+`SIGCONT` on Vinix.
+
+The V adapter validates the destination under the shared namespace lock,
+unlocks before native calls, and preserves `errno` and Mach references.
+Wrong kernel-object kinds return `KERN_INVALID_ARGUMENT`, missing send rights
+and retired names return `MACH_SEND_INVALID_DEST`, and compatibility receive
+queues with send rights return `KERN_NOT_SUPPORTED`.
+
+`tests/ios/native-checks.v build-thread-resume` builds the fixture. It covers
+native nested suspension, repeated self/remote underflow, dirty upper argument
+bits, eight concurrent and retired workers, unchanged send/dead references,
+right removal and reacquisition, fork and two runtime lifetimes.
+
+Six host ASan/UBSan runs pass resume, thread-state and thread-exception-port
+regressions; twelve native profiles include real suspension-count checks.
+The optimized ARM64 fixture passes with separate start/finish worker gates.
+The initial shared-gate fixture could let a fast worker consume another
+worker's release token; its stalled guest run and original artifacts are
+retained separately under `diagnostics/first-concurrency-gate`.
+
+Native measurements, seven final generated-C/executable pairs and fresh
+probe/audit evidence are retained in
+`build/ios/fortnite/thread-resume-checks`. Generated C and ARM64 review confirm
+no adapter allocation, right mutation, remote pthread dereference or signal
+delivery. The probe clears `_thread_resume` and stops before entry at
+`_thread_suspend`. Per-thread suspension, general/remote register capture,
+register mutation and kernel exception delivery remain unsupported on Vinix.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_thread_suspend` now forwards real Mach suspension on macOS. Native
+measurements verify nested counts from zero to one to two, balanced resumes,
+and self-suspension observed and resumed by another thread. The V adapter
+releases the shared namespace lock before suspending, so an adapter thread
+can acquire it to resume a suspended caller.
+
+Vinix returns `KERN_NOT_SUPPORTED` for live thread destinations because it
+has no individual-thread suspension backend. It does not stop the process,
+install a signal handler, change a suspension count or claim success.
+Subsequent resume calls retain the zero-count `KERN_FAILURE` behavior.
+Destination errors distinguish wrong kernel-object kinds, missing send
+rights, retired names and compatibility receive queues. `errno` and Mach
+references are preserved.
+
+`tests/ios/native-checks.v build-thread-suspend` builds the fixture. It covers
+native nested/self suspension, balanced resumes, eight concurrent and retired
+workers, unchanged send/dead references, right removal and reacquisition,
+dirty upper argument bits, fork and two runtime lifetimes.
+
+Six host ASan/UBSan runs pass suspension, resume and state-query regressions;
+twelve native profiles include nested counts and a different adapter thread
+resuming the suspended caller. The optimized ARM64 fixture passes explicit
+unsupported results without changing subsequent resume behavior. Generated C
+and ARM64 review confirm no adapter allocation, right mutation, remote pthread
+dereference or signal delivery.
+
+Native measurements, seven generated-C/executable pairs and fresh probe/audit
+evidence are retained in `build/ios/fortnite/thread-suspend-checks`. The probe
+clears `_thread_suspend` and stops before entry at
+`_thread_swap_exception_ports`. Individual-thread suspension, general/remote
+register capture, register mutation and kernel exception delivery remain
+unsupported on Vinix. Fortnite remains unplayable; the full iOS regression is
+unpassed.
+
+`_thread_swap_exception_ports` now forwards native swaps and their returned
+COPY_SEND references on macOS. Vinix supports zero-mask swaps and exact
+null/zero clears of unset actions. Native measurements show that a successful
+swap allocates an empty action table even with a zero mask. A flag on the
+existing Mach thread record tracks that state without another allocation.
+Subsequent thread queries return one null-action group for a nonzero valid
+mask; a fresh thread or fork child still returns zero groups. Removing and
+reacquiring send rights preserves the live thread's table state.
+
+The V adapter refreshes retired names and validates the destination and
+COPY_SEND descriptor before checking masks, behavior and ARM flavors.
+It changes table state under the namespace lock, then unlocks before caller
+writes or native calls. Both swaps and allocated-table queries write exactly
+four bytes per output field in native masks/count/handlers/behaviors/flavors
+order, including unaligned and overlapping outputs. Counts are output-only.
+Handler/policy installation and kernel exception delivery remain unsupported;
+rejected requests leave outputs and table state unchanged.
+
+`tests/ios/native-checks.v build-thread-swap-exception-ports` builds the fixture.
+Six host ASan/UBSan runs pass thread-swap, task-swap and thread-query
+regressions; twelve native profiles compare complete records, two distinct
+old handler groups and balanced returned references. The optimized ARM64
+fixture passes guarded/unaligned/aliased output checks, empty-table queries,
+descriptor precedence, eight concurrent and retired threads, right
+reacquisition, fork and two runtime lifetimes. Generated C and ARM64 review
+cover both the swap and the changed query path.
+
+Native measurements, seven generated-C/executable pairs and fresh probe/audit
+evidence are retained in
+`build/ios/fortnite/thread-swap-exception-ports-checks`. The native probe's
+initial fork cleanup reused the parent's task port; its diagnostic is retained
+under `diagnostics/native-fork-task-port`, and the corrected probe passes.
+The loader clears `_thread_swap_exception_ports` and stops before entry at
+`_uname`. Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_uname` now returns the host's system identity through Darwin's five
+256-byte fields. macOS forwards the native call. Vinix translates its native
+six-field, 65-byte Linux layout, omitting the domain name. It returns the
+kernel's actual system, node, release, version and machine strings; it does
+not substitute an iPhone model. Fortnite's caller passes a 1296-byte stack
+frame at offset eight and reads the machine field at offset 1024.
+
+Native measurements show that each field writes only its string and NUL,
+leaving the remaining bytes untouched. Success preserves `errno`; invalid
+destinations return `EFAULT` and may retain a written prefix. The V adapter
+uses stack storage and `process_vm_writev` to preserve these boundaries and
+report copyout errors without dereferencing an invalid application buffer.
+It allocates no user-space heap storage.
+
+`tests/ios/native-checks.v build-uname` builds the fixture. Six host ASan/UBSan
+runs pass uname, system-query and sysctl regressions. The optimized ARM64
+fixture passes full-record comparisons against native uname, untouched tails,
+unaligned buffers, Fortnite's frame layout, ten guarded capacities, read-only
+and invalid pointers, partial writes, thread-local errno, eight concurrent
+workers, fork and two runtime lifetimes. Generated C and ARM64 review cover
+both runners and the host/guest fixture.
+
+Native measurements, seven generated-C/executable pairs and fresh probe/audit
+evidence are retained in `build/ios/fortnite/uname-checks`. The loader clears
+`_uname` and stops before entry at `_vm_read_overwrite`. Fortnite remains
+unplayable; the full iOS regression is unpassed.
+
+`_vm_read_overwrite` now forwards native task reads on macOS and reads the
+current task's memory on Vinix. Its task argument is 32 bits; addresses,
+size and the output-only count are 64 bits. Fortnite passes a stack count
+pointer at `0x1000a8114`. The adapter validates the Mach destination before
+memory arguments and preserves errno. Compatibility receive queues still
+reject this typed RPC; Vinix has no cross-task Mach memory interface.
+
+The Vinix path streams address/permission prefixes from `/proc/self/maps`
+and uses kernel-assisted reads and writes. It accepts readable stack, heap,
+ordinary mmap and compatibility-owned regions. Source bytes are captured
+before destination writes, including overlap. Small snapshots stay on the
+stack; larger snapshots use a temporary mapping that is released on success
+and both copy failures. The descriptor closes on every exit. No mapping is
+added to the compatibility VM registry and no user-space heap allocation is
+retained.
+
+Native measurements distinguish Darwin's 32 KiB kernel-buffer boundary.
+Zero-length calls write a zero count without inspecting either address.
+Requests through 32 KiB reject static holes/protection failures with
+`KERN_INVALID_ADDRESS` and no copied prefix. Larger requests distinguish
+protection failures, can write a valid destination prefix, and still leave
+the count untouched on failure. Successful calls copy the eight-byte count
+last, including unaligned counts and counts that alias source or destination.
+
+`tests/ios/native-checks.v build-vm-read-overwrite` builds the fixture. Six
+host ASan/UBSan runs pass VM-read, uname and memory-entry regressions. Native
+matrix profiles and the optimized ARM64 fixture cover the 32 KiB boundary,
+small/large snapshots, static holes, permission splits, overlap, guarded and
+aliased counts, namespace errors, eight concurrent workers, fork and two
+runtime lifetimes. Generated C and ARM64 review check stack storage,
+descriptor closure and every temporary-mapping release path.
+
+Seven generated-C/executable pairs, native boundary probes and fresh
+probe/audit evidence are retained in
+`build/ios/fortnite/vm-read-overwrite-checks`. Diagnostics preserve the initial
+native function-pointer prototype error, the first guard matrix and the
+fixture's corrected unaligned count read. The loader clears
+`_vm_read_overwrite` and stops before entry at `_vm_region_64`. Fortnite
+remains unplayable; the full iOS regression is unpassed.
+
+`_vm_region_64` now has a seven-argument ABI bridge. macOS forwards queries
+to the native task, including basic, legacy basic, top and extended records,
+returned object rights and native output order. Vinix validates the Mach
+destination, then streams `/proc/self/maps` bounds to distinguish end-of-map
+from unavailable metadata. Native measurements show that end-of-map takes
+precedence over invalid flavors and short counts. Basic/legacy/extended
+records require nine words; top records require five.
+
+Vinix returns `KERN_NOT_SUPPORTED` for valid region-metadata requests and
+leaves every caller-owned buffer unchanged. Its exported map view lacks the
+complete Mach wire/inheritance attributes, object statistics and Darwin
+allocation tags needed for those records. Fortnite requests extended flavor
+13 with nine words and examines an allocation tag; that request remains
+unsupported on Vinix. No tags, object names or residency values are invented.
+Lookup uses fixed stack buffers and closes its descriptor on every exit;
+the bridge preserves errno and adds no heap lifetime or Mach references.
+
+`tests/ios/native-checks.v build-vm-region-64` builds the fixture. Six host
+ASan/UBSan runs pass region, read-overwrite and memory-entry regressions.
+Four native profiles compare complete guarded records, count thresholds,
+split protections, holes and unaligned/overlapping outputs. The optimized
+ARM64 fixture checks unchanged unsupported outputs, namespace/error
+precedence, bounded hex parsing, dirty upper arguments, eight concurrent
+workers, fork and two runtimes. Generated C and ARM64 review cover the ABI,
+descriptor cleanup and absence of Vinix output writes.
+
+Native measurements, seven generated-C/executable pairs and fresh
+probe/audit evidence are retained in
+`build/ios/fortnite/vm-region-64-checks`. The link probe clears
+`_vm_region_64` and stops before entry at `_CFLocaleCopyCurrent`. Fortnite
+remains unplayable; the full iOS regression is unpassed.
+
+`_CFLocaleCopyCurrent` now returns an owned, toll-free bridged `NSLocale`
+reference through its no-argument C entry. It shares the runtime's cached
+`NSLocale.currentLocale` snapshot, with one separate retain per caller and
+one cache retain released at shutdown. Publication is protected by the
+recursive runtime lock; results survive autorelease-pool drains and other
+callers' releases.
+
+On macOS the snapshot copies the native current locale's identifier and
+balances both its CF owner and temporary native autorelease pool. On Vinix
+it preserves the existing `LC_ALL`, `LC_MESSAGES`, then `LANG` policy,
+stripping encoding/modifier suffixes; unset, `C` and `POSIX` use the existing
+`en_US` compatibility default. It copies at most 1,023 identifier bytes into
+its owned NSString and keeps that snapshot through the runtime lifetime.
+This does not implement preference-change notifications, the ICU locale
+database, `CFLocaleGetValue` or preferred-language queries.
+
+`tests/ios/native-checks.v build-cf-locale-current` builds the fixture. Six
+host ASan/UBSan runs pass current-locale, Swift fixed-locale and CF dictionary
+checks. Native measurements verify cached owned references and identifier
+stability after pool drains and environment changes. The optimized ARM64
+fixture checks environment precedence/defaults/suffixes, long identifiers,
+protected argument/x8 registers, preserved x20/x21, cold concurrent cache
+publication, CF retain/release and Objective-C integration, autorelease
+independence and two drained runtimes with zeroed weak references.
+
+Native measurements, seven generated-C/executable pairs, corrected native
+pool/fixture-teardown/review-checker diagnostics and fresh probe/audit
+evidence are retained in `build/ios/fortnite/cf-locale-current-checks`. The
+link probe clears `_CFLocaleCopyCurrent` and stops before entry at
+`_CFLocaleCopyPreferredLanguages`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+`_CFLocaleCopyPreferredLanguages` now returns an owned immutable NSArray
+snapshot whose NSString elements remain borrowed until retained separately.
+On macOS it copies the complete native preference order, including an empty
+list, and balances the native array and temporary native autorelease pool.
+Each compatibility result has an independent lifetime and survives pool
+drains and the release of other snapshots. Native snapshots support up to
+32 entries and 1,023 UTF-8 bytes per string.
+
+Vinix uses a colon-separated `LANGUAGE` priority list, skips empty entries
+and removes duplicate normalized tags without changing preference order.
+An absent or empty list uses the existing locale environment policy and
+`en_US` compatibility default. The bounded profile supports two/three-letter
+languages, optional scripts/regions and a POSIX variant, plus measured
+Hebrew/Indonesian/Yiddish aliases and Chinese/English canonical forms. It
+accepts at most 32 distinct tags, 128 bytes per source tag and 4,095 bytes in
+`LANGUAGE`; unsupported forms fail explicitly. This is a Vinix configuration
+policy, without a CFPreferences database or full ICU canonicalization.
+
+`tests/ios/native-checks.v build-cf-preferred-languages` builds the fixture.
+Six host ASan/UBSan runs pass preferred-language, current-locale and CF
+dictionary checks. Native measurements compare the full preference list,
+array/element ownership and supported canonical tags. The optimized ARM64
+fixture checks order/deduplication, fallback precedence, 32-entry bounds,
+partial-error cleanup, non-NUL-terminated guarded parser input, protected
+argument/x8 registers, preserved x20/x21, independent snapshots, retained
+elements, eight concurrent callers and two drained runtimes. Generated C
+review verifies stack parsing, array/child cleanup and native ownership.
+
+Native measurements, seven generated-C/executable pairs and fresh probe/audit
+evidence are retained in `build/ios/fortnite/cf-preferred-languages-checks`.
+The link probe clears `_CFLocaleCopyPreferredLanguages` and stops before
+entry at `_CFLocaleGetValue`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+`_CFLocaleGetValue` now returns borrowed identifier, language and country
+NSStrings from built-in NSLocale snapshots. `NSLocale.objectForKey:` shares
+the same lookup. Identifier queries return the stored snapshot; language
+and country strings are cached together under the runtime lock and owned by
+the locale. A missing country stays nil and is cached without guessing a
+region. Callers may retain a value to keep it after the locale is released.
+
+On macOS the components are copied from a native fixed locale, with balanced
+CF owners and a temporary native autorelease pool. Component strings support
+up to 1,023 UTF-8 bytes. Vinix parses a bounded 128-byte profile: two-letter
+languages, optional scripts, alphabetic/numeric regions and a POSIX variant,
+plus root, C/POSIX and measured Hebrew/Indonesian/Yiddish aliases. Keywords,
+three-letter languages and the full ICU alias database remain unsupported
+on Vinix. Known locale metadata keys outside the three string keys fail
+explicitly; unrecognized keys return nil, matching native lookup behavior.
+
+`tests/ios/native-checks.v build-cf-locale-value` builds the fixture. Six
+host ASan/UBSan runs pass locale-value, current-locale and Swift fixed-locale
+checks. Four native profiles compare complete language/country results,
+including empty language, missing country, scripts, numeric regions and
+POSIX. The optimized ARM64 fixture checks borrowed/cache identity, retained
+child lifetimes and zeroed weak references, key-content equality, explicit
+unsupported queries, non-NUL-terminated guarded parser input, protected
+x2–x8 registers, preserved x20/x21, concurrent first queries, Objective-C
+integration and two drained runtimes. Generated C review checks atomic cache
+publication, failed-query cleanup and transfer to the locale's owned fields.
+
+Native measurements, seven generated-C/executable pairs and fresh probe/audit
+evidence are retained in `build/ios/fortnite/cf-locale-value-checks`. The link
+probe clears `_CFLocaleGetValue` and stops before entry at
+`_CFPreferencesAppSynchronize`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+`_CFPreferencesAppSynchronize` now flushes the current application's persisted
+defaults through the same store as `NSUserDefaults`. It accepts the current-app
+constant by string content and the bundle identifier read from `Info.plist`
+(or the existing bundle-filename fallback). Its return uses CF's unsigned-byte
+Boolean ABI. Allocated NSStrings and registered Mach-O constant strings are
+accepted. Unsupported domains and invalid arguments return false. Directory
+creation, write and exact-path rename failures also return false, with the
+in-memory values available for retry. Synchronization and standard-defaults
+mutations share the runtime lock; registration defaults stay out of the plist.
+
+Preference writes now rename to exactly the plist path. V's directory-target
+rename behavior previously allowed a write into a directory at that path to
+report success. The fixture caught this behavior; the failed generated C,
+executable, debug symbols and log are retained. The store still uses one
+per-bundle application source with eager setters. External-process merging,
+live reload, custom suites, global/managed/host sources and power-loss durability
+remain unsupported; malformed bundle metadata or an invalid existing plist
+retain the existing explicit startup failure.
+
+`tests/ios/native-checks.v build-cf-preferences-sync` builds the fixture. Six
+host ASan/UBSan runs pass synchronization, CF dictionary and locale-value checks.
+Four native profiles measure empty/staged/removal synchronization and a blocked
+destination, using only an isolated temporary preference domain. The optimized
+ARM64 fixture checks the single argument with protected x1–x8 registers,
+preserved x20/x21, Boolean success/failure, bundle identity, registration
+exclusion, cold/write/rename failure recovery, concurrent writes, removal and
+persistence across two drained runtimes. Generated C and assembly review checks
+the shared locking, exact rename, owned path/identity and serializer cleanup.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-preferences-sync-checks`. The fresh link probe clears
+`_CFPreferencesAppSynchronize` and stops before entry at
+`_CFPreferencesCopyAppValue`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+`_CFPreferencesCopyAppValue` now reads the current application's shared defaults
+store. It accepts the current-app constant or bundle identifier, compares keys
+by string content, searches persisted values before registered fallbacks, and
+returns nil for an absent key. Allocated NSStrings and registered Mach-O string
+constants are accepted for both arguments. Unsupported application domains,
+invalid arguments and unsupported preference objects fail explicitly.
+
+Each successful lookup returns an owned immutable property-list snapshot.
+Its strings, data, arrays, dictionaries and children survive replacement of the
+stored value and autorelease-pool cleanup. Construction transfers child owners
+directly to collections, and balances V's implicit map-iteration key copies.
+The existing autoreleased plist conversion now wraps the owned constructor.
+Boolean values keep their CFBoolean type through parsing, standard-defaults
+setters, serialization and restart. The supported profile consists of strings,
+signed integers, reals, Booleans, data, arrays and string-keyed dictionaries.
+Dates, other application domains, global/managed/host sources and external
+preference merging or live reload remain unsupported.
+
+`tests/ios/native-checks.v build-cf-preferences-value` builds the fixture. Six
+host ASan/UBSan runs pass value lookup, synchronization and CF dictionary checks.
+Isolated native measurements establish absent nil, content-equal keys, staged
+values, all seven supported plist types, registered-default visibility and
+retained-result lifetime. The optimized ARM64 fixture checks the two arguments
+with protected x2–x8 registers and preserved x20/x21, immutable nested ownership,
+persistent precedence, Boolean-preserving save/reload, image constants, rejected
+queries, repeated/concurrent dictionary copies, replaced-source child lifetime
+and two drained runtimes. Generated C and assembly review checks source locking,
+serializer cleanup, static rejection errors and pool-independent tree ownership.
+
+Evidence, diagnostics and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-preferences-value-checks`. The fresh link probe clears
+`_CFPreferencesCopyAppValue` and stops before entry at
+`_CFPreferencesSetAppValue`. Fortnite remains unplayable; the full iOS regression
+is unpassed.
+
+`_CFPreferencesSetAppValue` now stages changes in the current application's
+shared defaults store. Its three-pointer ABI returns void. A nil value removes
+the application's key, exposing a registered fallback if one exists; removing
+an absent key is harmless. Non-nil values are copied immediately to immutable
+property-list trees, and the store owns a copy of the key. Caller-owned values
+can be released or mutable containers changed after the call. Existing copied
+results remain valid after replacement or removal.
+
+The setter accepts the current-app constant or bundle identifier and allocated
+or registered image strings. It validates the complete supported tree under
+the same runtime lock as reads and synchronization before changing the store.
+Invalid arguments, unsupported domains or object types, raw CF collections,
+cycles/excessive depth, data over 16 MiB and non-finite real numbers fail
+explicitly. Rejected updates preserve existing values. The supported profile
+uses strings, signed integers, finite reals, Booleans, data, arrays and
+string-keyed dictionaries; dates and broader preference domains remain unsupported.
+
+CF setters perform no file writes. `CFPreferencesAppSynchronize` flushes the
+shared application source and reports persistence failures, leaving staged
+values available for retry. Existing eager `NSUserDefaults` setters also flush
+that shared source. Registered defaults remain separate from persisted values.
+
+`tests/ios/native-checks.v build-cf-preferences-set` builds the fixture. Six host
+ASan/UBSan runs pass setter, lookup and synchronization checks. Native probes
+measure value copying, equal-key lookup, nil removal, all seven supported plist
+types and persistence through an isolated temporary domain. The optimized ARM64
+fixture checks protected x3–x8 registers and preserved x20/x21, the void return
+contract, caller ownership, mutable-input isolation, image constants, rejected
+updates without mutation, repeated/concurrent replacements and removals,
+registration fallback, failure/retry synchronization and restart persistence.
+Generated C and assembly review checks validation before mutation, owned
+key/value transfer, serializer cleanup and absence of setter file writes.
+
+Evidence, diagnostics and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-preferences-set-checks`. The fresh link probe clears
+`_CFPreferencesSetAppValue` and stops before entry at `_CFRunLoopGetMain`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_CFRunLoopGetMain` now returns a borrowed handle to the existing main desktop
+run loop. Foundation's `mainRunLoop` and main-thread `currentRunLoop` use the
+same locked lazy cache, and its `getCFRunLoop` returns that handle. Worker-first
+access still identifies the main loop. The runtime owns one reference until
+shutdown; repeated calls neither retain nor autorelease it. Callers may balance
+their own `CFRetain`/`CFRelease` pairs without consuming the cached reference.
+
+Native probes verify main/current identity, distinct worker current loops,
+Foundation's `getCFRunLoop` mapping and survival across autorelease drains.
+Vinix keeps its existing restriction on background `NSRunLoop currentRunLoop`.
+The getter does not add CF source, observer, timer or run/wake/stop APIs; existing
+desktop display-link scheduling continues through the shared handle.
+
+`tests/ios/native-checks.v build-cf-run-loop-main` builds the fixture. Six host
+ASan/UBSan runs pass main-loop, connection and current-locale checks. The optimized
+ARM64 guest fixture verifies protected x0–x8 registers, preserved x20/x21,
+concurrent first publication, borrowed ownership, balanced caller references,
+display-link schedule/fire/remove/invalidate on the main thread, absence of
+per-call objects or autoreleases and two fully released runtime caches.
+Generated C and assembly review checks the no-argument pointer ABI, locked
+publication, shared Foundation getters and shutdown release in the fixture and
+both production runners.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-run-loop-main-checks`. The fresh link probe clears
+`_CFRunLoopGetMain` and stops before entry at `_CFStringCompare`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_CFStringCompare` now implements the zero-option profile used by Fortnite's
+application-preference cleanup. Two string pointers and a 64-bit option mask
+arrive in x0–x2; the signed 64-bit result is exactly -1, 0 or 1. Comparison uses
+literal UTF-16 code-unit order, including embedded NULs, prefixes and surrogate
+pairs. Case differences and composed/decomposed spellings remain distinct.
+Supplementary characters sort by their surrogate units rather than UTF-8 bytes.
+
+The bridge validates allocated NSStrings or registered UTF-8/decoded UTF-16 image
+constants before borrowing their bytes under the runtime lock. Valid UTF-8 up
+to 16 MiB is supported. Invalid provenance, malformed UTF-8 and nonzero options
+fail explicitly, including case-insensitive, nonliteral, localized and numeric
+comparison options. Two stack cursors stream UTF-16 units without allocating a
+conversion buffer, retaining inputs or adding autoreleases. Caller references
+and input contents remain unchanged.
+
+`tests/ios/native-checks.v build-cf-string-compare` builds the fixture. Six host
+ASan/UBSan runs pass comparison, preference lookup and preference setter checks.
+Native differential cases verify signed results, empty strings, embedded NULs,
+prefixes, normalization/case distinctions and BMP/surrogate ordering through
+U+10FFFF. The optimized ARM64 guest fixture also checks protected x3–x8,
+preserved x20/x21, both image constant encodings, rejected inputs and full-width
+option masks, eight concurrent readers, unchanged ownership and two drained
+runtimes. Generated C and assembly review verifies the ABI, locked validation,
+stack cursors, borrowed text and static unboxed rejection errors in the fixture
+and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-string-compare-checks`. The fresh link probe clears
+`_CFStringCompare` and stops before entry at `_CFUUIDCreate`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_CFUUIDCreate` now accepts an allocator pointer in x0 and returns an owned
+CFUUID reference in x0. `nil`, `kCFAllocatorDefault` and `kCFAllocatorSystemDefault`
+use the existing secure entropy helper. Custom allocators, `kCFAllocatorNull`
+and calls outside the runtime lifetime fail explicitly.
+The helper obtains sixteen bytes from `getentropy`, sets the version-4 and
+variant bits and fails explicitly if entropy is unavailable. A complete value
+is obtained before allocating and returning the object.
+
+Native probes identify CFUUID as `__NSCFType`, with `isKindOfClass:NSUUID`
+returning false. Vinix therefore uses a distinct private CFUUID class and
+stores its sixteen bytes in existing object metadata. No UUID sidecar or
+autorelease is added. `CFRetain`/`CFRelease`, collection ownership and weak
+reference cleanup use the existing object lifetime machinery. Other CFUUID
+constructors and byte/string conversion APIs remain unimplemented.
+
+`tests/ios/native-checks.v build-cf-uuid-create` builds the fixture. Six host
+ASan/UBSan runs pass CFUUID creation, NSUUID and low-level UUID generation checks.
+Native checks verify owned references, null/default allocation, autorelease
+independence, version/variant bits, uniqueness and variation of unreserved bits.
+The optimized ARM64 guest fixture also checks protected x1–x8, preserved x20/x21,
+allocator rejection, the distinct type, 512 unique stored values across eight
+workers per runtime, unchanged errno, balanced references, collection/weak
+lifetimes and two zero-live-object teardowns. Generated C and assembly review
+verifies the one-pointer ABI, locked allocator validation, secure entropy before
+object allocation, inline payload, owned return and static unboxed errors in
+the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-uuid-create-checks`. The fresh link probe clears
+`_CFUUIDCreate` and stops before entry at `_CFUUIDCreateFromString`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_CFUUIDCreateFromString` now accepts allocator/string pointers in x0/x1 and
+returns an owned CFUUID reference in x0. It accepts null/default allocation and
+allocated strings or registered UTF-8/decoded UTF-16 image constants. Invalid
+string provenance, malformed UTF-8, custom allocators, `kCFAllocatorNull` and
+calls outside the runtime lifetime fail explicitly.
+
+Native differential probes show that this parser differs from NSUUID's strict
+canonical parser: it examines at most 100 UTF-16 units, skips leading non-hex
+units, ignores the contents of four fixed separator slots and zero-fills
+invalid or incomplete byte pairs. Trailing text is ignored. Only an empty
+string returns nil; nonempty strings without hex pairs produce an all-zero
+UUID. All parsed bits are preserved, without imposing version/variant bits.
+Two fixed stack buffers hold the UTF-16 units and sixteen output bytes before
+one object is allocated. Results are independent of the source string and use
+the existing reference/weak-reference lifetime machinery. Equal UUID payloads
+have value equality and equal hashes, including collection key lookup; CFUUID
+and NSUUID remain distinct types. Native implementations may reuse an existing
+UUID, while this bridge returns independent owned objects.
+
+`tests/ios/native-checks.v build-cf-uuid-string` builds the fixture. Six host
+ASan/UBSan runs pass string parsing, CFUUID creation and NSUUID checks. The 42
+native differential cases cover prefixes, case, embedded NULs, separator slots,
+bad/incomplete pairs and the 100-unit boundary with BMP/supplementary text.
+The optimized ARM64 guest fixture also verifies protected x2–x8, preserved
+x20/x21, both image constant encodings, allocator/input rejection, value equality
+and hashing, source independence, dictionary/weak lifetimes, eight concurrent
+readers, balanced references, no autoreleases and two zero-live-object teardowns.
+Generated C and assembly review verifies the two-pointer ABI, locked validation,
+stack parsing, inline payload, owned return and static unboxed errors in the
+fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-uuid-string-checks`. The fresh link probe clears
+`_CFUUIDCreateFromString` and stops before entry at `_CFUUIDCreateFromUUIDBytes`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_CFUUIDCreateFromUUIDBytes` now accepts an allocator in x0 and a by-value
+sixteen-byte CFUUIDBytes aggregate in x1/x2, returning an owned CFUUID reference
+in x0. Fortnite's call site loads the two words with `ldp x1, x2, [x8]`, passes
+a null allocator and stores the result. The bridge copies both words into the
+existing inline CFUUID metadata, preserving byte order and every bit, including
+zero or nonstandard version/variant fields. The words are values, so even
+pointer-shaped payloads are accepted without dereferencing them.
+
+Null/default allocators are supported; custom allocators, `kCFAllocatorNull`
+and calls outside the runtime lifetime fail explicitly. Allocator validation
+precedes the single object allocation. The implementation reuses the existing
+CFUUID type, reference/weak-reference cleanup and value equality/hash behavior.
+It adds no UUID sidecar or autorelease, and equal byte/string-created values
+work interchangeably in collection lookup.
+
+`tests/ios/native-checks.v build-cf-uuid-bytes` builds the fixture. Six host
+ASan/UBSan runs pass byte construction, random UUID creation and string parsing.
+A typed native probe verifies 260 payloads, including every bit independently
+set and cleared, zero/all-ones and ascending/descending bytes. The host fixture
+also calls the actual native aggregate ABI through a raw register probe. Its
+261 cases include protected-address-shaped payloads, protected x3–x8 and preserved
+x20/x21. The optimized ARM64 guest fixture verifies the same payloads, rejected
+allocators, owned pool-independent results, equality/hash across constructors,
+set/weak lifetimes, eight concurrent callers and two zero-live-object teardowns.
+Generated C and assembly review verifies the allocator/two-word ABI, locked
+validation, exact scalar-to-inline copies, owned return and static unboxed
+errors in the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-uuid-bytes-checks`. The fresh link probe clears
+`_CFUUIDCreateFromUUIDBytes` and stops before entry at `_CFUUIDCreateString`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_CFUUIDCreateString` now accepts allocator/CFUUID pointers in x0/x1 and returns
+an owned CFString reference in x0. Native probes verify uppercase canonical
+36-character text with hyphens at positions 8, 13, 18 and 23. Every UUID bit is
+preserved through string parsing, including zero or nonstandard version/variant
+fields. Formatting uses a fixed stack buffer, then the existing NSString
+constructor copies its bytes into owned, NUL-terminated storage.
+
+The bridge accepts null/default allocation and a live CFUUID from the runtime's
+object map. It checks provenance before reading UUID storage, rejecting nil,
+stale handles, class objects, NSUUID/other objects, custom allocators,
+`kCFAllocatorNull` and calls outside the runtime lifetime. An isolated native
+nil diagnostic faults on this Mac; the bridge reports its checked failure.
+UUID contents and references remain unchanged. Returned strings outlive both
+the source UUID and the creating autorelease pool, and use the existing
+collection and weak-reference cleanup machinery.
+
+`tests/ios/native-checks.v build-cf-uuid-text` builds the fixture. Six host
+ASan/UBSan runs pass formatting, byte construction and string parsing checks.
+Native/runtime cases cover every byte value at every position, four known
+strings, uppercase/hyphen layout, exact parse round trips and balanced ownership.
+The optimized ARM64 guest fixture also verifies protected x2–x8, preserved
+x20/x21, invalid input/allocator rejection, source/pool independence, collection
+and weak lifetimes, eight concurrent readers, no autoreleases and two
+zero-live-object teardowns. Generated C and assembly review verifies the
+two-pointer ABI, locked provenance validation, stack formatting, copied string
+backing, owned return and static unboxed errors in the fixture and both
+production runners.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-uuid-text-checks`. The fresh link probe clears
+`_CFUUIDCreateString` and stops before entry at `_CFUUIDGetUUIDBytes`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_CFUUIDGetUUIDBytes` now accepts one CFUUID pointer in x0 and returns its
+sixteen-byte value in x0/x1. Fortnite stores those words with unaligned stores
+at offsets 5 and 13, then releases the UUID. A two-word integer aggregate matches
+this native ARM64 return convention, including its lack of an indirect x8
+output pointer. The bridge copies all sixteen bytes without changing any bits,
+references or runtime object counts. Returned values remain valid after the
+source UUID and autorelease pool are released.
+
+The adapter checks runtime lifetime, object-map provenance, the distinct CFUUID
+class and live references while holding the runtime lock. Nil, stale or foreign
+handles, class objects, NSUUID and destroyed storage fail explicitly before
+reading payload bytes. An isolated native nil diagnostic faults on this Mac.
+Extraction uses a stack value without allocating, retaining or autoreleasing.
+
+`tests/ios/native-checks.v build-cf-uuid-read` builds the fixture. Six host
+ASan/UBSan runs pass extraction, byte construction and string formatting checks.
+The native/runtime raw-register fixture covers 261 payloads, every byte value
+at every position, zero/all-ones/ascending/descending values and protected-address
+bit patterns. It reproduces the unaligned stores at offsets 5 and 13 with intact
+surrounding canaries, protects x1–x8 and verifies preserved x20/x21. The optimized
+ARM64 guest fixture also checks invalid handles, values from all three supported
+UUID constructors, independent copies, unchanged references, eight concurrent
+readers, no allocations/autoreleases and two zero-live-object teardowns.
+Generated C and assembly review verifies the aggregate layout and return ABI,
+locked provenance checks, exact stack copy and static unboxed errors in the
+fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/cf-uuid-read-checks`. The fresh link probe clears
+`_CFUUIDGetUUIDBytes` and stops before entry at `_NSCalendarIdentifierISO8601`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSCalendarIdentifierISO8601` now exports an aligned NSString pointer cell
+through Foundation and CoreFoundation. Native measurements confirm that both
+frameworks expose the same cell and exact `iso8601` CFString value. Fortnite's
+GOT consumer at `0x105eb70bc` loads the cell address, then dereferences it into
+x2; this is a data import without a function stub.
+
+The bridge extends the existing sealed Foundation constant page to four cells
+and four CFSTR records. Publication is serialized, registers all strings before
+sealing the page read-only, and preserves stable identities without allocating
+runtime objects on lookup. Retain, release, autorelease, immutable copying and
+equal-string dictionary lookup use the existing NSString machinery. Shutdown
+rejects cold publication while keeping published cells readable to callbacks;
+all four registrations and the page retire after pools and Swift contexts drain.
+The original three Foundation key values and record locations are preserved.
+
+`tests/ios/native-checks.v build-ns-calendar-iso8601` builds the new fixture.
+Six host ASan/UBSan runs pass the identifier, Foundation-key and URL-session
+constant checks. The optimized ARM64 fixture passes eight concurrent cold
+publishers, both framework routes, exact pointer/CFSTR/string layout, string and
+dictionary behavior, retirement guards, callback access and two zero-live-object
+teardowns. A separate native probe confirms acceptance by CoreFoundation's
+ISO8601 calendar with Monday/four-day week rules; this does not implement
+Objective-C NSCalendar construction or calendar arithmetic on Vinix.
+Generated C and assembly inspection covers the expanded layout, publication,
+allocation behavior and deferred unregister/unmap in both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-calendar-iso8601-checks`. The fresh production link probe
+clears this import and stops before entry at `_NSInternalInconsistencyException`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSInternalInconsistencyException` now exports an aligned NSString pointer
+cell through Foundation and CoreFoundation. Native measurements confirm a
+shared cell containing the exact 32-byte `NSInternalInconsistencyException`
+CFString value. Fortnite loads that cell through its GOT at `0x100092cb4` and
+`0x100094274`, dereferences it into x2 and constructs NSError with code -1 and
+nil userInfo. These are data consumers without a function stub.
+
+The bridge uses a dedicated sealed page with one pointer cell, a CFSTR record
+and NUL-terminated static bytes. Lazy publication holds the runtime lock,
+registers the string before sealing the page read-only, and then publishes the
+shared address. Lookup creates no Objective-C objects or temporary strings.
+Retain/release, autorelease, copying, equality, hashing and dictionary-key use
+follow the existing immutable NSString behavior. Published cells remain
+available to teardown callbacks after cold publication is disabled. The string
+registration and page retire after pools, NSError owners and Swift contexts
+drain. This adds a name constant; Objective-C exception throwing and unwinding
+remain unsupported.
+
+`tests/ios/native-checks.v build-ns-internal-exception` builds the fixture.
+Six host ASan/UBSan runs pass this fixture, Foundation keys and the ISO8601
+identifier. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover both framework routes, exact data layout and
+text, eight concurrent cold publishers, immutable copying, equal-string
+dictionary lookup and NSError domains with nil or retained userInfo across
+autorelease pools. Two runtime lifetimes check retirement guards, callback
+availability, zero live objects and removal of the constant registration.
+Foundation-key and ISO8601-identifier fixtures cover the existing constant
+storage. Generated C and assembly inspection covers the cell/record/byte layout,
+publication order, allocation behavior and deferred unregister/unmap in the
+fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-internal-exception-checks`. The fresh production link
+probe clears this import and stops before entry at `_NSInvalidArgumentException`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSInvalidArgumentException` now exports an aligned NSString pointer cell
+through Foundation and CoreFoundation. Native measurements confirm the same
+cell under both install names and the exact 26-byte `NSInvalidArgumentException`
+CFString value, distinct from `NSInternalInconsistencyException`. Fortnite's
+consumers at `0x100041044` and `0x10007d1cc` load the cell through the GOT,
+dereference it into x2 and pass the name to NSException calls. This adds the
+name constant; NSException construction, throwing and unwinding remain
+unsupported on Vinix.
+
+The existing exception-name page now publishes both cells and CFSTR records
+under the runtime lock before sealing the page read-only. The original
+internal-inconsistency cell, record and bytes stay at offsets 0, 32 and 64;
+the new name uses offsets 8, 128 and 160 without another page allocation.
+Each exact-name wrapper selects its own cell. Cached lookup allocates no
+objects or temporary strings, and retirement rejects new publication while
+keeping existing cells available to callbacks. Shutdown unregisters both
+strings before unmapping their shared page after pools and Swift contexts drain.
+
+`tests/ios/native-checks.v build-ns-invalid-argument` builds the fixture.
+Six host ASan/UBSan runs pass this fixture, internal inconsistency and
+Foundation keys. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover distinct names, both framework routes, eight
+mixed-name concurrent cold publishers, stable identities, exact cell/record/text
+layout, immutable copying, string equality/hash, dictionary-key use and
+autorelease pools. Two runtime lifetimes check both names during teardown,
+retirement guards, zero live objects and removal of both registrations.
+The internal-inconsistency and Foundation-key fixtures cover existing behavior.
+Generated C and assembly review checks the shared layout, publication and
+two-name retirement in the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-invalid-argument-checks`. The fresh production link
+probe clears this import and stops before entry at `_NSLocaleCountryCode`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSLocaleCountryCode` now resolves through Foundation and CoreFoundation.
+Native measurements show that it and `_kCFLocaleCountryCode` share the same
+aligned pointer cell and the exact 23-byte NSString value
+`kCFLocaleCountryCodeKey` under both install names. Fortnite's consumer at
+`0x10008cb44` loads the cell through GOT slot `0x10dc9b1c8`, dereferences it
+into x26 and passes the key as the x2 argument to subsequent calls.
+
+Both spellings now use one sealed page containing their shared cell, CFSTR
+record and NUL-terminated bytes at offsets 0, 32 and 64. This replaces the
+CF spelling's separate owned-string storage. Publication registers the constant
+under the runtime lock before sealing the page read-only; cached lookup
+allocates nothing. Retirement rejects cold publication while preserving the
+cached key for destructors. Shutdown unregisters and unmaps it after pools
+and Swift contexts drain.
+
+`tests/ios/native-checks.v build-ns-locale-country` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture and both existing locale fixtures;
+the optimized ARM64 guest fixture also passes. Native and runtime checks cover
+eight mixed-alias concurrent readers, both framework routes, exact storage,
+immutable copying, dictionary-key use and autorelease pools. Locale queries
+through `objectForKey:` and `CFLocaleGetValue` agree for alpha/numeric/script
+regions, absent countries and an equal independently allocated key. Repeated
+queries preserve cached result identity without object growth; retained results
+survive locale release. The fixture also checks currentLocale, retirement
+callbacks and two drained runtime lifetimes. Generated C and assembly review
+covers the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-locale-country-checks`. The fresh production link probe
+clears this import and stops before entry at `_NSLocaleCurrencyCode`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSLocaleCurrencyCode` now resolves through Foundation and CoreFoundation.
+Native measurements confirm that both install names and the CF spelling
+`_kCFLocaleCurrencyCode` share one aligned NSString pointer cell containing
+the exact eight-byte value `currency`, distinct from the country key.
+Fortnite's consumers at `0x104844bcc` and `0x107faf664` load GOT slot
+`0x10dc9b1d0`, dereference its pointer into x2 and pass the key to subsequent
+calls. This exports the key; currency-value queries still fail explicitly.
+Native USD/EUR/JPY, regionless and currency-override queries were measured
+as reference behavior, without adding a currency database to Vinix.
+
+The existing locale-key page now publishes both cells under the runtime lock
+before sealing the page read-only. Country storage stays at offsets 0, 32 and
+64; currency uses offsets 8, 128 and 160 without another page allocation.
+Each NS/CF alias pair selects its own cell. Cached lookup allocates nothing,
+retirement preserves existing cells for callbacks, and shutdown unregisters
+both strings before unmapping the page after pools and Swift contexts drain.
+
+`tests/ios/native-checks.v build-ns-locale-currency` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture, country-key fixture and locale
+value fixture. The optimized ARM64 guest fixture also passes. Native and runtime
+checks cover eight mixed-key/alias cold publishers, both framework routes,
+distinct identities, exact storage, immutable copying, CFHash, equal-string
+dictionary lookup and autorelease pools. Currency queries retain their explicit
+diagnostic without object growth or changes to country queries. Two runtime
+lifetimes check both keys during teardown and remove both registrations.
+An initial fixture used the existing unsupported Objective-C `hash` path;
+its host/guest diagnostics, generated C and executables are preserved in
+`objc-hash-diagnostic` within this cohort. The corrected fixture uses CFHash,
+matching the established constant fixtures. Generated C and assembly review
+covers shared publication and retirement in the fixture and production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-locale-currency-checks`. The fresh production link probe
+clears this import and stops before entry at `_NSLocaleCurrencySymbol`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSLocaleCurrencySymbol` now resolves through Foundation and CoreFoundation.
+Native measurements confirm that the NS and CF spellings share the same
+aligned NSString pointer cell under both install names, containing the exact
+26-byte key `kCFLocaleCurrencySymbolKey`. Fortnite's consumer at `0x104844c08`
+loads GOT slot `0x10dc9b1d8`, dereferences it into x2 and passes the key to
+the following call. Currency-code and currency-symbol value queries remain
+explicitly unsupported in the bridge.
+
+The existing locale-key page now contains all three cells and CFSTR records.
+Country and currency-code storage retain their layouts; the symbol key uses
+offsets 16, 192 and 224 for its cell, record and NUL-terminated text.
+Publication registers all three constants under the runtime lock before
+sealing the page read-only. Cached lookup allocates nothing. Retirement keeps
+published cells available to callbacks, and shutdown unregisters all three
+before unmapping the page after pools and Swift contexts drain.
+
+`tests/ios/native-checks.v build-ns-locale-currency-symbol` builds the fixture.
+Six host ASan/UBSan runs pass the new symbol-key fixture and the existing
+currency-code and country-key fixtures. The optimized ARM64 guest fixture
+also passes. Checks cover eight mixed-key/alias concurrent readers, all three
+distinct keys, both framework routes, exact layouts, immutable copying,
+CFHash, equal-string dictionary lookup and autorelease pools. Both currency
+queries retain their explicit diagnostic without object growth or changes
+to country queries. Two runtime lifetimes check three-key callback access
+and removal of all registrations. Generated C and assembly review covers
+the fixture and both production runners.
+
+Native symbol values, including `$`, `€`, `¥`, the generic currency sign and
+a currency override, were measured separately. Repeated native queries can
+return equal strings with different identities; the reference compares their
+contents. The initial pointer-identity diagnostic is preserved under
+`native-query-identity-diagnostic` within this cohort.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-locale-currency-symbol-checks`. The fresh production link
+probe clears this import and stops before entry at `_NSURLCreationDateKey`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSURLCreationDateKey` now resolves through Foundation and CoreFoundation.
+Native measurements confirm that it and `_kCFURLCreationDateKey` share one
+aligned NSString pointer cell under both install names, containing the exact
+20-byte value `NSURLCreationDateKey`. Fortnite's consumer at `0x100087798`
+loads GOT slot `0x10dc9b1e0`, dereferences it into x25 and builds a one-key
+NSArray for a subsequent NSFileManager call. This exports the resource key;
+resource-date lookup remains unsupported.
+
+URL resource keys use a separate sealed page so existing Foundation key
+layouts stay unchanged. Its cell, CFSTR record and NUL-terminated bytes occupy
+offsets 0, 32 and 64. Publication registers the constant under the runtime lock
+before sealing the page read-only; cached lookup allocates nothing. Retirement
+keeps the cell available to callbacks, and shutdown unregisters it before
+unmapping the page after pools and Swift contexts drain.
+
+`tests/ios/native-checks.v build-ns-url-creation-date` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture, Foundation keys and the ISO8601
+calendar-identifier fixture. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover eight mixed-alias readers, both framework
+routes, exact storage, immutable copying, CFHash, equal-string dictionary
+lookup and a retained one-key NSArray surviving pool drain. Two runtime
+lifetimes check isolated storage, retirement guards, callback access, zero
+live objects and removal of the key's registration. Generated C and assembly
+review covers the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-url-creation-date-checks`. The fresh production link probe
+clears this import and stops before entry at `_NSURLFileSizeKey`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSURLFileSizeKey` now resolves through Foundation and CoreFoundation.
+Native measurements confirm that it and `_kCFURLFileSizeKey` share one aligned
+NSString pointer cell under both install names, containing the exact 16-byte
+value `NSURLFileSizeKey`. Its cell and NSString are distinct from the
+creation-date key. Fortnite's consumers at `0x1000909f0` and `0x100090c08`
+load GOT slot `0x10dc9b1e8` and dereference the key. The first builds a two-key
+NSArray alongside `NSURLIsRegularFileKey`; the second passes the key in x3.
+File-size resource lookup remains unsupported.
+
+The shared URL-resource page preserves the creation-date cell, CFSTR record
+and text at offsets 0, 32 and 64, adding file-size storage at 8, 128 and 160.
+Both constants register under the runtime lock before read-only publication.
+Cached lookup allocates nothing, and both registrations remain available to
+shutdown callbacks until pools and Swift contexts drain, then unregister
+before the page is unmapped.
+
+`tests/ios/native-checks.v build-ns-url-file-size` builds the new fixture.
+Six host ASan/UBSan runs pass the new fixture, Foundation keys and the existing
+creation-date fixture. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover eight readers alternating both keys and
+their NS/CF aliases under both framework routes, exact distinct storage,
+immutable copying, CFHash, equal-string dictionary lookup and a retained
+two-key NSArray surviving pool drain. Two runtime lifetimes check isolated
+storage, retirement guards, callback access, zero live objects and removal
+of both registrations. Generated C and assembly review covers the fixture
+and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-url-file-size-checks`. The fresh production link probe
+clears this import and stops before entry at `_NSURLIsExcludedFromBackupKey`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSURLIsExcludedFromBackupKey` now resolves through Foundation and
+CoreFoundation. Native measurements confirm that it and
+`_kCFURLIsExcludedFromBackupKey` share one aligned NSString pointer cell under
+both install names, containing the exact 28-byte value
+`NSURLIsExcludedFromBackupKey`. Its cell and NSString are distinct from the
+creation-date and file-size keys. Four inspected consumers load GOT slot
+`0x10dc9b1f0`: `0x10004d49c` dereferences the key into x25 for a one-key
+NSArray, `0x1006279d4` loads it into x19, and `0x100087ef0` and `0x1006281d0`
+pass it in x3 alongside NSNumber values. Backup-exclusion metadata reads and
+writes remain unsupported.
+
+The shared URL-resource page preserves both existing layouts and adds the
+backup-exclusion cell, CFSTR record and NUL-terminated text at offsets 16,
+192 and 224. All three constants register under the runtime lock before
+read-only publication. Cached lookup allocates nothing. Shutdown keeps all
+three keys available to callbacks until pools and Swift contexts drain,
+then unregisters them before unmapping the page.
+
+`tests/ios/native-checks.v build-ns-url-backup-exclusion` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture and the existing file-size and
+creation-date fixtures. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover eight readers alternating all three keys
+and their NS/CF aliases under both framework routes, exact distinct storage,
+immutable copying, CFHash and equal-string dictionary lookup. Retained
+three-key and backup-only NSArrays and an NSNumber dictionary survive pool
+drain. Two runtime lifetimes check isolated storage, retirement guards,
+callback access, zero live objects and removal of all three registrations.
+Generated C and assembly review covers the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-url-backup-exclusion-checks`. The fresh production link
+probe clears this import and stops before entry at `_NSURLIsRegularFileKey`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSURLIsRegularFileKey` now resolves through Foundation and CoreFoundation.
+Native measurements confirm that it and `_kCFURLIsRegularFileKey` share one
+aligned NSString pointer cell under both install names, containing the exact
+21-byte value `NSURLIsRegularFileKey`. Its cell and NSString are distinct from
+the three existing resource keys. Fortnite's inspected consumer at
+`0x1000909e8` loads GOT slot `0x10dc9b1f8`, dereferences it into x21 and builds
+a two-key NSArray alongside `NSURLFileSizeKey`. File-type resource lookup
+remains unsupported.
+
+The shared URL-resource page preserves all three existing layouts and adds
+the regular-file cell, CFSTR record and NUL-terminated text at offsets 24,
+256 and 288. All four constants register under the runtime lock before
+read-only publication. Cached lookup allocates nothing. Shutdown keeps all
+four keys available to callbacks until pools and Swift contexts drain,
+then unregisters them before unmapping the page.
+
+`tests/ios/native-checks.v build-ns-url-regular-file` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture and the existing backup-exclusion
+and file-size fixtures. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover eight readers alternating all four keys
+and their NS/CF aliases under both framework routes, exact distinct storage,
+immutable copying, CFHash and equal-string dictionary lookup. A retained
+regular-file/file-size NSArray and matching NSNumber dictionary survive pool
+drain, as does a four-key array. Two runtime lifetimes check isolated storage,
+retirement guards, callback access, zero live objects and removal of all four
+registrations. Generated C and assembly review covers the fixture and both
+production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-url-regular-file-checks`. The fresh production link probe
+clears this import and stops before entry at
+`_NSURLVolumeAvailableCapacityForImportantUsageKey`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_NSURLVolumeAvailableCapacityForImportantUsageKey` now resolves through
+Foundation and CoreFoundation. Native measurements confirm that its NS and
+CF aliases share one aligned NSString pointer cell under both install names,
+containing the exact 48-byte value
+`NSURLVolumeAvailableCapacityForImportantUsageKey`. Its cell and NSString
+are distinct from all four existing resource keys. Fortnite's inspected
+consumer at `0x100628934` loads GOT slot `0x10dc9b200`, selects between this
+cell and `NSURLVolumeAvailableCapacityKey`, dereferences the selected cell
+into x3 and passes an output slot in x2. Volume-capacity resource queries
+remain unsupported.
+
+The shared URL-resource page preserves all four existing layouts. The new
+cell occupies unused padding at offset 96, with its CFSTR record and
+NUL-terminated text at offsets 320 and 352. All five constants register under
+the runtime lock before checked read-only publication. Cached lookup uses
+a fixed stack table and allocates nothing. Shutdown keeps all five keys
+available until pools and Swift contexts drain, then unregisters them before
+checked page unmapping.
+
+`tests/ios/native-checks.v build-ns-url-important-capacity` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture and the existing regular-file
+and backup-exclusion fixtures. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover eight readers alternating all five keys and
+their NS/CF aliases under both framework routes, exact distinct storage,
+immutable copying, CFHash and equal-string dictionary lookup. Retained
+five-key and one-key NSArrays and a synthetic capacity dictionary containing
+a 5 GiB + 17 NSNumber survive pool drain. This collection check does not
+query a volume. Two runtime lifetimes check isolated storage, retirement
+guards, callback access, zero live objects and removal of all five
+registrations. Generated C and assembly review covers the fixture and both
+production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-url-important-capacity-checks`. The fresh production
+link probe clears this import and stops before entry at
+`_NSURLVolumeAvailableCapacityKey`. Fortnite remains unplayable; the full
+iOS regression is unpassed.
+
+`_NSURLVolumeAvailableCapacityKey` now resolves through Foundation and
+CoreFoundation. Native measurements confirm that it and
+`_kCFURLVolumeAvailableCapacityKey` share one aligned NSString pointer cell
+under both install names, containing the exact 31-byte value
+`NSURLVolumeAvailableCapacityKey`. Its cell and NSString are distinct from
+all five existing resource keys. Fortnite's inspected consumer at
+`0x10062893c` loads GOT slot `0x10dc9b208` into x9, conditionally selects it
+or the important-usage key cell, then dereferences the selected cell into x3
+and passes an output slot in x2. Volume-capacity queries remain unsupported.
+
+The shared URL-resource page preserves all five existing layouts. The sixth
+cell occupies padding at offset 104, with its CFSTR record and NUL-terminated
+text at offsets 416 and 448. All six constants register under the runtime
+lock before checked read-only publication. Cached lookup allocates nothing.
+Shutdown keeps all six keys available until pools and Swift contexts drain,
+then unregisters them before checked page unmapping.
+
+`tests/ios/native-checks.v build-ns-url-available-capacity` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture and the existing important-usage
+capacity and regular-file fixtures. The optimized ARM64 guest fixture also
+passes. Native and runtime checks cover eight readers alternating all six
+keys and both aliases through both frameworks, exact distinct storage,
+immutable copying, CFHash and equal-string dictionary lookup. A retained
+six-key NSArray, paired-capacity NSArray and synthetic capacity dictionary
+preserve distinct 5 GiB + 17 and 7 GiB + 29 NSNumber values across pool drain;
+this collection check does not query a volume. Two runtime lifetimes check
+isolated storage, retirement guards, callback access, zero live objects and
+removal of all six registrations. Generated C and assembly review covers
+the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-url-available-capacity-checks`. The fresh production
+link probe clears this import and stops before entry at
+`_NSURLVolumeTotalCapacityKey`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+`_NSURLVolumeTotalCapacityKey` now resolves through Foundation and
+CoreFoundation. Native measurements confirm that it and
+`_kCFURLVolumeTotalCapacityKey` share one aligned NSString pointer cell under
+both install names, containing the exact 27-byte value
+`NSURLVolumeTotalCapacityKey`. Its cell and NSString are distinct from all
+six earlier resource keys. Fortnite's inspected consumer at `0x100628978`
+loads GOT slot `0x10dc9b210`, dereferences it into x3, passes an output slot
+in x2 and stores the returned object through x20. Volume-capacity queries
+remain unsupported.
+
+The shared URL-resource page preserves all six existing layouts. The seventh
+cell occupies padding at offset 112, with its CFSTR record and NUL-terminated
+text at offsets 480 and 512. All seven constants register under the runtime
+lock before checked read-only publication. Cached lookup allocates nothing.
+Shutdown keeps all seven keys available until pools and Swift contexts
+drain, then unregisters them before checked page unmapping.
+
+`tests/ios/native-checks.v build-ns-url-total-capacity` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture and the existing available and
+important-usage capacity fixtures. The optimized ARM64 guest fixture also
+passes. Native and runtime checks cover eight readers alternating all seven
+keys and both aliases through both frameworks, exact distinct storage,
+immutable copying, CFHash and equal-string dictionary lookup. A retained
+seven-key NSArray, three-capacity NSArray and synthetic dictionary preserve
+distinct 5 GiB + 17, 7 GiB + 29 and 11 GiB + 43 NSNumber values across pool
+drain; this collection check does not query a volume. Two runtime lifetimes
+check isolated storage, retirement guards, callback access, zero live
+objects and removal of all seven registrations. Generated C and assembly
+review covers the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-url-total-capacity-checks`. The fresh production link
+probe clears this import and stops before entry at
+`_OBJC_EHTYPE_$_NSException`. Objective-C exception handling remains
+unsupported. Fortnite remains unplayable; the full iOS regression is unpassed.
+
+`_OBJC_EHTYPE_$_NSException` now resolves through Foundation and
+CoreFoundation as a direct 24-byte type-info record. Native measurement and
+[Apple's runtime ABI](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-exception.mm)
+confirm its vtable, C string name and Class fields at offsets 0, 8 and 16.
+Its shared vtable has the native zero/id type-info prefix, no-op destructors
+and a catch-matching callback. An NSObject-derived NSException descriptor
+supplies the Class identity; NSException API methods remain unsupported.
+The inspected IPA contains 22 PC-relative exception-table references to
+GOT slot `0x10dc9b218`.
+
+One locked page holds the record, internal id type-info, fixed vtable and
+names. Publication checks read-only protection before exposing the page.
+Lookup and matching allocate nothing and create no Objective-C ownership.
+Foreign exception types leave the pointer untouched; matching Objective-C
+types adjust it before the class check, including failed and missing-class
+matches. Internal id matching also accepts nil. The page stays available
+through pool and Swift callbacks, then unmaps before class descriptors retire.
+This metadata support does not implement throwing or stack unwinding.
+
+`tests/ios/native-checks.v build-ns-exception-type` builds the fixture.
+Six host ASan/UBSan runs pass the new fixture and existing total-capacity and
+invalid-argument fixtures. The optimized ARM64 guest fixture also passes.
+Native and runtime checks cover eight concurrent cold readers, shared
+storage, base/subclass/unrelated and foreign types, weak/nil cases,
+three- and four-argument callback ABIs, no-op destructors, unchanged live
+object counts, isolated exception-name storage, retirement guards, pool
+callback access and two drained/unmapped lifetimes. Generated C and assembly
+review covers the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-exception-type-checks`, including native measurements,
+the Apple source snapshot and preserved helper diagnostics. The fresh
+production probe clears the type-info and class imports, then stops before
+entry at `___NSArray0__`. Fortnite remains unplayable; the full iOS regression
+is unpassed.
+
+`___NSArray0__` now resolves through Foundation and CoreFoundation as a
+read-only pointer cell containing an immutable empty NSArray. The separately
+exported `___NSArray0__struct` returns the object directly. Native measurement
+confirms these distinct addresses, a zero CF/NSArray count, nil first object,
+immortal caller ownership and identity-preserving immutable copies. Mutable
+copies are independent owned NSMutableArrays. The IPA has 12 inspected
+consumer sites for GOT slot `0x10dc9b220`, including a second pointer load
+and Objective-C retain calls.
+
+The cache owns one ordinary array object and one sealed cell page. Lookup
+publishes under the Objective-C initialization lock. Generic collection
+mutators reject the singleton, while empty enumeration leaves output buffers
+untouched. The cell and object survive pool and Swift context destruction;
+shutdown removes caller immortality, releases the cache reference, and checks
+the cell unmap before class descriptors retire.
+
+`tests/ios/native-checks.v build-ns-empty-array` builds the new fixture. Six
+host ASan/UBSan runs pass the empty-array, exception-type and constant-dictionary
+fixtures. The optimized ARM64 guest fixture also passes. Checks cover eight
+concurrent cold readers, both export forms and framework routes, copy and
+equality/hash behavior, independent mutable copies, guarded empty enumeration,
+seven rejected mutations, retained array/dictionary owners across pool drain,
+weak loads, retirement guards, pool callback access and two drained/unmapped
+runtime lifetimes with no remaining Objective-C objects. Generated C and
+assembly review covers the fixture and both production runners.
+
+Evidence and seven generated-C/executable pairs are retained under
+`build/ios/fortnite/ns-empty-array-checks`, including native measurements and
+the preserved build and review helper diagnostics. The fresh production probe clears
+the empty-array import, then stops before entry at `_$s7SwiftUI13_VStackLayoutVMn`. Fortnite
+remains unplayable; the full iOS regression is unpassed.
+
+Inspection identifies the next import as a Swift nominal type descriptor:
+one indirect context reference in `__TEXT,__swift5_typeref` at `0x10dc7fd3f`
+uses relative field `0x10dc7fd40` to reach GOT cell `0x10dc9b2b8`. The encoding
+agrees with the [Swift mangling ABI](https://github.com/swiftlang/swift/blob/main/docs/ABI/Mangling.rst),
+whose source snapshot is retained with the evidence. SwiftUI remains unsupported.
+
+`_$s7SwiftUI13_VStackLayoutVMn` now resolves only through SwiftUI.framework
+to a distinct nongeneric nominal descriptor with a complete metadata accessor.
+Native measurement and the SDK's frozen `_VStackLayout` declaration establish
+an alignment word at offset 0 and optional CGFloat spacing at offset 8. The
+value occupies 17 bytes with a 24-byte stride, POD/inline flags and no extra
+inhabitants. The supplied IPA references the descriptor indirectly through
+GOT cell `0x10dc9b2b8` from its Swift type-reference record at `0x10dc7fd3f`.
+
+One locked allocation holds an RX accessor page and a read-only metadata page.
+Every request returns the same complete metadata in x0/x1 while preserving
+x20/x21. Copy/take/assignment witnesses transfer exactly 17 bytes and preserve
+all seven padding bytes. Destruction is a no-op. Single-payload enum witnesses
+preserve the native 17-byte payload, optional tag byte and UInt32 wrapping
+behavior, including nonzero tag writes with a zero empty-case population.
+No Objective-C ownership or dependent metadata cache is created by lookup.
+Owned Swift buffers, heap objects and Array metadata retire before this arena
+unmaps. Cached lookup remains available to earlier teardown callbacks.
+
+`tests/ios/native-checks.v build-swiftui-vstack` builds the fixture. Six host
+ASan/UBSan runs pass the new fixture, metadata-state lookup and Dispatch QoS
+regressions. The optimized ARM64 guest fixture also passes. Native/runtime
+checks cover eight cold readers, exact field offsets and layout, guarded
+17-byte copies and unused inputs, enum populations and wrapping, indirect
+symbolic type lookup, typed Array ownership, RX/RO protection, retirement
+guards, callback access and two drained/unmapped lifetimes. Generated C and
+assembly review covers the fixture and both production runners.
+
+Evidence, native measurements, SDK/ABI source snapshots, preserved fixture
+compiler diagnostics and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/swiftui-vstack-checks`. The fresh production probe clears
+the descriptor import and stops before entry at `_$s7SwiftUI13_VariadicViewO4TreeVMn`. Field reflection,
+public VStack accessors/constructors, layout/view conformances and SwiftUI
+rendering remain unsupported. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+The next required descriptor has two inspected indirect context references
+in `__TEXT,__swift5_typeref`, at `0x10dc7fce8` and `0x10dc7fd38`, whose relative
+fields at `0x10dc7fce9` and `0x10dc7fd39` target GOT cell `0x10dc9b2c0`.
+No application code was executed during this inspection.
+
+`_$s7SwiftUI13_VariadicViewO4TreeVMn` now resolves only through SwiftUI.framework
+as a descriptor export for `SwiftUI._VariadicView.Tree`. Native measurement
+and the SDK establish a generic struct with two type parameters, three key
+arguments and the requirement `Root: _VariadicView_Root`. The nested enum,
+module and protocol descriptor preserve that identity. The struct describes
+two fields and a field-offset vector at metadata word five. The supplied IPA
+has two indirect context references to this descriptor through GOT cell
+`0x10dc9b2c0`, as recorded above.
+
+This export supplies identity and the generic signature. Generic instantiation,
+field reflection, the Root getter/default implementation and conformances
+remain unsupported. There is no metadata cache or instantiation pattern.
+The generic flag remains set, so type-name lookup rejects the descriptor
+before reading its accessor. A direct accessor call reports
+`iOS: SwiftUI Tree generic instantiation is not implemented` without inspecting
+the supplied generic arguments. Native specialization measurements demonstrate
+why this cannot reuse a fixed value layout: with `_VStackLayout` as Root,
+Int Content gives a 32-byte value, while String Content gives a 40-byte value
+with different ownership flags.
+
+A locked allocation publishes one RX diagnostic-accessor page and one
+read-only descriptor page. Lookup creates no Swift values, Objective-C owners
+or dependent metadata caches. Cached descriptor access remains available to
+teardown callbacks; the arena unmaps after owners and Array metadata drain.
+`tests/ios/native-checks.v build-swiftui-tree` builds the fixture. Six host
+ASan/UBSan runs pass Tree, metadata-state lookup and VStack checks with normal
+and deterministic hashing. The optimized ARM64 fixture checks eight cold
+readers, the native generic signature, direct/indirect symbolic rejection,
+guarded name boundaries and arguments, explicit accessor diagnostics,
+RX/RO protection, callback access and two drained/unmapped lifetimes.
+
+Evidence, native specialization measurements, SDK/Swift ABI snapshots and
+seven generated-C/executable pairs are retained in
+`build/ios/fortnite/swiftui-tree-checks`. The guest fixture, production probe
+and both import audits pass their scoped checks. Generated C and assembly
+review covers the fixture and both production runners. Fortnite now stops
+before entry at `_$s7SwiftUI13_ZStackLayoutVMn`; it remains unplayable, and
+the full iOS regression is unpassed.
+
+The next required descriptor has one indirect context reference in
+`__TEXT,__swift5_typeref` at `0x10dc7fcef`. Its relative field at `0x10dc7fcf0`
+targets GOT cell `0x10dc9b2c8` in `__DATA_CONST,__got`. This inspection executes
+no application code.
+
+`_$s7SwiftUI13_ZStackLayoutVMn` now resolves only through SwiftUI.framework
+to a distinct nongeneric descriptor and complete metadata accessor. Native
+measurements and the SDK's frozen declarations establish one Alignment field
+at offset 0, containing horizontal and vertical alignment words. The value
+is 16 bytes with a 16-byte stride, POD/inline flags and no extra inhabitants.
+The supplied IPA references this descriptor through the GOT cell above.
+
+A locked arena holds a sealed RX accessor page and read-only metadata page.
+All requests return canonical complete metadata in x0/x1 while preserving
+x20/x21. Five copy/take/assignment witnesses transfer exactly 16 bytes;
+destruction is a no-op. Single-payload enum witnesses preserve native payload
+and tag-byte behavior, including nonzero case writes with zero empty cases
+and UInt32 wrapping. Lookup creates no Objective-C owners or dependent
+metadata caches. Swift owners and Array metadata drain before the arena
+unmaps; earlier teardown callbacks can still resolve its cached descriptor.
+
+`tests/ios/native-checks.v build-swiftui-zstack` builds the fixture. Six host
+ASan/UBSan runs pass ZStack, metadata-state lookup and VStack checks with
+normal and deterministic hashing. Checks cover eight cold readers, native
+layout/field metadata, guarded value copies and unused inputs, adjacent
+canaries, enum populations and wrapping, indirect symbolic lookup, typed
+Array ownership, sealed pages, retirement guards, callback access and two
+drained/unmapped lifetimes. Field reflection, public ZStack accessors and
+constructors, layout/view conformances and SwiftUI rendering remain unsupported.
+
+The optimized ARM64 guest fixture and the scoped production probe/import
+audits pass. Generated C and assembly review covers the fixture and both
+production runners. Evidence, native measurements, SDK/Swift ABI snapshots,
+the preserved evidence-tool ordering diagnostic and seven generated-C/executable
+pairs are retained in `build/ios/fortnite/swiftui-zstack-checks`. The fresh
+startup probe clears this descriptor import, then stops before entry at
+`_$s7SwiftUI14_OpacityEffectVAA12ViewModifierAAWP`. Fortnite remains unplayable;
+the full iOS regression is unpassed.
+
+The next import is a protocol witness table, as identified by the retained
+Swift mangling ABI. Its GOT cell is `0x10dc9b2d0`; the inspected load at
+`0x1015c1304` places the pointer in an argument buffer before the call to
+`_swift_getWitnessTable` at `0x1015c1314`. This path also references the
+ModifiedContent View conformance descriptor. One consumer site was inspected
+without executing application code.
+
+`_$s7SwiftUI14_OpacityEffectVAA12ViewModifierAAWP` now resolves only through
+SwiftUI.framework to a concrete, unconditional witness table.
+`_$s7SwiftUI14_OpacityEffectVMn` resolves to its nominal descriptor in the same
+arena. The ViewModifier declaration preserves its native signature, and the
+table has six requirement slots. The opacity value has complete nongeneric
+metadata with one Double field, an
+8-byte POD size/stride and zero extra inhabitants. The associated Body slot
+holds direct private metadata for Swift.Never: enum kind, zero cases, size
+zero, stride one, POD/inline flags and no extra inhabitants. Its zero-size
+witnesses share the measured Void operations without constructing a Void
+metadata arena. Field reflection and public accessor/protocol exports
+remain unsupported.
+
+The read-only table supports ordinary static `_swift_getWitnessTable` and
+direct `_swift_getAssociatedTypeWitness` lookup. Native Swift also reads the
+compatibility table without modifying its associated-type slot. Four graph
+requirements report an explicit unsupported-operation error. The associated
+Never:View requirement uses native tagged `FF 07` relative-accessor data and
+reports its own unsupported-conformance error. No incomplete View table or
+rendering output is returned. The View and ViewModifier declarations retain
+their Self.Body:View signatures; graph/default implementations and rendering
+remain unsupported.
+
+One locked allocation publishes RX metadata/diagnostic thunks and read-only
+descriptors, value witnesses and the conformance table. Lookup creates no
+Objective-C owner or dependent metadata arena. Swift owners and Array metadata
+drain before unmapping; earlier teardown callbacks can read the cached table
+and associated Body metadata.
+
+`tests/ios/native-checks.v build-swiftui-opacity` builds the fixture. Six host
+ASan/UBSan runs pass opacity, static witness lookup and CocoaError protocol
+checks with normal and deterministic hashing. Checks include eight cold
+readers, native protocol/layout comparisons, signed native static lookup,
+native direct associated-type lookup, guarded POD/zero-size copies and enum
+width boundaries/UInt32 wrapping, complete accessor context preservation,
+all graph/associated-conformance error paths, typed Array storage without
+constructing Never values, sealed pages, callbacks and two drained lifetimes.
+
+The optimized ARM64 fixture, startup probe and both production import audits
+pass. Generated C and assembly review covers the host/guest fixture and both
+production runners. Native measurements, SDK/Swift ABI snapshots, six sanitizer
+logs, four final guest runs and seven generated-C/executable pairs are retained
+in `build/ios/fortnite/swiftui-opacity-checks`. The earlier witness-only checkpoint
+and both fixture compiler diagnostics are preserved separately. The final probe
+clears both opacity imports, then stops before entry at
+`_$s7SwiftUI15ModifiedContentVMn`. Fortnite remains unplayable; the full iOS
+regression is unpassed.
+
+The next import is a generic nominal descriptor. Its GOT cell is
+`0x10dc9b2e0` in `__DATA_CONST,__got`; nine indirect context symbolic references
+in `__TEXT,__swift5_typeref` point to that cell. This inspection executed no
+application code and does not establish ModifiedContent support.
+
+`_$s7SwiftUI15ModifiedContentVMn` now resolves only through SwiftUI.framework
+to a distinct, sealed nominal descriptor. Native measurements and the SDK's
+frozen declaration establish a generic struct in the SwiftUI module with two
+unconstrained type parameters, two key arguments and no generic requirements.
+It declares two fields with their offset vector at metadata word four.
+Native Int/Int, String/Int and Never/String specializations confirm that
+layout, ownership flags and extra inhabitants depend on those arguments.
+
+This export supplies nominal identity and the generic signature. It supplies
+no complete specialization metadata, value witnesses, field reflection,
+instantiation cache/pattern or View conformance. The descriptor's generic bit
+makes direct and indirect symbolic lookup reject before reading its accessor
+or protected generic arguments. Calling its diagnostic accessor reports
+`iOS: SwiftUI ModifiedContent generic instantiation is not implemented`.
+
+One locked allocation publishes an RX diagnostic page and read-only descriptor
+page. Construction creates no Swift/Objective-C owners or dependent metadata
+arenas. Earlier teardown callbacks can still resolve the cached descriptor;
+Swift owners and Array metadata drain before unmapping it.
+
+`tests/ios/native-checks.v build-swiftui-modified` builds the fixture. Six host
+ASan/UBSan runs pass ModifiedContent, mangled-state lookup and Tree checks with
+normal and deterministic hashing. Checks include eight cold readers, the native
+generic signature, direct/indirect bounded symbolic references, protected
+arguments, four diagnostic requests, sealed pages, retirement guards, callback
+access and two drained/unmapped lifetimes. Generic instantiation and SwiftUI
+rendering remain unsupported.
+
+The optimized ARM64 fixture, startup probe and both production import audits
+pass. Generated C and assembly review covers the host/guest fixture and both
+production runners. Native measurements, SDK/Swift ABI snapshots, six sanitizer
+logs, four guest runs and seven generated-C/executable pairs are retained in
+`build/ios/fortnite/swiftui-modified-checks`, along with the corrected fixture
+generator's original diagnostic. The fresh probe clears the nominal descriptor
+import, then stops before entry at
+`_$s7SwiftUI15ModifiedContentVyxq_GAA4ViewA2aERzAA0E8ModifierR_rlMc`,
+ModifiedContent's conditional View conformance. Fortnite remains unplayable;
+the full iOS regression is unpassed.
+
+The next import's GOT cell is `0x10dc9b2e8`. Loads at `0x1015c1310` and
+`0x1015c1784` pass the descriptor as x0 to `_swift_getWitnessTable` at
+`0x1015c1314` and `0x1015c1788`, with specialization metadata in x1 and
+conditional witness arguments in x2. Two consumer sites were inspected without
+executing application code.
+
+`_$s7SwiftUI15ModifiedContentVyxq_GAA4ViewA2aERzAA0E8ModifierR_rlMc`
+now resolves only through SwiftUI.framework to a conditional conformance
+descriptor in the existing ModifiedContent arena. Its type reference points
+to the same canonical nominal descriptor. Native measurements establish flags
+`0x20200` and two key protocol requirements: `Content: View` (`x`) and
+`Modifier: ViewModifier` (`q_`). Both protocol declarations retain six
+requirements and their `Self.Body: View` signatures.
+
+The native record has a seven-word pattern and two private conditional witness
+arguments. The compatibility declaration retains the conditional/generic flags
+and private-argument count, supplies no pattern and uses zero copied words with
+a diagnostic instantiator. The retained Swift runtime source permits this
+instantiator-only profile and a null out-of-line cache. No writable cache or
+complete witness table is supplied. Ordinary `_swift_getWitnessTable` continues
+to reject conditional/generic records before reading metadata, arguments or
+the pattern; directly calling the instantiator reports
+`iOS: SwiftUI ModifiedContent View witness instantiation is not implemented`.
+
+The shared allocation remains RX/RO and creates no dependent metadata arena
+or Swift/Objective-C owner. Cached declaration lookup remains available during
+earlier teardown callbacks; owners and Array metadata drain before unmapping.
+`tests/ios/native-checks.v build-swiftui-modified-view` builds the fixture.
+Six host ASan/UBSan runs pass conditional conformance, existing witness lookup
+and nominal ModifiedContent checks with normal and deterministic hashing.
+They cover native requirements/control measurements, eight cold readers,
+canonical shared identity, sealed pages, protected unused arguments, both
+explicit error paths, callbacks and two drained/unmapped lifetimes. Witness
+specialization, generic ModifiedContent instantiation and rendering remain
+unsupported.
+
+The optimized ARM64 fixture, startup probe and both production import audits
+pass. Generated C and assembly review covers the host/guest fixture and both
+production runners. Native measurements, SDK/Swift ABI/runtime snapshots,
+six sanitizer logs, four guest runs and seven generated-C/executable pairs are
+retained in `build/ios/fortnite/swiftui-modified-view-checks`. The fresh probe
+clears the conformance descriptor import, then stops before entry at
+`_$s7SwiftUI18LocalizedStringKeyV13stringLiteralACSS_tcfC`.
+Fortnite remains unplayable; the full iOS regression is unpassed.
+
+The next initializer's GOT cell is `0x10dc9b2f0`, with stub `0x10c63aa7c`
+and branch forwarder `0x107c28eb4`. Calls at `0x1015bfd40` and `0x1015c019c`
+follow Swift string-literal construction and feed the resulting key into a
+SwiftUI Text initializer. The two call sites and one forwarder were inspected
+without executing application code.
+
+`_$s7SwiftUI18LocalizedStringKeyV13stringLiteralACSS_tcfC` now resolves only
+through SwiftUI.framework to the literal-key initializer. Native measurements
+show a 32-byte frozen value with String at offset 0, `hasFormatting` at 16 and
+an arguments Array at 24. The initializer consumes the String by transferring
+its two words unchanged, returns false for formatting, and supplies the
+canonical immortal empty Array. Unicode, embedded NULs and percent characters
+are preserved without parsing or rewriting.
+
+Swift returns this value in x0/x1/w2/x3. The sealed ARM64 entry leaves the
+input String in x0/x1, clears x2 and loads the existing empty Array into x3.
+It reads no input bytes, indirect-result storage or Swift context registers;
+there is no per-call allocation, retain or release. Owned String reference
+counts remain unchanged until the returned key is destroyed. Cold lookup
+creates one RX page and reuses the existing empty Array singleton. Earlier
+teardown callbacks can still use the cached entry; shutdown retires the entry
+before unmapping that singleton.
+
+`tests/ios/native-checks.v build-swiftui-localized-key` builds the fixture.
+Six host ASan/UBSan runs pass literal keys, String interpolation and empty
+Arrays with normal and deterministic hashing. The native comparison covers
+direct result registers, preserved x20/x21, protected x8 and opaque input
+spans, inline/immortal/owned String forms,
+unchanged alias reference counts and canonical empty arguments. Checks also
+cover eight cold readers, 600 released owned calls, sealed pages, callbacks
+and two drained/unmapped lifetimes. Localized lookup, key interpolation,
+public key metadata and Text rendering remain unsupported.
+
+The optimized ARM64 fixture, launch probe and both import audits pass their
+expected checks. The probe clears the literal-key import and stops before
+entry at `_$s7SwiftUI19HorizontalAlignmentV6centerACvgZ`; its child exit status
+remains 1. Generated C and ARM64 disassembly review covers both fixture
+variants and both production runners, including unchanged String ownership
+and entry retirement before empty Array storage. Seven executable/generated-C
+artifact pairs, native results and sanitizer/guest logs are archived under
+`build/ios/fortnite/swiftui-localized-key-checks`. A full-disk interruption
+affected static-audit archive construction before boot; its partial archive
+hash, failed integrity check and recovery diagnostics are retained. Only
+that phase was rerun, and its recovered run passed.
+
+The next required import's actual main-image fixup is at `0x10dc9b2f8`, with
+stub `0x10c63aa88`, forwarder `0x107c28ed8` and one inspected call at
+`0x1015c0564`. The call wrapper returns the horizontal alignment getter's
+result directly. These two consumer/forwarder sites were inspected without
+executing application code; that probe still stopped before application entry.
+
+`_$s7SwiftUI19HorizontalAlignmentV6centerACvgZ` and
+`_$s7SwiftUI9AlignmentV6centerACvgZ` now resolve only through SwiftUI.framework.
+Native SDK declarations and three fresh native processes confirm that
+HorizontalAlignment is an 8-byte POD identity and Alignment is a 16-byte POD
+pair with fields at 0 and 8. The getters return directly in x0 and x0/x1,
+preserve x20/x21 and never use indirect-result memory.
+
+AlignmentKey is an integer identity, not a pointer. Native center keys differ
+with initialization order, while bit 0 remains 0 for horizontal and 1 for
+vertical. The compatibility runtime reserves identities 1 and 2 for the two
+center axes (encoded as 2 and 5); both getters share the horizontal key.
+Future alignment registrations must allocate distinct identities starting
+at 3. These getters have no allocation, ARC, metadata or runtime storage
+dependency, so their values and entry points survive runtime shutdown.
+Custom alignment IDs, public alignment metadata and layout remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-alignment` builds the center fixture.
+Six host ASan/UBSan runs pass center getters, ZStack metadata and localized
+string keys with normal and deterministic hashing. The center checks cover
+16,384 concurrent iterations, exact framework routing, protected x8,
+preserved Swift context registers, component consistency and two drained
+lifetimes, including callbacks and post-shutdown calls. The initial fixture
+assumed a retirement flag was already set before deallocation callbacks;
+that setup was corrected and the failing source, executable/generated C and
+logs are retained with hashes in `callback-fixture-diagnostic` under
+`build/ios/fortnite/swiftui-alignment-checks`.
+
+The optimized ARM64 center fixture, launch probe and both import audits pass
+their expected checks. Both center imports are cleared; the probe remains
+before entry with child status 1 at
+`_$s7SwiftUI19UIViewRepresentablePAAE09dismantleC0_11coordinatory0C4TypeQz_11CoordinatorQztFZ`.
+Its actual main-image fixup is `0x10dc9b300`, stub `0x10c63aa94`, forwarder
+`0x107c28e30` and call `0x1015be63c`. The call wrapper forwards the default
+UIViewRepresentable teardown operation and returns. These two consumer/forwarder
+sites were inspected without executing application code; that probe stopped
+at the teardown import. Generated C and ARM64 disassembly review covers both
+fixture variants and both production runners. Seven executable/generated-C
+artifact pairs and the joined validation logs are archived in the same cohort.
+
+`_$s7SwiftUI19UIViewRepresentablePAAE09dismantleC0_11coordinatory0C4TypeQz_11CoordinatorQztFZ`
+now resolves through SwiftUI.framework to the empty protocol-extension default.
+The hook borrows its view and generic coordinator; it accesses no arguments,
+metadata, witness tables, indirect results or Swift context storage. It performs
+no allocation, ARC, custom witness dispatch or view-hierarchy removal and has
+no runtime storage dependency.
+
+Apple's [default-hook declaration](https://developer.apple.com/documentation/swiftui/uiviewrepresentable/dismantleuiview(_:coordinator:)-94s0o)
+and the installed Mac Catalyst SDK establish its signature. The pinned
+[OpenSwiftUI default](https://github.com/OpenSwiftUIProject/OpenSwiftUI/blob/da91cd90de7285da284e785d9b0376bf78ae5809/Sources/OpenSwiftUI/Integration/Representable/UIKit/UIViewRepresentable.swift#L217)
+corroborates an empty hook. The available native NSViewRepresentable counterpart
+is a single `ret` and passes 4,000 calls with protected borrowed arguments.
+The UIKit symbol is unavailable in this Mac runtime; UIKit execution was not
+measured natively. The compatibility implementation follows the empty-default
+contract, with that native-comparison limit recorded in the evidence.
+
+`tests/ios/native-checks.v build-swiftui-dismantle` builds the fixture. Six
+host ASan/UBSan runs pass the default hook, center alignments and Objective-C
+supplied storage with normal and deterministic hashing. The hook checks
+16,384 concurrent calls, 600 borrowed ownership cycles with unchanged aliases,
+read-only coordinator storage at a protected boundary, untouched x8 and
+preserved x0-x3/x20/x21, callbacks and two drained runtime lifetimes.
+
+Evidence is retained under `build/ios/fortnite/swiftui-dismantle-checks`.
+The storage regression resumed after restoring its archived native C++
+fixture into this cohort; its initial missing-library failure is preserved
+in `regression-fixture-diagnostic`. A source-fetch HTTP 403 and the verified
+snapshot recovery are recorded separately. Build and VM staging use an owned
+4 GiB RAM volume after host disk exhaustion; completion verifies retained
+files on the repository filesystem before detaching it.
+
+The launch probe clears the default teardown import and remains before entry,
+with child exit status 1, at
+`_$s7SwiftUI19UIViewRepresentablePAAE12sizeThatFits_6uiView7contextSo6CGSizeVSgAA08ProposedI4SizeV_0C4TypeQzAA0cD7ContextVyxGtF`.
+Its main-image fixup is `0x10dc9b308`, stub `0x10c63aaa0`, forwarder
+`0x107c28e3c` and call `0x1015be6d0`. The wrapper forwards the proposal and
+normalizes the optional result's tag in w2 after the call. These two
+consumer/forwarder sites were inspected without executing application code;
+the sizing default remains unsupported.
+
+The optimized ARM64 fixture, launch probe and both import audits pass their
+expected checks. Generated C and ARM64 disassembly review covers both fixture
+variants and both production runners, including the empty body and direct
+return without argument or ownership operations. Seven executable/generated-C
+artifact pairs, native/source evidence and joined logs are retained.
+
+`_$s7SwiftUI19UIViewRepresentablePAAE12sizeThatFits_6uiView7contextSo6CGSizeVSgAA08ProposedI4SizeV_0C4TypeQzAA0cD7ContextVyxGtF`
+now resolves through SwiftUI.framework to the protocol-extension default that
+returns no preferred size. Its V ARM64 entry returns `Optional<CGSize>.none`
+in x0/x1/w2 (0/0/1); a C aggregate return would use indirect result storage.
+The entry accesses no proposal, view, context, metadata or witness storage,
+performs no ownership operations or allocation, and remains callable after
+runtime shutdown. Custom sizing and layout remain unsupported.
+
+The installed UIKit and AppKit SDK declarations establish the optional-size
+signature. The pinned
+[OpenSwiftUI default](https://github.com/OpenSwiftUIProject/OpenSwiftUI/blob/da91cd90de7285da284e785d9b0376bf78ae5809/Sources/OpenSwiftUI/Integration/Representable/UIKit/UIViewRepresentable.swift#L247)
+returns nil. The native NSViewRepresentable counterpart returns the measured
+0/0/1 registers in four instructions and passes 2,048 protected-argument calls.
+UIKit execution remains unverified: this Mac has no available native UIKit
+entry for the comparison. Native and SDK/source evidence is retained under
+`build/ios/fortnite/swiftui-sizing-checks`.
+
+`tests/ios/native-checks.v build-swiftui-sizing` builds the fixture. Six host
+ASan/UBSan runs pass sizing, dismantling and center alignments with normal
+and deterministic hashing. The sizing fixture also passes in the optimized
+ARM64 guest: 16,384 concurrent calls, 600 borrowed ownership cycles with
+unchanged Objective-C/Swift aliases, nil/finite/infinite/NaN proposals,
+read-only context storage at a protected boundary, protected x8, preserved
+x3-x7/x20/x21/d0/d1, callbacks and two drained runtime lifetimes.
+
+The launch probe clears the sizing default and stops before entry, with child
+status 1, at
+`_$s7SwiftUI19UIViewRepresentablePAAE13_makeViewList4view6inputsAA01_fG7OutputsVAA11_GraphValueVyxG_AA01_fG6InputsVtFZ`.
+Its main-image fixup is `0x10dc9b310`, stub `0x10c63aaac`, forwarder
+`0x107c28e54` and call `0x1015be814`. The wrapper obtains a protocol witness
+table and forwards indirect view-list result storage in x8. These two
+consumer/forwarder sites were inspected without executing application code;
+view-list graph construction remains unsupported.
+
+The sizing fixture, launch probe and both import audits pass their expected
+checks. Generated C and ARM64 disassembly review covers both fixture variants
+and both production runners, including the three result-register writes and
+direct return without ownership or memory access. Seven executable/generated-C
+artifact pairs and joined validation logs are archived in the same cohort.
+
+`_$s7SwiftUI19UIViewRepresentablePAAE13_makeViewList4view6inputsAA01_fG7OutputsVAA11_GraphValueVyxG_AA01_fG6InputsVtFZ`
+now has a diagnostic binding. Calling it terminates with
+`iOS: SwiftUI UIViewRepresentable view-list graph construction is not implemented`.
+The handler accesses no graph, inputs, metadata, witness, Swift self or indirect
+result storage. It never returns an uninitialized `_ViewListOutputs` and requires
+no runtime-owned storage. Unary graph construction remains unsupported.
+
+The installed UIKit/AppKit SDK declarations and pinned OpenSwiftUI source
+identify this as a unary graph-list factory. The native AppKit wrapper loads
+the inherited View witness from x3+8 and tail-calls framework machinery.
+Only its instructions were inspected; no native graph factory was executed,
+and the UIKit entry is unavailable on this Mac. Evidence is retained under
+`build/ios/fortnite/swiftui-view-list-checks`.
+
+`tests/ios/native-checks.v build-swiftui-view-list` builds the fixture. Six
+host ASan/UBSan runs pass the diagnostic entry, sizing default and Tree
+descriptor with normal and deterministic hashing. Each diagnostic fixture
+run checks 20 child calls that exit 1 with the exact error, protected input
+and x8 pointers, unchanged shared read-only/writable result pages next to a
+protected boundary, 16,384 concurrent resolutions, exact framework routing,
+callback access and two drained runtime lifetimes.
+
+The optimized ARM64 guest fixture passes the same diagnostic and shared-result
+checks. The launch probe binds `_makeViewList` and remains before application
+entry, with child status 1, at
+`_$s7SwiftUI19UIViewRepresentablePAAE14_layoutOptionsyAA013_PlatformViewd6LayoutF0V0C4TypeQzFZ`.
+Its main-image fixup is `0x10dc9b318`, stub `0x10c63aab8`, forwarder
+`0x107c28e4c` and call `0x1015be728`. These two consumer/forwarder sites were
+inspected without executing application code.
+
+The fixture, launch probe and both audits pass their expected checks. Generated
+C and ARM64 disassembly review covers both fixture variants and both production
+runners: a terminal diagnostic with no graph/result/context dereference or
+ownership operations. Seven executable/generated-C artifact pairs and joined
+validation logs are archived in the same cohort.
+
+`_$s7SwiftUI19UIViewRepresentablePAAE14_layoutOptionsyAA013_PlatformViewd6LayoutF0V0C4TypeQzFZ`
+now resolves to the default option-producing hook. It initializes `rawValue`
+to 1 in eight bytes of caller-owned storage supplied through x8. The current
+resilient option set stores one Int; its Swift return ABI remains indirect.
+The V ARM64 entry has no borrowed-view, metadata or witness accesses, ownership
+operations, allocation or runtime-storage dependency. Custom options and
+SwiftUI layout/graph execution remain unsupported.
+
+Native metadata reports POD size/stride/alignment 8/8/8. The option-set
+constructor and getter round-trip rawValue 1 across 1,024 protected-boundary
+cases, and 1,024 native AppKit defaults also return 1 through x8. Only the
+eight result bytes change; protected borrowed arguments remain untouched and
+x20/x21 are preserved. The installed UIKit declaration confirms the resilient
+Int-backed type; the pinned OpenSwiftUI default corroborates rawValue 1.
+UIKit execution remains unverified because
+its entry is unavailable on this Mac. Evidence is retained under
+`build/ios/fortnite/swiftui-layout-options-checks`.
+
+The dedicated fixture passes normal and deterministic ASan/UBSan host runs
+with its result hook compiled at O2, plus the optimized ARM64 guest run. It
+checks both protected result-page boundaries, 16,384 concurrent calls across
+eight readers and two runtime lifetimes, 600 borrowed UIView ownership cycles,
+a read-only provider next to an inaccessible page, protected metadata/witness
+arguments, exact framework routing, and calls during and after teardown.
+Only the eight result bytes change; x0-x3/x8/x20/x21 remain intact. Host sizing
+and view-list diagnostic regressions also pass normal and deterministic
+sanitizer runs. The public test driver accepts the new fixture and rejects
+an unknown fixture.
+
+The fresh launch probe links past the layout-options import and exits 1
+before application entry at the next required SwiftUI import,
+`_$s7SwiftUI19UIViewRepresentablePAAE19_identifiedViewTree2inAA011_IdentifiedfG0O0C4TypeQz_tF`.
+Its main-image fixup is `0x10dc9b320`, stub `0x10c63aac4`, forwarder
+`0x107c28e38` and call `0x1015be664`. These two consumer/forwarder sites were
+inspected without executing application code. Fortnite remains unplayable.
+
+The fixture, launch probe and both import audits pass their expected checks.
+Generated C and ARM64 disassembly review of both fixture variants and both
+production runners confirms a constant eight-byte store through x8 and return,
+with no frame, borrowed argument/context reads, ownership, allocation or
+runtime-storage dependency. Seven executable/generated-C artifact pairs and
+joined validation logs are archived in the same cohort.
+
+`_$s7SwiftUI19UIViewRepresentablePAAE19_identifiedViewTree2inAA011_IdentifiedfG0O0C4TypeQz_tF`
+now has an exact SwiftUI diagnostic binding. Calling it terminates with
+`iOS: SwiftUI UIViewRepresentable identified-view tree result is not implemented`
+before accessing the borrowed view, Swift self, metadata, witnesses or x8
+result storage. This does not construct an empty tree. The resilient enum's
+metadata and value witnesses, nonempty trees and application rendering remain
+unsupported.
+
+The pinned UIKit default returns `.empty`, but that semantic value is not a
+zero pointer. Native AppKit metadata reports non-POD size/stride/alignment
+169/176/8; the default obtains enum metadata and constructs an indirect result
+through x8. Its current representation has 168 zero payload bytes followed
+by tag 2. UIKit execution and layout remain unverified: this Mac cannot load
+the Catalyst SwiftUI entry into the host process. The compatibility hook does
+not copy this platform-specific layout. Evidence is retained under
+`build/ios/fortnite/swiftui-identified-tree-checks`.
+
+The native default passes 1,024 cases with result storage at both protected
+page boundaries. Only those 169 bytes change, the native enum tag getter
+reports 2, and the native destroy witness accepts each result. Inaccessible
+borrowed arguments are untouched and x20/x21 remain intact. These are AppKit
+observations; they do not verify UIKit's private enum layout.
+
+The diagnostic fixture passes normal and deterministic ASan/UBSan host runs
+with the primary hook compiled at O2, and an optimized ARM64 guest run. Each
+primary run checks 20 child calls exiting 1 with the exact enum diagnostic,
+inaccessible provider/metadata/witness/self/x8 arguments, and unchanged shared
+read-only and writable result pages next to an inaccessible page. Eight
+readers perform 16,384 concurrent resolutions across two drained runtime
+lifetimes, including teardown callbacks. Layout-options and view-list host
+regressions also pass normal and deterministic sanitizer runs. The public
+driver selects the new fixture and rejects an unknown fixture.
+
+The fresh launch probe links past this diagnostic binding and exits 1 before
+application entry at the next required SwiftUI import,
+`_$s7SwiftUI19UIViewRepresentablePAAE21_overrideLayoutTraits_3foryAA01_fG0Vz_0C4TypeQztF`.
+Its main-image fixup is `0x10dc9b328`, stub `0x10c63aad0`, forwarder
+`0x107c28e44` and call `0x1015be700`. These two consumer/forwarder sites were
+inspected without executing application code. This does not establish that
+the identified-tree method can execute; Fortnite remains unplayable.
+
+The fixture, launch probe and both audits pass their expected checks.
+Generated C and ARM64 disassembly review covers both fixture variants and
+both production runners: a terminal diagnostic with no provider/result/context
+dereference or ownership operations. Seven executable/generated-C artifact
+pairs and joined validation logs are archived in the same cohort.
+
+`_$s7SwiftUI19UIViewRepresentablePAAE21_overrideLayoutTraits_3foryAA01_fG0Vz_0C4TypeQztF`
+now resolves to the extension's empty default. It leaves caller-owned inout
+traits unchanged and does not access the borrowed view, Swift self, generic
+metadata/witnesses or x8 storage. Custom trait overrides, layout and graph
+execution remain unsupported.
+
+The native AppKit counterpart is a single `ret`. It passes 4,000 calls with
+protected arguments and 2,048 read-only/writable inout boundary calls with
+every byte unchanged and x0-x3/x8/x20/x21 preserved. The installed SDK declares
+the traits argument inout, and the pinned OpenSwiftUI UIKit source marks this
+default as empty. UIKit execution remains unverified because its entry is
+unavailable on this Mac. Evidence is retained under
+`build/ios/fortnite/swiftui-layout-traits-checks`.
+
+The dedicated fixture passes normal and deterministic ASan/UBSan host runs
+with its default hook compiled at O2, plus the optimized ARM64 guest run. It
+checks 16,384 concurrent calls across eight readers and two runtime lifetimes,
+600 ownership cycles with unchanged ObjC/Swift aliases, unchanged read-only
+and writable traits buffers at both protected boundaries, read-only Swift
+self storage, protected metadata/witness/x8 arguments, exact framework
+routing, and calls during and after teardown. Host layout-options and
+identified-tree diagnostic regressions also pass normal and deterministic
+sanitizer runs. The public driver selects the new fixture and rejects an
+unknown fixture.
+
+The fresh launch probe links past the layout-traits default and exits 1
+before application entry at the next required SwiftUI import,
+`_$s7SwiftUI19UIViewRepresentablePAAE21_overrideSizeThatFits_2in6uiViewySo6CGSizeVz_AA09_ProposedF0V0C4TypeQztF`.
+Its main-image fixup is `0x10dc9b330`, stub `0x10c63aadc`, forwarder
+`0x107c28e40` and call `0x1015be6ec`. These two consumer/forwarder sites were
+inspected without executing application code. Fortnite remains unplayable.
+
+The layout-traits fixture, launch probe and both audits pass their expected
+checks. Generated C and ARM64 disassembly review of both fixture variants and
+both production runners confirms an empty hook and one `ret`, with no
+argument/result/context access, ownership operations, allocation, runtime
+storage or custom witness dispatch. Seven executable/generated-C artifact
+pairs and joined validation logs are archived in the same cohort.
+
+`_$s7SwiftUI19UIViewRepresentablePAAE21_overrideSizeThatFits_2in6uiViewySo6CGSizeVz_AA09_ProposedF0V0C4TypeQztF`
+now resolves to the extension's empty default. It preserves every bit of the
+caller-owned inout CGSize and does not access the proposal, view, Swift self,
+generic metadata/witnesses or x8 storage. Custom sizing overrides, layout and
+graph execution remain unsupported.
+
+The native AppKit counterpart is a single `ret`. It passes 4,000 protected
+proposal calls and 2,048 read-only/writable CGSize boundary calls, including
+NaNs, negative zero and infinities. Size bits and x0-x8/x20/x21/d0/d1 remain
+unchanged. The SDK declares an inout CGSize and a proposed-size value; the
+pinned OpenSwiftUI UIKit source marks this default as empty. UIKit execution
+remains unverified because its entry is unavailable on this Mac. Evidence is
+retained under `build/ios/fortnite/swiftui-size-override-checks`.
+
+The dedicated fixture passes normal and deterministic ASan/UBSan host runs
+with its default compiled at O2, plus the optimized ARM64 guest run. It checks
+16,384 concurrent calls across eight readers and two runtime lifetimes, 600
+ownership cycles with unchanged ObjC/Swift aliases, unchanged read-only and
+writable CGSize bits at both protected boundaries, nil/finite/infinite/NaN
+proposals, read-only Swift self storage, protected metadata/witness/x8,
+x0-x8/x20/x21/d0/d1, exact framework routing, and calls during and after
+teardown. Layout-traits and sizeThatFits host regressions also pass normal
+and deterministic sanitizer runs.
+
+The initial public-driver check used a fixture table compiled before
+registration; that failure is archived under `public-route-stale-build`.
+Rebuilding from the registered source passes both valid and unknown fixture
+routing checks. The build helper now requires registration before compiling
+this driver.
+
+The fresh launch probe links past the size-override default and exits 1
+before application entry at the next required SwiftUI import,
+`_$s7SwiftUI19UIViewRepresentablePAAE24_modifyBridgedViewInputsyyAA01_gH0VzFZ`.
+Its main-image fixup is `0x10dc9b338`, stub `0x10c63aae8`, forwarder
+`0x107c28e48` and call `0x1015be714`. These two consumer/forwarder sites were
+inspected without executing application code. Fortnite remains unplayable.
+
+The size-override fixture, launch probe and both audits pass their expected
+checks. Generated C and ARM64 disassembly review of both fixture variants and
+both production runners confirms an empty hook and one `ret`, with no
+argument/result/context access, ownership operations, allocation, runtime
+storage or custom witness dispatch. Seven executable/generated-C artifact
+pairs and joined validation logs are archived in the same cohort.
+
+The required SwiftUI import
+`_$s7SwiftUI19UIViewRepresentablePAAE24_modifyBridgedViewInputsyyAA01_gH0VzFZ`
+now resolves to the static extension's empty default. It leaves the opaque
+inout `_ViewInputs` storage unchanged and does not read metadata, witnesses,
+Swift contexts or x8 storage. It does not dispatch custom representable
+implementations or assume a private `_ViewInputs` layout.
+
+The native AppKit counterpart is a single `ret`. It passes 4,000 calls with
+protected arguments and 2,048 calls with read-only/writable input buffers at
+both protected boundaries, preserving every buffer byte and
+x0-x3/x8/x20/x21. The SDK declares the static inout method; the pinned
+OpenSwiftUI UIKit source supplies an empty body. Native UIKit execution
+remains unverified because its entry is unavailable on this Mac. Evidence is
+retained under `build/ios/fortnite/swiftui-bridged-inputs-checks`.
+
+The dedicated fixture passes normal and deterministic ASan/UBSan host runs
+with the default compiled at O2, plus the optimized ARM64 guest run. It
+checks 16,384 concurrent calls across eight readers and two runtime
+lifetimes, 600 ownership cycles with unchanged ObjC/Swift aliases,
+read-only/writable input bytes at both protected boundaries, protected
+metadata/witness/x8/contexts, x0-x3/x8/x20/x21, exact framework routing, and
+calls during and after teardown. The borrowed payload is a test fixture,
+not a model of private `_ViewInputs`. Layout-traits and size-override host
+regressions also pass normal and deterministic sanitizer runs. Public
+fixture routing passes after registration, including rejection of an
+unknown fixture.
+
+The fresh launch probe links past the bridged-inputs default and exits 1
+before application entry at the next required import,
+`_$s7SwiftUI19UIViewRepresentablePAAE4bodys5NeverOvg`. Its main-image fixup is
+`0x10dc9b340`, stub `0x10c63aaf4`, forwarder `0x107c28e5c` and call
+`0x1015be858`, followed by a `brk`. These two consumer/forwarder sites were
+inspected without executing application code. Fortnite remains unplayable.
+
+The bridged-inputs fixture, launch probe and both audits pass their expected
+checks. Generated C and ARM64 disassembly review of both fixture variants
+and both production runners confirms an empty hook and one `ret`, with no
+input/result/context access, ownership operations, allocation, runtime
+storage or custom witness dispatch. Seven executable/generated-C artifact
+pairs and joined validation logs are archived in the same cohort.
+
+The required SwiftUI import
+`_$s7SwiftUI19UIViewRepresentablePAAE4bodys5NeverOvg` now resolves to the
+primitive `Body == Never` getter. Calling it writes a fixed diagnostic and
+traps with `BRK`/`SIGTRAP`, including when stderr is closed. It does not
+return a value or access caller metadata, witnesses, Swift self or x8.
+Native generic type-name reporting and crash annotations remain unsupported.
+
+The native AppKit counterpart projects the inherited View witness from
+x1, calls its failure path and has a trailing `brk #1`. Two child probes
+deliver `SIGTRAP`, with normal and closed stderr. They use valid native
+EmptyView metadata/View conformance in a read-only surrogate witness
+projection, with protected self/x8; no NSView object is constructed. The
+normal diagnostic says the body must not be called on EmptyView. The SDK
+declares a `Swift.Never` result, and the pinned OpenSwiftUI UIKit source
+calls `bodyError()`. Native UIKit execution remains unverified because its
+entry is unavailable on this Mac. Evidence is retained under
+`build/ios/fortnite/swiftui-body-checks`.
+
+The dedicated fixture passes normal and deterministic ASan/UBSan host runs
+with the getter compiled at O2, plus the optimized ARM64 guest run. Each
+run checks 24 child calls that deliver `SIGTRAP` without returning, the
+fixed diagnostic and closed-stderr path, nil/protected/invalid metadata,
+witnesses and self, protected x8, and unchanged shared read-only/writable
+pages at a protected boundary. Eight readers complete 16,384 concurrent
+resolutions across two runtime lifetimes, with exact framework routing,
+teardown callbacks and calls after shutdown. Bridged-inputs and view-list
+host regressions also pass normal and deterministic sanitizer runs. Public
+fixture routing passes, including rejection of an unknown fixture.
+
+The fresh launch probe links past the body getter and exits 1 before
+application entry at the next required SwiftUI import,
+`_$s7SwiftUI19UIViewRepresentablePAAE9_makeView4view6inputsAA01_F7OutputsVAA11_GraphValueVyxG_AA01_F6InputsVtFZ`.
+Its main-image fixup is `0x10dc9b348`, stub `0x10c63ab00`, forwarder
+`0x107c28e50` and call `0x1015be768`. These two consumer/forwarder sites were
+inspected without executing application code. SwiftUI graph construction
+remains unsupported, and Fortnite remains unplayable.
+
+The body fixture, launch probe and both audits pass their expected checks.
+Generated C and ARM64 disassembly review of both fixture variants and both
+production runners confirms a fixed diagnostic followed by `brk #1`, with
+no return, caller-storage access, ownership operations, allocation or
+runtime storage. Seven executable/generated-C artifact pairs and joined
+validation logs are archived in the same cohort.
+
+The required SwiftUI import
+`_$s7SwiftUI19UIViewRepresentablePAAE9_makeView4view6inputsAA01_F7OutputsVAA11_GraphValueVyxG_AA01_F6InputsVtFZ`
+now has a diagnostic binding. Calling it exits 1 with an explicit view graph
+construction diagnostic before reading graph/inputs/metadata/witness/self
+or writing caller-owned x8 storage. It does not create a view, synthesize
+`_ViewOutputs`, dispatch a custom witness or provide rendering.
+
+The native AppKit factory requests PlatformViewRepresentableAdaptor
+metadata and preserves the indirect result pointer from x8 for downstream
+calls. Its instructions were inspected through its authenticated return;
+the factory was not executed. The SDK declares graph-value/input arguments
+and a `_ViewOutputs` result. The pinned OpenSwiftUI UIKit source conditionally
+checks the representable's value type and delegates to the platform adapter's
+factory. The platform adapter, graph engine and resilient result remain
+unsupported. Native UIKit execution is unverified because its entry is
+unavailable on this Mac. Evidence is retained under
+`build/ios/fortnite/swiftui-view-factory-checks`.
+
+The dedicated fixture passes normal and deterministic ASan/UBSan host runs
+with the entry compiled at O2, plus the optimized ARM64 guest run. It checks
+32 child calls that exit 1 with the graph diagnostic, protected graph,
+inputs, metadata, witnesses, self and x8, and unchanged shared read-only and
+writable result pages at both protected boundaries. These fixture offsets
+do not specify the private `_ViewOutputs` layout. Eight readers complete
+16,384 concurrent resolutions across two runtime lifetimes, with exact
+framework routing, teardown callbacks and calls after shutdown. The body
+and view-list host regressions also pass normal and deterministic sanitizer
+runs. Public fixture routing passes, including rejection of an unknown
+fixture.
+
+The fresh launch probe links past the factory binding and exits 1 before
+application entry at the required `Coordinator == Void` default,
+`_$s7SwiftUI19UIViewRepresentablePAAyt11CoordinatorRtzrlE04makeE0yyF`.
+Its main-image fixup is `0x10dc9b350`, stub `0x10c63ab0c`, forwarder
+`0x107c28e34` and call `0x1015be650`. These two consumer/forwarder sites were
+inspected without executing application code. The `_makeView` binding
+remains diagnostic-only, and Fortnite remains unplayable.
+
+The view-factory fixture, launch probe and both audits pass their expected
+checks. Generated C and ARM64 disassembly review of both fixture variants
+and both production runners confirms a terminal diagnostic, with no return,
+graph/input/result/context dereference, ownership operations or runtime
+storage. Seven executable/generated-C artifact pairs and joined validation
+logs are archived in the same cohort.
+
+The required SwiftUI import
+`_$s7SwiftUI19UIViewRepresentablePAAyt11CoordinatorRtzrlE04makeE0yyF`
+now resolves to the empty `makeCoordinator()` default constrained to
+`Coordinator == Void`. Swift Void has no result bytes: the entry creates no
+coordinator, leaves result storage unchanged and does not access borrowed
+self, metadata or witnesses. Custom coordinator implementations and SwiftUI
+graph execution remain unsupported.
+
+The native AppKit counterpart is a single `ret`. It passes 4,000 calls with
+protected arguments and 2,048 read-only/writable self/result boundary calls,
+preserving every byte and x0-x3/x8/x20/x21. The SDK declares the Void
+constraint and result, and the pinned OpenSwiftUI UIKit source supplies an
+empty default. Native UIKit execution remains unverified because its entry
+is unavailable on this Mac. Evidence is retained under
+`build/ios/fortnite/swiftui-coordinator-checks`.
+
+The dedicated fixture passes normal and deterministic ASan/UBSan host runs
+with its default compiled at O2, plus the optimized ARM64 guest run. It
+checks 16,384 concurrent calls across eight readers and two runtime
+lifetimes, 600 ownership cycles with unchanged ObjC/Swift aliases,
+read-only/writable borrowed self and result boundary storage, aliased
+self/result pointers, protected metadata/witness/x8/contexts,
+x0-x3/x8/x20/x21, exact framework routing, and calls during and after
+teardown. The borrowed payload exercises ownership without assuming a
+representable self layout. Bridged-inputs and view-factory host regressions
+also pass normal and deterministic sanitizer runs. Public fixture routing
+passes, including rejection of an unknown fixture.
+
+The fresh launch probe links past the coordinator default and exits 1
+before application entry at the required SwiftUI nominal type descriptor,
+`_$s7SwiftUI32_EnvironmentKeyTransformModifierVMn`. Its main-image fixup is
+`0x10dc9b358` in `__DATA_CONST,__got`; ten indirect context symbolic
+references in `__TEXT,__swift5_typeref` point to this cell. These data
+references were inspected without executing application code. SwiftUI graph
+construction remains unsupported, and Fortnite remains unplayable.
+
+The coordinator fixture, launch probe and both audits pass their expected
+checks. Generated C and ARM64 disassembly review of both fixture variants
+and both production runners confirms an empty hook and one `ret`, with no
+argument/result/context access, ownership operations, allocation, runtime
+storage or custom witness dispatch. Seven executable/generated-C artifact
+pairs and joined validation logs are archived in the same cohort.
+
+The required nominal descriptor
+`_$s7SwiftUI32_EnvironmentKeyTransformModifierVMn` now resolves through
+SwiftUI.framework to sealed type identity and its generic signature. Native
+measurement establishes a unique generic struct in module SwiftUI, one
+unconstrained type parameter, one key argument, no generic requirements and
+two fields with their offset vector at metadata word three. The frozen SDK
+declaration stores a writable environment key path and a transform closure.
+Native Int, String and Never specializations each have size/stride 24, field
+offsets 0/8, ownership flags `0x10007` and 2,147,483,647 extra inhabitants.
+
+This binding supplies no complete specialization metadata, value witnesses,
+field reflection, instantiation cache/pattern or ViewModifier conformance.
+Key-path and closure ownership and environment execution remain unsupported.
+The generic bit makes direct and indirect symbolic lookup reject before
+reading the accessor or protected generic arguments. Calling the diagnostic
+accessor reports
+`iOS: SwiftUI environment transform generic instantiation is not implemented`.
+
+One locked allocation publishes an RX diagnostic page and a read-only
+descriptor page. Cached identity remains available during earlier teardown
+callbacks; Swift owners and Array metadata drain before both pages unmap.
+Retirement guards prevent late allocation and resolution after unmapping.
+
+`tests/ios/native-checks.v build-swiftui-environment-transform` selects the
+fixture. Normal and deterministic ASan/UBSan host runs pass the new fixture
+with its entry compiled at O2, plus ModifiedContent and mangled-state lookup
+regressions. The optimized ARM64 fixture checks eight cold readers, native
+signature and page permissions, bounded direct/indirect symbolic references,
+protected arguments, four diagnostic requests per lifetime, callback access
+and two drained/unmapped lifetimes. The launch probe and both import audits
+also pass their expected checks. Generated C and ARM64 review covers locked
+publication, generic rejection and retirement in both fixture variants and
+both production runners. Seven executable/generated-C pairs, native
+measurements, SDK/Swift ABI snapshots and joined logs are retained under
+`build/ios/fortnite/swiftui-environment-transform-checks`.
+
+The fresh launch probe clears the nominal descriptor and exits 1 before
+application entry at its ViewModifier conformance descriptor,
+`_$s7SwiftUI32_EnvironmentKeyTransformModifierVyxGAA04ViewF0AAMc`.
+Its GOT cell is `0x10dc9b360`. The load at `0x1015c17f8` passes this descriptor
+as x0 to `_swift_getWitnessTable` at `0x1015c17fc`, with metadata in x1 and
+witness arguments in x2. This consumer was inspected without executing app
+code. Generic instantiation and SwiftUI graph execution remain unsupported,
+and Fortnite remains unplayable.
+
+The required conformance descriptor
+`_$s7SwiftUI32_EnvironmentKeyTransformModifierVyxGAA04ViewF0AAMc` now resolves
+in the existing environment-transform arena, pointing to the same nominal
+descriptor. Native inspection establishes an unconditional conformance with
+flags zero and a fixed seven-word witness table, despite the nominal type
+being generic. There are no conditional requirements, generic instantiator
+or instantiation cache. Both private protocol declarations retain the native
+six-slot ViewModifier/View signatures and `Self.Body: View` requirement.
+
+The fixed table supports ordinary `_swift_getWitnessTable` lookup without
+reading the unused metadata or argument pointers. Its four graph entries
+exit 1 with an explicit environment-transform diagnostic. Its tagged
+associated-conformance record reports that `Never: View` is unsupported.
+The associated-type slot contains the tagged mangled name `s5NeverO`; the
+current decoder rejects it explicitly before publishing metadata or writing
+the read-only table. Complete modifier specialization, Never resolution and
+environment graph execution remain unsupported.
+
+Native associated-type lookup on a valid Int specialization returns the
+canonical Swift.Never metadata. No native environment values or graph
+operations were executed. The binding introduces no dependent metadata
+arenas or Swift/Objective-C owners; its table, protocols and diagnostics
+share the existing sealed pages and their quiescent retirement.
+
+`tests/ios/native-checks.v build-swiftui-environment-conformance` selects the
+fixture. Normal and deterministic ASan/UBSan host runs pass the new fixture
+with its entry compiled at O2, plus environment-transform nominal and opacity
+regressions. The optimized ARM64 fixture checks eight cold readers and
+concurrent static-table lookup, shared identity, exact protocol signatures,
+protected unused metadata/arguments, twelve terminal graph/body/type child
+probes, tagged data, page permissions, callback access and two drained/unmapped
+lifetimes. The launch probe and both audits also pass their expected checks.
+Generated C and ARM64 review covers both fixture variants and both production
+runners. Seven executable/generated-C pairs, native measurements, SDK/Swift
+ABI snapshots and joined logs are retained under
+`build/ios/fortnite/swiftui-environment-conformance-checks`.
+
+The fresh probe clears the conformance descriptor and exits 1 before
+application entry at `_$s7SwiftUI4FontV5titleACvgZ` (`SwiftUI.Font.title`).
+Its main-image fixup is `0x10dc9b368`, stub `0x10c63ab18`, forwarder
+`0x107c28ebc` and call `0x1015bfdc4`; the caller stores the x0 result at
+`0x1015bfddc`. These two consumer/forwarder sites were inspected without
+executing application code. Fortnite remains unplayable.
+
+The next cohort binds `_$s7SwiftUI4FontV5titleACvgZ` only to an explicit
+`Font.title` provider-construction diagnostic. It terminates with exit 1 if
+called, before returning a Font or touching caller arguments, metadata,
+witnesses, context or result storage. Resolution accepts only the exact
+symbol in the SwiftUI framework. It creates no provider or runtime owner.
+
+The frozen SDK declares Font as an `AnyFontBox` provider reference. Typed
+native host measurements show an eight-byte value, stride eight, returned in
+x0 with one owned reference. Eight simultaneous calls share a cached
+`SwiftUI.FontBox<SwiftUI.Font.TextStyleProvider>` whose native instance size is
+33 bytes; each getter and retain increments its strong count once, and each
+release balances that reference. This measures host ABI/ownership only.
+Provider construction, its virtual methods and font rendering remain
+unsupported; the diagnostic does not fabricate a FontBox.
+
+`tests/ios/native-checks.v build-swiftui-font-title` selects the fixture.
+Normal and deterministic ASan/UBSan runs pass it with its entry compiled at
+O2, plus environment-conformance and view-factory regressions. The optimized
+ARM64 fixture passes eight readers and 16,384 concurrent resolutions, 32
+terminal child calls, protected unused arguments/metadata/witness/self/x8,
+unchanged shared read-only/writable result pages at both guarded boundaries,
+exact routing, callback access and two drained runtime lifetimes. Generated
+C and ARM64 review covers both fixture variants and both production runners.
+Seven executable/generated-C pairs, native measurements, SDK/Swift ABI
+snapshots and joined logs are retained under
+`build/ios/fortnite/swiftui-font-title-checks`.
+
+The fresh probe resolves the title import and exits 1 before application
+entry at `_$s7SwiftUI4TextV4boldACyF` (`SwiftUI.Text.bold()`). Its main-image
+fixup is `0x10dc9b370`, stub `0x10c63ab24`, forwarder `0x107c28ec4` and call
+`0x1015bfea0`. The caller supplies Text in x0-x3 and stores the result
+fields at `0x1015bfeb8` through `0x1015bfec4`. These two consumer/forwarder
+sites were inspected without executing application code. Font creation,
+SwiftUI graph execution and application rendering remain unsupported;
+Fortnite remains unplayable.
+
+The next cohort binds `_$s7SwiftUI4TextV4boldACyF` only to an explicit
+`Text.bold` modifier-construction diagnostic. It exits 1 if called, before
+reading Text storage, modifiers, metadata, witnesses, contexts or result
+storage. Resolution accepts only the exact symbol in the SwiftUI framework;
+it allocates no Text, modifier array or boxed modifier.
+
+The frozen SDK declares Text's storage and `[Text.Modifier]` fields. Typed
+native host metadata and ARM64 calls measure Text size/stride 32 and
+Text.Modifier size 9, stride 16. For short, heap-backed and Unicode verbatim
+strings, `bold()` borrows unchanged storage and returns owned Text in x0-x3.
+Its one-element array contains a boxed `SwiftUI.BoldTextModifier`, native
+instance size 17. Calling it twice creates a separate two-element array and
+leaves the input array intact. Native value-witness destruction balances the
+result arrays and String references. These measurements do not implement
+Text modifier ownership, boxed virtual methods or text rendering.
+
+`tests/ios/native-checks.v build-swiftui-text-bold` selects the fixture.
+Normal and deterministic ASan/UBSan runs pass it with its entry compiled at
+O2, plus Font.title and LocalizedStringKey regressions. The optimized ARM64
+fixture passes eight readers and 16,384 concurrent resolutions, 32 terminal
+child calls, protected unused arguments/metadata/witness/self/x8, unchanged shared
+read-only/writable result pages at both guarded boundaries, exact routing,
+callback access and two drained runtime lifetimes. Generated C and ARM64
+review covers both fixture variants and both production runners. The cohort
+retains seven executable/generated-C pairs, native measurements, SDK/Swift ABI
+snapshots and joined logs under `build/ios/fortnite/swiftui-text-bold-checks`.
+
+The fresh probe resolves the bold import and exits 1 before application
+entry at `_$s7SwiftUI4TextV4fontyAcA4FontVSgF` (`SwiftUI.Text.font(_:)`). Its
+main-image fixup is `0x10dc9b378`, stub `0x10c63ab30`, forwarder `0x107c28ec0`
+and call `0x1015bfe08`. The caller supplies the optional Font in x0 and Text
+in x1-x4, stores the result fields at `0x1015bfe14` through `0x1015bfe20`,
+then releases the Font provider at `0x1015bfe44`. These two consumer/forwarder
+sites were inspected without executing application code. Text modifier
+construction, SwiftUI graph execution and rendering remain unsupported;
+Fortnite remains unplayable.
+
+The next cohort binds `_$s7SwiftUI4TextV4fontyAcA4FontVSgF` only to an explicit
+`Text.font` modifier-construction diagnostic. It exits 1 if called, before
+reading the optional Font, Text storage/modifiers, contexts or result
+storage. Only the exact symbol in the SwiftUI framework resolves. It creates
+no Text, modifier array or provider owner.
+
+Typed native host metadata and ARM64 calls confirm Text size/stride 32,
+Text.Modifier size 9/stride 16 and Font size 8. For nil and `.title` arguments
+across short, heap-backed and Unicode verbatim strings, `font(_:)` borrows
+the Font in x0 and Text in x1-x4 and returns owned Text in x0-x3. Nil adds a
+one-element font modifier with a nil payload; `.title` adds the same modifier
+with its provider pointer and retains that provider. Applying it twice
+creates a separate two-element array without changing the input array.
+Native value-witness destruction balances String, array and provider
+ownership. These measurements do not implement modifier arrays, Font
+provider ownership or text rendering in the runner.
+
+`tests/ios/native-checks.v build-swiftui-text-font` selects the fixture.
+Normal and deterministic ASan/UBSan runs pass it with its entry compiled at
+O2, plus Text.bold and Font.title regressions. The optimized ARM64 fixture
+passes eight readers and 16,384 concurrent resolutions, 32 terminal child
+calls, nil/protected/invalid Font values, protected Text/self/x8, unchanged
+shared read-only/writable result pages at both guarded boundaries, exact
+routing, callback access and two drained runtime lifetimes. Generated C and
+ARM64 review covers both fixture variants and both production runners. Seven
+executable/generated-C pairs, native measurements, SDK/Swift ABI snapshots
+and joined logs are retained under `build/ios/fortnite/swiftui-text-font-checks`.
+
+The fresh probe resolves the font import and exits 1 before application
+entry at `_$s7SwiftUI4TextVAA4ViewAAWP` (Text's View protocol witness table).
+Its main-image fixup is `0x10dc9b380` with no call stub. The consumers at
+`0x1015bff3c` and `0x1015c023c` load the table into x2 at `0x1015bff40` and
+`0x1015c0240`, then save it for later generic calls alongside Text metadata.
+These two data consumers were inspected without executing application code.
+Text modifier construction, provider ownership, SwiftUI graph execution and
+rendering remain unsupported; Fortnite remains unplayable.
+
+The Text View witness-table slice binds `_$s7SwiftUI4TextVAA4ViewAAWP` as
+sealed data. Its seven-word table links an unconditional conformance with
+native flags 8 through an indirect Text descriptor. The View signature has
+one Body requirement and six witness slots. Tagged associated-conformance
+data and an indirect symbolic reference identify Body as `Swift.Never`.
+Typed native runtime measurement confirms that Body resolves to canonical
+Never without constructing Text values or executing graph operations.
+
+Private Text and Never declarations carry diagnostic metadata accessors;
+Text metadata and value witnesses remain unsupported. Graph witnesses and
+the Body conformance accessor also stop with explicit diagnostics. The
+arena publishes only after sealing separate RX/RO pages, stays available to
+shutdown callbacks and unmaps after Swift owners and collections drain.
+
+`tests/ios/native-checks.v build-swiftui-text-view` selects the fixture.
+Normal and deterministic ASan/UBSan runs cover it at O2 plus Text.font and
+environment-conformance regressions. The optimized ARM64 fixture checks
+eight cold readers, native signatures and tagged data, protected unused
+arguments, 16 terminal graph/body/metadata child probes, exact routing,
+callback access and two drained/unmapped runtime lifetimes. Native
+measurements, SDK/Swift ABI snapshots, seven executable/generated-C pairs
+and joined logs are retained in `build/ios/fortnite/swiftui-text-view-checks`.
+
+The fresh launch resolves the witness-table import and exits 1 during
+linking at `_$s7SwiftUI4TextVMn`, Text's nominal descriptor. Its GOT fixup is
+`0x10dc9b388`; ten indirect symbolic references in `__swift5_typeref` were
+verified without executing application code. Text metadata, value ownership,
+SwiftUI graph execution and rendering remain unsupported; Fortnite remains
+unplayable.
+
+The Text nominal slice binds `_$s7SwiftUI4TextVMn` to the same sealed
+descriptor referenced by its View conformance. Native inspection confirms a
+nongeneric SwiftUI.Text struct, two fields and an offset vector at word two.
+Six native metadata requests return the same complete Text metadata; its
+32-byte size/stride and non-POD value witnesses require real ownership for
+the reflected `storage` and `modifiers` fields. The runner supplies descriptor
+identity with a diagnostic accessor; Text metadata, value ownership, field
+reflection and rendering remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-text-nominal` selects the fixture.
+Normal and deterministic ASan/UBSan runs cover it at O2 plus Text View and
+Text.font regressions. The optimized ARM64 fixture checks eight cold
+readers, shared descriptor/table identity, sealed RX/RO storage, 32 terminal
+direct/indirect symbolic-reference and metadata-access probes, bounded names
+at a protected boundary, protected contexts/arguments, exact routing,
+shutdown callbacks and two drained/unmapped lifetimes. Native measurements,
+SDK/Swift ABI snapshots, seven executable/generated-C pairs and joined logs
+are retained in `build/ios/fortnite/swiftui-text-nominal-checks`.
+
+The fresh probe resolves the descriptor import and exits 1 during linking at
+`_$s7SwiftUI4TextVN`, Text's type metadata. Its GOT fixup is `0x10dc9b390`
+with no call stub. The consumers at `0x1015bff30` and `0x1015c0230` load it
+into x1 and save it alongside the View witness table for generic calls.
+These two data consumers were inspected without executing application code.
+Text ownership and SwiftUI graph execution remain unsupported; Fortnite
+remains unplayable.
+
+The Text metadata slice binds `_$s7SwiftUI4TextVN` to complete struct metadata
+sharing the existing Text nominal descriptor and View table. Its measured
+layout is size/stride 32, field offsets 0/24, flags `0x02030007` and
+`INT32_MAX` extra inhabitants. The nominal accessor returns the same complete
+metadata through direct and bounded symbolic lookups.
+
+All eight value witnesses now handle Text's frozen String/object storage
+and modifier-array owner. Copying retains both owners; takes transfer them.
+Copies and assignments preserve the seven padding bytes after the storage
+tag, while initializing take copies all 32 bytes. Native deallocation probes
+confirm that assignments publish new storage before releasing its previous
+owner, then update the array. Registered non-inline boxes support shared
+buffer copies and Any, validate their provenance and destroy Text before
+deallocating the box. Field reflection, Text construction, graph execution
+and rendering remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-text-metadata` selects the fixture.
+Normal and deterministic ASan/UBSan runs cover its O2 entry plus nominal and
+View regressions. Native and runner fixtures compare all String/object
+assignment combinations, callback-visible state and reference counts,
+read-only source spans, padding, guarded enum boundaries, shared boxes and
+Any. A heap String shared by Text storage and a typed array verifies final
+element destruction. Eight cold readers and two drained lifetimes exercise
+publication and retirement. Native measurements, SDK/Swift ABI snapshots,
+seven executable/generated-C pairs and joined logs are retained under
+`build/ios/fortnite/swiftui-text-metadata-checks`.
+
+The fresh launch resolves Text metadata and exits 1 during linking at its
+localized-string initializer
+`_$s7SwiftUI4TextV_9tableName6bundle7commentAcA18LocalizedStringKeyV_SSSgSo8NSBundleCSgs06StaticI0VSgtcfC`.
+Its fixup is `0x10dc9b398`, stub `0x10c63ab3c` and forwarder `0x107c28eb8`.
+The calls at `0x1015bfd8c` and `0x1015c01e4` pass a literal LocalizedStringKey,
+nil table/bundle/comment arguments and receive Text in x0-x3. These sites
+were inspected without executing application code. Fortnite remains
+unplayable, with Text construction and SwiftUI graph/rendering still absent.
+
+The localized Text initializer now has an exact SwiftUI diagnostic binding.
+Native ARM64 measurements cover 24 literal-key/table/comment combinations
+with a nil bundle. The result is an owned Text in x0-x3 with object storage
+and an empty modifier array. Its 72-byte LocalizedTextStorage provider consumes
+the key and optional table owners. Text copies retain the shared provider;
+final destruction releases its fields. The comment does not become a stored
+field. These observations do not provide provider construction or localization.
+
+`tests/ios/native-checks.v build-swiftui-text-localized` selects the new fixture.
+Normal and deterministic ASan/UBSan runs cover its O2 entry, Text metadata and
+literal-key regressions. Thirty-two terminal child probes verify the diagnostic
+with protected key/table/bundle/comment pointers, stack arguments, Self and x8,
+including unchanged shared result pages at both protected boundaries. Eight
+readers, exact framework routing and callbacks exercise two drained lifetimes.
+Native declarations and measurements, seven executable/generated-C pairs and
+joined logs are retained under `build/ios/fortnite/swiftui-text-localized-checks`.
+Localized provider construction, localization and rendering remain unsupported.
+
+The fresh launch resolves this diagnostic binding and exits 1 during linking
+at SwiftUI's default View graph factory,
+`_$s7SwiftUI4ViewPAAE05_makeC04view6inputsAA01_C7OutputsVAA11_GraphValueVyxG_AA01_C6InputsVtFZ`.
+Its fixup is `0x10dc9b3a0`, stub `0x10c63ab48` and forwarder `0x107c28ee4`.
+The call at `0x1015c0aa8` forwards the caller's arguments through a small wrapper.
+These sites were inspected without executing application code. Fortnite still
+stops before application entry and remains unplayable.
+
+The default `View._makeView`, `View._makeViewList` and `View._viewListCount`
+imports now have distinct terminal diagnostics. They require Body's View
+conformance and graph traversal, which remain unsupported. Native metadata
+inspection measures `_GraphValue<Int>` at 4 bytes, `_ViewInputs` at 84,
+`_ViewListInputs` at 129 and `_ViewListCountInputs` at 80. The native entries
+read graph values and inputs indirectly. `_ViewOutputs` and `_ViewListOutputs`
+are resilient owned values of 16 and 65 bytes; the count result is `Int?`,
+size 9 and stride 16. Binding these diagnostics does not construct graph
+outputs or supply a count.
+
+Fresh IPA inspection finds these required default View imports and calls:
+
+| Hook | GOT fixup | Stub | Forwarder | Calls |
+| --- | --- | --- | --- | --- |
+| `_makeView` | `0x10dc9b3a0` | `0x10c63ab48` | `0x107c28ee4` | `0x1015c0aa8` |
+| `_makeViewList` | `0x10dc9b3a8` | `0x10c63ab54` | `0x107c28ee8` | `0x1015c0abc` |
+| `_viewListCount` | `0x10dc9b3b0` | `0x10c63ab60` | `0x107c28e58` | `0x1015be82c`, `0x1015c0ad0` |
+
+The count hook also serves a UIViewRepresentable wrapper. Both callers mask
+the optional-result tag. No graph factory or application code was executed.
+
+`tests/ios/native-checks.v build-swiftui-view-defaults` selects the fixture.
+Normal and deterministic ASan/UBSan runs cover its O2 entry and the existing
+representable factory/list diagnostics. The fixture checks seven native ABI
+layouts and 96 terminal child calls with protected graph, inputs, metadata,
+witness, stack, Self and x8 values, unchanged shared result pages at both
+protected boundaries, exact routing, eight readers and two drained lifetimes.
+Seven executable/generated-C pairs, SDK/ABI snapshots, native measurements,
+call-site traces and joined logs are retained under
+`build/ios/fortnite/swiftui-view-defaults-checks`. Graph construction, count
+traversal and rendering remain unsupported.
+
+The fresh launch resolves all three diagnostic bindings and exits 1 during
+linking at `_$s7SwiftUI4ViewPAAE7opacityyQrSdF`, View's opacity modifier.
+Its fixup is `0x10dc9b3b8`, stub `0x10c63ab6c` and forwarder `0x107c28eac`.
+The call at `0x1015bfa7c` passes opacity 0 or 1 in d0, Self in x20 and an
+indirect result in x8. These sites were inspected without executing application
+code. Fortnite still stops before application entry and remains unplayable.
+
+`View.opacity` now constructs its returned value. It borrows Self in x20,
+copies it once through `initializeWithCopy` using the caller's type metadata,
+and writes the opacity Double into the frozen
+`ModifiedContent<Self, _OpacityEffect>` result in x8. The modifier begins at
+Self's size rounded up to eight bytes; using Self's stride would misplace it
+for types with trailing padding. The adapter preserves x20/x21 and the
+opacity's exact bits, including signed zero, infinity and NaN payloads.
+It neither clamps the value nor changes ownership of the source.
+
+Native SwiftUI comparison covers five generic POD layouts (Void, UInt8, Int,
+Optional<Int> and SIMD4<Float>), EmptyView and a Color with an owned opacity
+provider. Both implementations copy that provider once and balance the result's
+destruction. Generic POD metadata exercises the value ABI with a protected,
+unused View table; it does not fabricate conformances for non-View types.
+The Vinix fixture also checks fifteen sizes with distinct strides, exact
+read-only sources, writable results and untouched alignment padding at both
+guard boundaries, ten IEEE bit patterns,
+overflow rejection before touching Self or result, an instrumented copy witness,
+native ARC, eight concurrent readers, and two drained/unmapped lifetimes.
+
+`tests/ios/native-checks.v build-swiftui-view-opacity` selects the fixture.
+Its sanitizer runs, neighboring opacity/ModifiedContent regressions, isolated
+ARM64 fixture and import audits, native SDK/ABI snapshots, generated C and
+call-site evidence are retained under
+`build/ios/fortnite/swiftui-view-opacity-checks`. The adapter shares the existing
+opacity arena's sealing and retirement. This implements value construction;
+generic ModifiedContent metadata and View conformance instantiation, graph
+construction and rendering remain unsupported.
+
+The new launch resolves `View.opacity` and exits 1 during linking at
+`_$s7SwiftUI4ViewPAAE8disabledyQrSbF`. Fresh IPA inspection locates its fixup
+at `0x10dc9b3c0`, stub at `0x10c63ab78`, forwarder at `0x107c28ecc` and call
+at `0x1015c0030`. The caller passes the disabled Bool in w0, type metadata in
+x1, a View table in x2, borrowed Self in x20 and the result in x8. These sites
+were inspected without executing application code. Fortnite still stops
+before application entry and remains unplayable.
+
+`View.disabled` now has a terminal diagnostic for its missing environment
+transform construction. Native SwiftUI returns
+`ModifiedContent<Self, _EnvironmentKeyTransformModifier<Bool>>`, storing an
+owned writable key path to `EnvironmentValues.isEnabled` and a closure that
+captures the disabled Bool. Applying that closure computes
+`inheritedEnabled && !disabled`: passing false preserves a disabled ancestor.
+Native measurements put EnvironmentValues at 16 bytes and the transform at 24
+bytes, with the key path at offset zero and the closure at offset eight.
+For EmptyView, the complete returned value is also 24 bytes. Native copy/destroy
+checks confirm ownership of the captured context and a canonical key path
+across both Bool values.
+
+Key-path construction and environment execution remain unsupported. The new
+binding reports that limitation before reading Self, metadata or witnesses,
+changing ownership, or writing an indirect result. The public fixture
+`tests/ios/native-checks.v build-swiftui-view-disabled` checks the native
+layouts and four inherited-enabled cases, plus 128 diagnostic child calls
+with guarded inputs, unchanged shared writable/read-only result pages,
+four Bool register patterns, eight readers, exact routing, teardown callbacks
+and two drained lifetimes. Sanitizer runs also cover the existing opacity value
+constructor and environment-transform descriptor. Native measurements,
+SDK/ABI snapshots, isolated ARM64 results, generated C and call-site evidence
+are retained under `build/ios/fortnite/swiftui-view-disabled-checks`.
+Binding this diagnostic does not implement disabled controls or rendering.
+
+The new launch resolves this binding and exits 1 during linking at
+`_$s7SwiftUI5StateV12wrappedValuexvg`. Fresh IPA inspection locates its fixup
+at `0x10dc9b3c8`, stub at `0x10c63ab84` and forwarder at `0x107c28e60`.
+The three calls at `0x1015be924`, `0x1015bfa08` and `0x1015c0000` pass an
+indirect result in x8 and read its Bool byte afterward. These sites were
+inspected without executing application code. Fortnite still stops before
+application entry and remains unplayable.
+
+`State.wrappedValue` now reads a cached value when `_location` is nil. Its
+ARM64 argument is complete State<Value> metadata in x0, borrowed Self in x20
+and an indirect Value result in x8. The getter reads the signed location field
+offset from State metadata, then copies `_value` through Value's
+`initializeWithCopy` witness. That preserves the source and gives the result
+its own reference ownership. It copies Value's size rather than State's size
+or Value's stride.
+
+Native comparisons cover State<Void>, Bool, UInt8, Int, Optional<Int>, String
+and SIMD4<Float>. Their location offsets are 0, 8 or 16; State<SIMD4<Float>>
+has size 24 and stride 32. An owned native String confirms that both native and
+Vinix reads retain one result reference and balance destruction while the
+source remains intact. The fixture also covers fifteen instrumented size/stride
+cases, guard pages and untouched padding, zero-sized results, a reentrant copy
+witness, eight cold readers, RX publication and two drained/unmapped lifetimes.
+
+A non-nil location needs AnyLocation virtual calls and graph/update tracking.
+It now diagnoses before accessing the location object, Value's metadata or
+bytes, or result storage; negative field offsets also diagnose. Thirty-four
+child calls check these paths using protected values and shared writable/read-only
+results. The adapter remains available to teardown callbacks after concurrent
+work is retired, and is unmapped with the runtime's metadata after owners drain.
+
+`tests/ios/native-checks.v build-swiftui-state-value` selects the fixture.
+Sanitizer regressions also cover opacity construction and disabled diagnostics.
+Native SDK/ABI measurements, generated C, isolated ARM64 runs, import audits and
+call-site evidence are retained under
+`build/ios/fortnite/swiftui-state-value-checks`. State construction, generic
+metadata instantiation, bindings, live locations, graph execution and
+rendering remain unsupported.
+
+The matching setter, `_$s7SwiftUI5StateV12wrappedValuexvs`, now handles a nil
+location with native nonmutating semantics: cached `_value` remains unchanged,
+while the incoming Value is consumed through its own `destroy` witness. It
+receives the new Value indirectly in x0, complete State metadata in x1 and
+borrowed Self in x20; there is no result in x8. Its fixup is
+`0x10dc9b3d0`, stub `0x10c63ab90` and forwarder `0x107c28e68`. The calls at
+`0x1015bea28` and `0x1015bee20` pass the new Bool indirectly in x0, State
+metadata in x1 and borrowed State in x20. These sites were inspected without
+executing application code.
+
+Native comparisons cover the same seven State specializations. Both native and
+Vinix leave read-only cached State intact and release exactly one incoming
+owned String reference without changing its bytes. Fifteen instrumented
+size/stride cases check the exact destroy argument and Value metadata, including
+a zero-sized Value with inaccessible storage. A reentrant destructor resolves
+the adapter on another thread without holding the initialization lock. Thirty-four
+child calls verify that non-nil locations and negative field offsets diagnose
+before accessing cached Value bytes, new Value metadata/owners or location
+objects. Live writes require AnyLocation virtual set and transaction behavior;
+they remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-state-set` selects the setter fixture.
+Its adapter is sealed RX before publication, remains available to drained
+teardown callbacks and is unmapped after owners retire. Native disassembly,
+six sanitizer runs including getter/opacity regressions, isolated ARM64 checks,
+generated C and call-site evidence are retained under
+`build/ios/fortnite/swiftui-state-set-checks`.
+
+`State.projectedValue` now has an explicit diagnostic binding for unsupported
+Binding construction. Native SwiftUI returns an owned Binding even when State's
+location is nil: an empty Transaction, a constant AnyLocation object and a
+cached Value. The three fields are at offsets 0, 8 and 16. Native comparisons
+cover Binding<Void>, Bool, UInt8, Int, Optional<Int>, String and SIMD4<Float>.
+Binding<Bool> has size 17 and stride 24. An owned String gains two references,
+one for the cached Value and one captured by the constant location; copying and
+destroying Binding balance both owners. A native Bool Binding continues to read
+its original value after the source State changes, confirming constant snapshot
+behavior. No attached locations, graph or application code are executed by
+these comparisons.
+
+The getter receives complete State metadata in x0, borrowed Self in x20 and an
+indirect Binding result in x8. Its fixup is `0x10dc9b3d8`, stub `0x10c63ab9c`, forwarder
+`0x107c28e6c` and direct call `0x1015beac0`; inspection executes no application
+code. That call reads two words and a Bool from the returned Binding. Vinix's
+diagnostic stops before reading metadata, Self or Value owners, allocating a
+location, or writing any result bytes. Binding metadata, constant/live location
+construction, transactions, graph execution and rendering remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-state-projected` selects the fixture.
+It checks 128 child calls, protected metadata/Self/stack/x8 pointers and unchanged
+shared writable/read-only result pages at both guard boundaries, eight readers,
+exact framework routing and two drained runtime lifetimes. Native ownership
+measurements, sanitizer regressions for both wrapped-value accessors, isolated
+ARM64 checks and call-site evidence are retained under
+`build/ios/fortnite/swiftui-state-projected-checks`.
+
+`_$s7SwiftUI5StateVMn` now supplies State's nominal identity and unconstrained
+generic signature. Native measurements confirm unique generic-struct flags
+`0xd1`, one type parameter, zero requirements and one key argument. There are
+two fields with the field-offset vector at metadata word three. Native complete
+State<Bool> and State<Int> have size/stride 16 and offsets 0/8; State<String>
+has size/stride 24 and offsets 0/16. These specialization measurements describe
+native SwiftUI; Vinix does not construct complete State metadata.
+
+The descriptor's module is SwiftUI and its type name is State. Its required GOT cell
+is `0x10dc9b3e0`; the indirect context symbolic reference at `0x10dc7fc3c`
+points to it from `__swift5_typeref`. A sealed read-only data page holds the
+descriptor/module/names; a separate RX page holds its diagnostic accessor.
+Reflection, instantiation cache and default pattern pointers remain null. The
+generic bit remains set, so direct and indirect symbolic lookup reject before
+calling a nongeneric accessor ABI or reading protected generic arguments.
+Calling the accessor directly diagnoses unsupported State instantiation.
+
+`tests/ios/native-checks.v build-swiftui-state-nominal` selects the fixture.
+It compares the native descriptor signature, exercises guarded symbolic names
+and arguments, eight cold readers, retirement guards, callback access after
+concurrency retirement and two drained/unmapped lifetimes. Native measurements,
+sanitizer regressions for environment-transform descriptors and projected-value
+diagnostics, generated C, isolated ARM64 runs and import evidence are retained
+under `build/ios/fortnite/swiftui-state-nominal-checks`. State specialization,
+construction, locations, DynamicProperty conformance and rendering remain
+unsupported.
+
+`Button(action:label:)` now has an explicit diagnostic binding. The native
+initializer takes the escaping action function/context in x0/x1, the borrowed
+label function/context in x2/x3, Label metadata and its View witness in x4/x5,
+and an indirect result in x8. It evaluates the label once and transfers the
+action context into owned Button storage; construction does not invoke the
+action.
+
+Button is not frozen. Native measurements show private action storage larger
+than a closure pair: Button<EmptyView> has size 106, stride 112 and field
+offsets 0/8/106; Button<Text> has size/stride 144 and offsets 0/8/112. The native
+fixture obtains result size and label placement from metadata. An owned action
+context verifies transferred ownership, one retained reference per Button copy,
+balanced destruction, and a stored action that remains callable after the
+original Button is destroyed. The label builder runs once with a protected
+borrowed context and an empty result, using the measured arm64e closure signing
+discriminator `0x720f`. No Button graph, UI event loop or application code is
+executed by these comparisons.
+
+The required import is
+`_$s7SwiftUI6ButtonV6action5labelACyxGyyc_xyXEtcfC`. Its fixup is
+`0x10dc9b3e8`, stub `0x10c63aba8`, forwarder
+`0x107c28ec8` and direct call `0x1015bffc8`. These references were inspected
+without executing application code. Vinix diagnoses before invoking either
+closure, touching metadata or owners, or writing result storage. Button
+metadata, construction, action storage, graph execution and rendering remain
+unsupported.
+
+`tests/ios/native-checks.v build-swiftui-button` selects the fixture. It checks
+136 child calls with protected closures, contexts, Label metadata, View witness,
+stack and result pointers; shared writable/read-only result pages remain
+unchanged at both guard boundaries, and valid callbacks are never invoked.
+Eight readers, exact framework routing, teardown callbacks and two drained
+runtime lifetimes are covered. Native measurements, sanitizer regressions for
+State descriptors/projected-value diagnostics, generated C and isolated ARM64
+runs are retained under `build/ios/fortnite/swiftui-button-checks`.
+
+Button's nominal descriptor, `_$s7SwiftUI6ButtonVMn`, now supplies sealed
+`SwiftUI.Button` identity with the native generic signature: one Label type
+parameter, a `Label: View` requirement and two key arguments (Label metadata and
+its View witness). It records three fields with the offset vector at metadata
+word four. The requirement includes the native View declaration and its
+`Body: View` signature. It supplies no Button metadata, witness table, reflection
+record, instantiation cache or metadata pattern. The accessor explicitly
+diagnoses unsupported specialization; the generic bit makes direct/indirect
+symbolic lookup reject before attempting the nongeneric accessor ABI.
+
+The descriptor's required GOT fixup is
+`0x10dc9b3f0`, referenced indirectly by ten context symbolic references in
+`__swift5_typeref`, from `0x10dc7fc84` through `0x10dc7feac`. These references
+were inspected without executing application code.
+
+`tests/ios/native-checks.v build-swiftui-button-nominal` checks native signature
+agreement, eight concurrent cold readers, data/code protections, protected
+symbolic inputs and 128 child accessor calls with protected Label metadata and
+View witnesses. Teardown retains the descriptor through drained callbacks,
+then unmaps both pages; fresh publication is rejected after retirement. Two
+runtime lifetimes and regressions for State descriptors and Button initializer
+diagnostics are recorded under
+`build/ios/fortnite/swiftui-button-nominal-checks`. Button specialization,
+construction, action storage, View witness specialization and rendering remain
+unsupported.
+
+Button's View conformance descriptor, `_$s7SwiftUI6ButtonVyxGAA4ViewAAMc`, now
+shares the existing sealed Button arena, its nominal descriptor and its View
+protocol declaration. Native measurements show an unconditional conformance
+with a generic witness table: `Label: View` is already required by the nominal
+type, so there are no conditional or private witness arguments. Its control
+word is `0x10007` (seven copied words, RequiresInstantiation, zero private words),
+with no native instantiator. Native lookup returns stable, distinct cached
+tables for Button<EmptyView> and Button<Text>; both copy all seven pattern words.
+No witness methods, Button construction, graph or application code are invoked
+by these native comparisons.
+
+Vinix preserves the generic conformance flag `0x20000` and RequiresInstantiation,
+with zero copied words, a null pattern/cache and an explicit diagnostic
+instantiator. Witness lookup rejects the generic declaration before touching
+metadata, arguments or the pattern. The instantiator diagnoses before reading
+caller inputs or writing a table. This supplies the conformance declaration;
+Button witness specialization, construction, graph execution and rendering
+remain unsupported.
+
+The required GOT fixup is `0x10dc9b3f8`; the consumer at `0x1015c16f0` loads it
+before calling `swift_getWitnessTable` at `0x1015c16f8`. These references were
+inspected without executing application code.
+
+`tests/ios/native-checks.v build-swiftui-button-view` checks eight concurrent
+cold readers resolving nominal/conformance descriptors in both orders, shared
+canonical identity, RX/RO protections and 192 child calls with protected
+metadata, arguments and table pointers. Shared writable/read-only table pages
+remain unchanged at both guard boundaries. Teardown callbacks retain descriptor
+access until users drain; both pages unmap across two runtime lifetimes.
+Measurements, native Button descriptor/ModifiedContent conformance regressions,
+generated C and isolated ARM64 results are retained under
+`build/ios/fortnite/swiftui-button-view-checks`.
+
+`VStack(alignment:spacing:content:)` now has an explicit diagnostic binding.
+The SDK declares frozen VStack storage as
+`_VariadicView.Tree<_VStackLayout, Content>`, with a borrowed content builder.
+Native ARM64 construction takes alignment in x0, optional spacing payload/tag
+in x1/x2, builder function/context in x3/x4, Content metadata and its View
+witness in x5/x6, and the indirect result in x8. Native measurements show size
+17/stride 24 for VStack<EmptyView> and size/stride 56 for VStack<Text>, with
+Content offsets 17 and 24 respectively.
+
+Six native construction cases verify the 17-byte layout root, spacing payloads
+and optional tags, one builder evaluation with a protected borrowed context,
+and owned Text content copied and destroyed through native value witnesses.
+The builder receives temporary Content storage before the value is moved into
+VStack. Copies and destruction balance the String owner, and x20/x21 remain
+preserved. No graph, rendering or application code executes in these comparisons.
+
+Vinix diagnoses before invoking the builder, reading Content metadata or its
+View witness, changing ownership, or writing result storage. Frozen generic
+storage still needs dependent Tree/VStack metadata and ownership support;
+VStack construction, Tree specialization, graph execution and rendering remain
+unsupported.
+
+The import is
+`_$s7SwiftUI6VStackV9alignment7spacing7contentACyxGAA19HorizontalAlignmentV_12CoreGraphics7CGFloatVSgxyXEtcfC`.
+Its required fixup is
+`0x10dc9b400`, stub `0x10c63abb4`, forwarder `0x107c28ea8` and direct call
+`0x1015bf9c0`. These references were inspected without executing application
+code.
+
+`tests/ios/native-checks.v build-swiftui-vstack-init` checks 136 child calls with
+protected builder/context, Content metadata, View witness, stack, Self and x8,
+arbitrary alignment/spacing bits and valid builders that must never run.
+Shared writable/read-only result pages remain unchanged at both guard
+boundaries. Eight readers, exact routing, teardown callbacks and two drained
+runtime lifetimes are covered. Native preflight measurements, sanitizer
+regressions for _VStackLayout and Button construction diagnostics, generated C
+and isolated ARM64 results are retained under
+`build/ios/fortnite/swiftui-vstack-init-checks`.
+
+VStack's nominal type descriptor, `_$s7SwiftUI6VStackVMn`, now supplies its
+generic struct declaration in module SwiftUI, one stored field, a field-offset
+vector at metadata word four, the `Content: View` requirement and two key
+arguments: Content metadata and its View witness. Its View declaration includes
+the `Body: View` signature and six requirement flags, with no default
+implementations. Native descriptor checks and EmptyView/Text specializations
+confirm the declaration and dependent sizes of 17/stride 24 and 56/stride 56.
+
+The descriptor occupies read-only storage; its accessor thunk occupies a
+separate executable page. No reflection records, instantiation cache, generic
+metadata pattern or complete generic metadata are supplied. The generic bit
+keeps direct/indirect symbolic lookup from calling the nongeneric accessor ABI.
+Explicit specialization attempts diagnose before reading Content metadata or
+its View witness. Dependent Tree ownership, VStack specialization, construction
+and rendering remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-vstack-nominal` checks eight cold
+readers, exact routing, the native generic signature, 128 protected accessor
+calls, symbolic rejection, retirement guards, teardown callback access and two
+drained/unmapped runtime lifetimes. Native measurements, Button descriptor and
+VStack initializer sanitizer regressions, generated C and isolated ARM64
+results are retained under `build/ios/fortnite/swiftui-vstack-nominal-checks`.
+The required import cell is `0x10dc9b408` in `__DATA_CONST,__got`, referenced by
+five indirect context symbolic references in `__TEXT,__swift5_typeref`.
+These data references were inspected without executing application code.
+
+VStack's View conformance declaration, `_$s7SwiftUI6VStackVyxGAA4ViewAAMc`,
+now shares the nominal descriptor's sealed arena. Native measurement shows
+zero conformance flags and one static seven-word witness table: both EmptyView
+and Text specializations return the exact pattern pointer. Content's View
+constraint belongs to the nominal signature; there are no conditional
+requirements, generic witness controls or instantiation caches.
+
+The table preserves tagged Body/Never type and conformance-accessor records.
+Lookup returns the canonical table without reading unused metadata or argument
+pointers. Body/Never metadata and conformance access and all four graph witness
+slots diagnose before reading caller storage or writing results. No complete
+VStack/Never metadata, graph engine or rendering support is supplied.
+
+`tests/ios/native-checks.v build-swiftui-vstack-view` checks both resolution
+orders with eight cold readers, native static table and symbolic Never
+declarations, protected unused metadata/arguments, 256 terminal child calls,
+protected graph stack arguments, Self and x8, and unchanged shared writable/read-only
+result pages at both guard boundaries. Teardown callbacks and two drained/unmapped
+lifetimes use the existing arena. Native measurements, VStack nominal and
+Button View sanitizer regressions, generated C and isolated ARM64 results are
+retained under `build/ios/fortnite/swiftui-vstack-view-checks`.
+The required fixup is `0x10dc9b410`; a consumer at `0x1015c1190` loads it before
+calling `swift_getWitnessTable` at `0x1015c1198`. These references were inspected
+without executing application code.
+
+`ZStack(alignment:content:)` now has an explicit diagnostic binding. Frozen
+ZStack stores `_VariadicView.Tree<_ZStackLayout, Content>`. Native ARM64
+construction takes the two Alignment words in x0/x1, builder function/context
+in x2/x3, Content metadata and its View witness in x4/x5, and the indirect
+result in x8. EmptyView and Text specializations have size/stride 16 and 48
+respectively, with Content at offset 16 in both.
+
+Six native construction cases cover `.center`, `.topLeading` and `.bottomTrailing`
+alignments with both content types. Each calls the builder once with a
+protected borrowed context and temporary Content storage. Copies and
+destruction balance owned Text/String references, preserve x20/x21 and leave
+result canaries intact. No graph, rendering or application code executes.
+
+Vinix stops before calling the builder, reading Content metadata or its View
+witness, changing ownership or writing results. Generic Tree/ZStack metadata,
+Content ownership, construction and rendering remain unsupported.
+`tests/ios/native-checks.v build-swiftui-zstack-init` checks 136 terminal child
+calls, protected builder/context/metadata/witness/stack arguments/Self/x8,
+arbitrary alignment words, valid builders that must never run, unchanged
+shared writable/read-only result pages at both guard boundaries, eight
+readers, callbacks and two drained runtime lifetimes. Native measurements,
+_ZStackLayout and VStack initializer sanitizer regressions, generated C and
+isolated ARM64 results are retained under
+`build/ios/fortnite/swiftui-zstack-init-checks`.
+
+The import is
+`_$s7SwiftUI6ZStackV9alignment7contentACyxGAA9AlignmentV_xyXEtcfC`.
+Its required fixup is `0x10dc9b418`,
+stub `0x10c63abc0`, forwarder `0x107c28ea4` and direct call `0x1015bf6f8`.
+These references were inspected without executing application code.
+
+ZStack's nominal descriptor, `_$s7SwiftUI6ZStackVMn`, now resolves through
+SwiftUI.framework in sealed storage. Native ARM64 measurement confirms one
+generic Content parameter, its `Content: View` requirement, two key arguments
+(metadata and witness), and one field with its offset vector at metadata word
+four. The View declaration includes its six requirements and `Body: View`
+signature. Native EmptyView and Text specializations have size/stride 16 and
+48 respectively; their field offset is zero.
+
+The generic descriptor retains its generic bit. Symbolic lookup rejects it
+before attempting the nongeneric accessor ABI, and its three-argument generic
+accessor diagnoses without reading Content metadata or its witness. No
+complete ZStack metadata, instantiation cache, generic metadata pattern or
+reflection is supplied.
+ZStack specialization, construction, dependent Tree ownership, complete
+Body/Never metadata and rendering remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-zstack-nominal` checks eight cold
+readers, the native declaration, read-only descriptor and executable accessor
+protections, direct/indirect symbolic rejection at a guard boundary, 128
+terminal child calls with protected metadata and witnesses, retirement
+guards, teardown callbacks and two drained/unmapped lifetimes. Native
+measurements, VStack nominal and ZStack initializer sanitizer regressions,
+generated C and isolated ARM64 results are retained under
+`build/ios/fortnite/swiftui-zstack-nominal-checks`. Its required
+import cell is `0x10dc9b420` in `__DATA_CONST,__got`, referenced by an indirect
+context symbolic reference at `0x10dc7fc5a` in `__TEXT,__swift5_typeref`.
+These data references were inspected without executing application code.
+
+ZStack's View conformance declaration, `_$s7SwiftUI6ZStackVyxGAA4ViewAAMc`,
+now shares the nominal descriptor's sealed arena. Native measurement shows
+zero conformance flags and a static seven-word witness table: EmptyView and
+Text specializations return the same pattern pointer. Content's View
+constraint belongs to the nominal signature; no conditional requirements,
+generic witness controls or instantiation caches are supplied.
+
+The table preserves tagged Body/Never type and conformance-accessor records.
+Lookup returns the canonical table without reading unused metadata or argument
+pointers. Body/Never metadata and conformance access and all four graph witness
+slots diagnose before reading caller storage or writing results. Complete
+ZStack/Never metadata, graph execution and rendering remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-zstack-view` checks both resolution
+orders with eight cold readers, native static table and symbolic Never
+declarations, protected unused metadata/arguments, 256 terminal child calls,
+protected graph stack arguments, Self and x8, and unchanged shared writable/read-only
+result pages at both guard boundaries. Teardown callbacks and two drained/unmapped
+lifetimes use the existing arena. Native measurements, ZStack nominal and
+VStack View sanitizer regressions, generated C and isolated ARM64 results are
+retained under `build/ios/fortnite/swiftui-zstack-view-checks`.
+Its required import cell is `0x10dc9b428`; a consumer at `0x1015c06b8` loads
+it before calling `swift_getWitnessTable` at `0x1015c06c0`. These references
+were inspected without executing application code.
+
+TupleView's nominal descriptor, `_$s7SwiftUI9TupleViewVMn`, now resolves
+through SwiftUI.framework in sealed storage. Native ARM64 measurement confirms
+one unconstrained T parameter, zero generic requirements, one metadata key
+argument and one field with its offset vector at metadata word three. Frozen
+TupleView stores its T value directly. Native Bool, Int and String
+specializations have size/stride 1, 8 and 16 respectively, with field offset
+zero; T has no View constraint or witness argument.
+
+The generic bit stays set. Symbolic lookup rejects before attempting the
+nongeneric accessor ABI, and the two-argument generic accessor diagnoses
+without reading T metadata. No complete metadata, instantiation cache,
+generic metadata pattern or reflection is supplied. TupleView metadata
+instantiation and rendering remain unsupported.
+
+`tests/ios/native-checks.v build-swiftui-tuple-nominal` checks eight cold
+readers, the native declaration, read-only descriptor and executable accessor
+protections, direct/indirect symbolic rejection at a guard boundary, 32
+terminal child calls with protected or invalid T metadata, retirement guards,
+teardown callbacks and two drained/unmapped lifetimes. Native measurements,
+State nominal and ZStack View sanitizer regressions, generated C and isolated
+ARM64 results are retained under
+`build/ios/fortnite/swiftui-tuple-nominal-checks`. Its
+required import cell is `0x10dc9b438` in `__DATA_CONST,__got`, referenced by
+seven indirect context symbolic references in `__TEXT,__swift5_typeref`.
+These data references were inspected without executing application code.
+
+TupleView's value initializer, `_$s7SwiftUI9TupleViewVyACyxGxcfC`, now
+constructs the stored value through T's `initializeWithTake` witness. Native
+ARM64 takes the consumed source address in x0, complete T metadata in x1 and
+the indirect result in x8. The sealed adapter rearranges these arguments and
+calls the take witness once, without retaining or releasing the moved value.
+The source becomes uninitialized. No TupleView metadata or View graph is
+needed for this operation.
+
+Native/Vinix comparisons cover seven layouts: Void, Bool, UInt8, Int,
+Optional<Int>, String and SIMD4<Float>. An owned native String moves without
+an extra retain; native TupleView copies and destruction balance ownership.
+Fifteen synthetic size/stride cases cover both guard boundaries, read-only
+POD sources, exact result spans and protected zero-size source/result pointers.
+A forbidden copy witness checks that construction uses the take slot, and a
+reentrant witness resolves the initializer from another thread.
+
+`tests/ios/native-checks.v build-swiftui-tuple-init` also checks eight cold
+readers, exact routing, executable adapter protection, preserved x20/x21,
+unused protected registers/stack, warm teardown callbacks and two
+drained/unmapped lifetimes. Native measurements, TupleView nominal and State
+getter sanitizer regressions, generated C and isolated ARM64 results are
+retained under `build/ios/fortnite/swiftui-tuple-init-checks`.
+TupleView metadata instantiation, graph execution and rendering remain
+unsupported. Its required
+import cell is `0x10dc9b440`, stub `0x10c63abd8`, forwarder `0x107c28ed4`
+and direct call `0x1015c053c`. These references were inspected without
+executing application code.
+
+TupleView's View conformance descriptor, `_$s7SwiftUI9TupleViewVyxGAA0D0AAMc`,
+now resolves through SwiftUI.framework in the existing sealed nominal arena.
+Native Bool, Int and String specializations share one static seven-word
+witness table. Conformance flags are zero, with no conditional requirements,
+generic witness control or instantiator; T remains unconstrained in the
+nominal signature. The declaration includes View's Body: View signature and
+tagged symbolic Body == Never records. Never metadata, its View conformance
+and all four graph witnesses terminate with explicit diagnostics when used.
+They do not read caller metadata or arguments or write an indirect result.
+
+`tests/ios/native-checks.v build-swiftui-tuple-view` checks eight cold readers
+in both resolution orders, canonical descriptors, the native static table,
+read-only data and executable thunk protections, protected unused arguments,
+256 terminal child calls, protected graph stack/Self/x8, unchanged shared
+writable/read-only result pages at both guard boundaries, teardown callbacks
+and two drained/unmapped lifetimes. Native measurements, TupleView nominal
+and initializer sanitizer regressions, generated C and four isolated ARM64
+phases are retained under `build/ios/fortnite/swiftui-tuple-view-checks`.
+TupleView metadata instantiation, graph execution and rendering remain unsupported.
+The conformance's required cell is `0x10dc9b448`. Consumers at `0x1015c05d4` and
+`0x1015c111c` load it before calling `swift_getWitnessTable` at `0x1015c05dc`
+and `0x1015c1124` respectively. These references were inspected without
+executing application code.
+SwiftUI's global Never: View witness table, `_$ss5NeverO7SwiftUI4ViewACWP`,
+now resolves in the existing opacity arena. The seven-word static table has
+conformance flags 8 and an indirect reference to the arena's Never descriptor.
+It shares complete zero-size, stride-one Never metadata and the existing
+View declaration. Body metadata lookup returns Never; the tagged `FF 07`
+associated-conformance accessor returns this same canonical table without
+reading caller metadata or arguments. No additional arena or owner is allocated.
+
+Native measurements confirm `Never.Body == Never`, recursive `Body: View`
+and a view-list count of `nil`. The count witness returns zero in x0 and the
+None tag in w1, without reading inputs or writing x8. The two graph factories
+and `Never.body` stop with explicit diagnostics. TupleView's dependent
+metadata and graph paths still diagnose as described above.
+
+`tests/ios/native-checks.v build-swiftui-never-view` checks eight cold readers
+in both opacity/table resolution orders, shared metadata, recursive conformance,
+protected arguments, native-compatible count results, x20/x21 preservation,
+120 terminal graph/body child calls, protected stack/Self/x8 and unchanged
+writable/read-only result pages at both guard boundaries. Native Swift's
+associated-conformance lookup caches authenticated pointers; its cross-check
+uses a writable table copy while Vinix's table remains read-only. Shutdown
+callbacks and two drained/unmapped lifetimes use the existing arena.
+Native measurements, opacity and TupleView View sanitizer regressions,
+generated C and four isolated ARM64 phases are retained under
+`build/ios/fortnite/swiftui-never-view-checks`. Graph construction and rendering
+remain unsupported.
+
+Its required cell is `0x10dc9b450`; a consumer at `0x1015c103c` loads the
+table and returns it directly. This reference was inspected without executing
+application code.
+The Objective-C exception personality import, `___objc_personality_v0`, now
+resolves through libobjc.A.dylib to an explicit terminal diagnostic. The
+unwinder supplies version, actions, exception class, exception storage and
+context in x0..x4. The diagnostic stops before reading or modifying exception
+state and returns no unwind reason code. It allocates no metadata or owners.
+Native export inspection and [Apple's runtime source](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-exception.mm)
+establish the ABI and alternate-handler/C++ personality delegation. Mach-O
+frame registration, exception throwing, catching and unwinding remain unsupported.
+
+`tests/ios/native-checks.v build-objc-personality` checks eight readers and
+16,384 concurrent resolutions, exact library routing and 180 terminal child
+calls across version/action/class combinations, null/invalid/protected
+exception/context pointers and protected unused registers, stack, Self and x8.
+Shared writable/read-only state stays unchanged at both guard boundaries.
+The entry remains stable before startup, in shutdown callbacks and after
+two drained runtimes. Native source/export measurements, NSException type
+metadata and uncaught-handler sanitizer regressions, generated C and four
+isolated ARM64 phases are retained under `build/ios/fortnite/objc-personality-checks`.
+
+Its required cell is `0x10dc9b458` in `__DATA_CONST,__got`. The compact-unwind
+personality entry at `0x10dc81200` references this cell as personality index
+zero. These unwind data were inspected without executing application code.
+The next required import was `_imp_implementationWithBlock`, Objective-C's
+block-to-method adapter.
+Its required cell is `0x10dc9b498`, stub `0x10c63dd4c` and branch forwarder
+`0x107c28ddc`. Calls at `0x10833f5a4` and `0x10008b258` pass Blocks and use
+the resulting IMP for method replacement or installation. These references
+were inspected without executing application code.
+`imp_implementationWithBlock`, `imp_getBlock` and `imp_removeBlock` now resolve
+through libobjc.A.dylib. The adapter copies its Block and emits a four-instruction
+ARM64 tail call from `(self, _cmd, args...)` to `(block, self, args...)`.
+It discards the selector, preserves x2..x8, q0..q7 and the original stack and
+link register, and leaves the Block's return convention intact. Each live IMP
+owns one page sealed read/execute after emission; no writable executable page
+is published. Global Blocks retain their identity and heap Blocks share their
+existing copy reference. This follows the [Apple SDK/runtime contract](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-block-trampolines.mm).
+
+Lookup returns a borrowed Block. Removal drops the registry entry before
+releasing its copy and unmapping the adapter. Callers must detach the IMP and
+drain its invocations before removal, and coordinate borrowed Block use with
+removal. Copy and disposal helpers run outside the runtime lock. Quiescent
+shutdown releases remaining IMPs after ordinary app owners and threads drain,
+while class metadata, Foundation objects and autorelease pools remain available
+to capture destructors. Those destructors must not invoke retired IMPs.
+
+`tests/ios/native-checks.v build-objc-block-imp` compares raw ARM64 x0..x8,
+all eight SIMD argument registers, four stack words and result bits against
+Apple's native adapter. It also checks stack/global/shared heap Block ownership,
+four concurrent creators, real method installation and replacement, cross-thread
+copy/dispose reentry, captured-object weak lifetime, invalid identities and two
+drained runtimes. Six sanitizer runs, property/monitor regressions, generated C,
+native source snapshots and four isolated ARM64 phases are retained under
+`build/ios/fortnite/objc-block-imp-checks`.
+
+The begin-catch import has required cell `0x10dc9b508`, stub `0x10c63e190`
+and branch forwarder `0x107c28288`.
+The inspector found 27 direct calls, including `0x100008668`, followed by
+exception cleanup and `_objc_end_catch` paths. These references were inspected
+without executing application code. The paired end-catch import has cell
+`0x10dc9b548`, stub `0x10c63e1f0`, forwarder `0x107c2828c`, an additional tail
+forwarder at `0x1000555d8` and 45 direct calls.
+
+With `ios_cxx`, `_objc_begin_catch` and `_objc_end_catch` now resolve to the
+existing C++ backend's `__cxa_begin_catch` and `__cxa_end_catch` addresses.
+This matches [Apple's delegation](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-exception.mm):
+both languages share adjusted exception pointers, handler ownership and
+thread-local catch bookkeeping. The compatibility layer adds no private
+exception layout, TLS, Objective-C retain or pointer adjustment. In particular,
+a foreign catch-all result must not be interpreted as an Objective-C object.
+Builds without `ios_cxx` bind explicit terminal diagnostics before reading
+exception storage or returning a fabricated catch result.
+
+`tests/ios/native-checks.v build-objc-catch` checks exact backend aliases,
+four mixed-language begin/end combinations, foreign adjusted pointers,
+single cleanup, empty-stack end after a completed catch and four simultaneous
+thread-local catches. Native Apple comparisons use the same cases without
+throwing or unwinding. Eight resolver readers, exact library routing, shutdown
+callback access and two drained runtimes are also checked. The no-backend
+host variant checks 48 terminal child calls with null/invalid/protected storage,
+protected unused registers/stack/x8 and unchanged writable/read-only result
+pages. Six sanitizer runs, the personality regression, generated C, native
+source snapshots and four isolated ARM64 phases are retained under
+`build/ios/fortnite/objc-catch-checks`. This implements catch bookkeeping for
+valid unwind records; full Objective-C throwing/catching and Mach-O frame
+unwinding remain unsupported.
+
+The atomic C++ property helper has required cell `0x10dc9b518`, stub
+`0x10c63e1a8` and branch forwarder
+`0x107c28cc0`. Four additional tail forwarders, including `0x100b60788` and
+`0x102155080`, pass storage and a copy callback to this atomic C++ property
+helper. These references were inspected without executing application code.
+
+`_objc_copyCppObjectAtomic` now resolves through libobjc.A.dylib. It locks
+both storage addresses in a consistent order and invokes the supplied copy
+callback exactly once, including for self-copy. Equal addresses and hash
+collisions acquire one lock. The callback defines the copy and C++ resource
+ownership; the helper neither reads storage itself nor retains Objective-C
+objects. This follows [Apple's accessor implementation](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-accessors.mm)
+and [lock ordering](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/Threading/mixins.h).
+Eight padded native mutexes occupy a fixed 1 KiB table, use the iOS pointer
+hash and remain available before startup, during shutdown callbacks and across
+runtime lifetimes. The registry lock is released before locking storage or
+calling the callback, and the helper allocates no per-copy storage.
+
+`tests/ios/native-checks.v build-objc-cpp-copy` compares callback forwarding
+for null/invalid/protected identities, self-copy and callback-managed ownership
+with Apple's native runtime. It checks eight simultaneous cold callers,
+eight-worker torn-copy and opposing-pair stress, hash collisions, nested
+disjoint copies, cross-thread registry/independent-copy progress, shutdown
+callbacks and two drained runtimes. Six sanitizer runs, property/monitor
+regressions, generated C/ARM64 review, native sources and four isolated ARM64
+phases are retained under `build/ios/fortnite/objc-cpp-copy-checks`.
+
+The struct-copy helper has required cell `0x10dc9b520`, stub `0x10c63e1b4`
+and branch forwarder `0x107c290fc`.
+The additional tail forwarder at `0x1020c18d0` passes a 32-byte size,
+atomic=true and hasStrong=false. These references were inspected without
+executing application code.
+
+`_objc_copyStruct` now resolves through libobjc.A.dylib. It performs an
+overlap-safe `memmove` of the requested bytes. Atomic calls lock both endpoint
+addresses in a consistent order, acquiring equal or colliding stripes once.
+Nonatomic calls bypass initialization and all locks. As in [Apple's implementation](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-accessors.mm),
+the obsolete `hasStrong` flag is ignored: copied bytes receive no Objective-C
+ownership treatment. The eight native mutexes occupy a separate 1 KiB table
+and remain available across runtime lifetimes; the C++ callback-copy table is
+independent. There is no per-copy allocation.
+
+`tests/ios/native-checks.v build-objc-struct-copy` compares guard-page lengths,
+unaligned endpoints, zero-byte protected boundaries, self/overlapping moves,
+opaque pointer bytes with both flags and eight-worker 16 KiB copy contention
+against Apple's native runtime. It also checks eight simultaneous cold callers,
+hash collisions, nonatomic progress with the registry and all struct locks held,
+independence from the C++ copy table, unrelated-stripe progress, shutdown
+callbacks and two drained runtimes. Six sanitizer runs, C++ copy/property
+regressions, generated C/ARM64 review, native sources and four isolated ARM64
+phases are retained under `build/ios/fortnite/objc-struct-copy-checks`.
+
+The rethrow import has required cell `0x10dc9b558`, stub `0x10c63e208` and branch forwarder
+`0x107c2837c`. Four direct calls, including `0x1000554a0` and `0x10005ebb8`,
+were inspected without executing application code.
+
+With `ios_cxx`, `_objc_exception_rethrow` now resolves to the existing C++
+backend's `___cxa_rethrow` address, following [Apple's delegation](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-exception.mm).
+That backend currently stops with an explicit diagnostic because Mach-O
+unwinding is unsupported. Builds without `ios_cxx` bind a dedicated terminal
+diagnostic. This closes the import binding; actual rethrowing remains
+unsupported. No native host unwinder is called, and the compatibility entry
+adds no exception layout, TLS, ownership or fabricated unwind result.
+
+`tests/ios/native-checks.v build-objc-rethrow` checks the exact backend alias,
+96 terminal child calls with empty/foreign catch bookkeeping, protected values
+in unused registers/stack words/Self/x8 and unchanged writable/read-only pages
+at both guard boundaries. The no-backend host variant checks 48 terminal child
+calls. Eight readers perform 16,384 resolutions across two drained runtimes;
+shutdown callbacks can still resolve the entry. Native exports and source
+delegation were checked without invoking native rethrowing or unwinding.
+Six sanitizer runs, the catch bookkeeping regression, generated C/ARM64 review,
+native sources and four isolated ARM64 phases are retained under
+`build/ios/fortnite/objc-rethrow-checks`.
+
+The throw import has required cell `0x10dc9b560`, stub `0x10c63e214`, branch forwarder
+`0x107c28414` and direct call `0x10009f110`. These references were inspected
+without executing application code.
+
+`_objc_exception_throw` now binds a dedicated terminal diagnostic with its
+single object argument, in both C++ backend configurations. Actual throwing
+remains unsupported. The entry stops before reading the object, changing its
+ownership, invoking an uncaught handler or allocating exception metadata.
+[Apple's implementation](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-exception.mm)
+builds an Objective-C exception record, preprocesses and retains the object,
+and passes typeinfo plus a release destructor to the three-argument C++ throw
+entry. Those requirements prevent forwarding the raw object directly to
+`__cxa_throw`; Mach-O unwinding must be implemented before adding that path.
+
+`tests/ios/native-checks.v build-objc-throw` checks the exact diagnostic binding,
+192 terminal child calls per run with null/invalid/protected/managed/class
+objects and absent/trapping/protected uncaught handlers, protected values in
+unused registers/stack words/Self/x8 and unchanged writable/read-only pages
+at both guard boundaries. Eight concurrent resolver readers, shutdown callback
+access and two drained runtimes are also checked. Native exports and the Apple
+ownership contract were inspected without invoking native throwing/unwinding.
+Six sanitizer runs cover both backend configurations and the rethrow regression;
+generated C/ARM64 review, native sources and four isolated ARM64 phases are
+retained under `build/ios/fortnite/objc-throw-checks`.
+
+The terminate import has required cell `0x10dc9b6e8`, stub `0x10c63e454`
+and branch forwarder `0x107c28380`.
+Four direct calls, including `0x1000554b8` and `0x10005ebd0`, were inspected
+without executing application code.
+
+With `ios_cxx`, `_objc_terminate` now resolves to the existing backend's
+`__ZSt9terminatev` address, following [Apple's public entry](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-exception.mm).
+It shares the backend's C++ terminate-handler state. Custom handlers receive
+the call; default handlers and handlers that return end in SIGABRT. Builds
+without `ios_cxx` bind an explicit terminal backend-required diagnostic.
+The entry adds no separate handler registry, exception ownership or unwinder.
+Objective-C uncaught-handler delivery is not implemented by this binding;
+full Objective-C throwing/catching and Mach-O frame unwinding remain unsupported.
+
+`tests/ios/native-checks.v build-objc-terminate` checks the exact backend alias,
+384 terminal child calls with empty/foreign catch bookkeeping, two custom
+handlers, default/returning-handler SIGABRT, protected unused arguments, stack
+words, Swift Self and x8, and unchanged writable/read-only pages at both guard
+boundaries. The no-backend variant checks 192 terminal diagnostic calls even
+when C++ handlers are installed. Test-only typed declarations access the linked
+backend's handler state without exposing new application imports. Native Mac
+comparisons check both custom handlers and returning-handler SIGABRT in isolated
+children, without throwing or unwinding. Eight concurrent resolver readers,
+shutdown callback access and two drained runtimes are also checked.
+Six sanitizer runs cover both backend configurations and the throw regression;
+generated C/ARM64 review, native sources and four isolated ARM64 phases are
+retained under `build/ios/fortnite/objc-terminate-checks`.
+
+The protocol-method import has required cell `0x10dc9b710`, stub `0x10c63e568`,
+branch forwarder `0x107c283c4` and two direct calls (`0x100055b28`, `0x100080f04`)
+that were inspected without executing application code.
+
+`_protocol_getMethodDescription` now returns the canonical selector and borrowed
+type-encoding pointer in ARM64 registers x0/x1. Required/optional and
+instance/class declarations use four separate lists. Lookup checks the protocol
+itself before walking adopted protocols depth first in declaration order,
+matching [Apple's runtime](https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-runtime-new.mm).
+Nil protocols/selectors and missing methods return two null pointers. A found
+declaration preserves the distinction between null and empty type encodings.
+
+Image registration validates big and direct/indirect relative method lists
+before publishing protocol roots or rewriting references. Protocol declarations
+have no executable implementation to validate; their IMP fields are not followed.
+Selectors are interned and type encodings copied into protocol-owned storage.
+Duplicate aliases keep the first declaration, so returned pointers remain valid
+after source metadata is retired and until quiescent runtime shutdown. The six
+built-in protocols also carry their 26 ARM64 method declarations. Each list is
+limited to 4096 entries; names and type encodings retain the existing 1023-byte
+and 65535-byte limits. Lookup uses bounded stack scratch and allocates no heap
+storage. Shutdown frees every owned encoding and method map.
+
+`tests/ios/native-checks.v build-protocol-method` compares all four lookup modes,
+own/inherited/diamond precedence, Unicode and long encodings, nil/missing results
+and the raw x0/x1 ABI against the native Mac runtime. Private fixtures cover
+all three list formats, null/empty type strings, duplicate aliases, guarded
+limits, malformed registration without partial publication, protected source
+retirement, invalid identities, cycles, eight concurrent readers and callback
+access during two drained runtime lifetimes. Six sanitizer runs cover both C++
+backend configurations and the existing protocol lookup regression. Its test
+class helper was renamed to avoid a collision with the system resolver header.
+Generated C/ARM64 review, native sources and four isolated ARM64 phases are
+retained under `build/ios/fortnite/protocol-method-checks`.
+
+Fortnite imports 18 fixed-argument functions from `/usr/lib/libsqlite3.dylib`.
+The `_sqlite3_bind_blob` required cell `0x10dc9b720`, stub `0x10c63e8ec`, branch forwarder
+`0x107c28408` and direct call `0x100057980` were inspected without executing
+application code. That call passes the statement, index 3, borrowed blob bytes,
+byte length and a null destructor.
+
+The optional `ios_sqlite` backend now binds all 18 functions directly to one
+native SQLite engine. Handles, error strings, statement storage and callbacks
+stay with that engine; Objective-C shutdown does not close database handles.
+Only the exact library and symbol names resolve. Without the backend the
+imports remain unresolved. Variadic APIs and extension-loading APIs are not
+exported. Static, transient and custom-destructor ownership follows the
+[SQLite binding API](https://www.sqlite.org/c3ref/bind_blob.html).
+
+`tests/ios/sqlite-build.v` builds the unmodified SQLite 3.53.4 amalgamation
+verified against `tests/packages/sqlite-source.json`. The ARM64 archive reserves
+x18, enables thread safety and omits extension loading. The public native-checks
+driver enables the backend when `build/ios/sqlite/build.status.txt` exists;
+`VINIX_IOS_SQLITE_SDK` selects another SDK directory. A host build using
+`-d ios_sqlite` links its system SQLite through `-lsqlite3`.
+
+`tests/ios/native-checks.v build-sqlite` checks all 18 aliases, signed integers,
+embedded-NUL text/blob bytes, null/empty/failed binds, destructor counts and
+guarded raw ARM64 calls. It also checks reentrant and aborting callbacks, owned
+errors, constraint failures, busy close, eight shared-connection writers,
+transaction rollback, persistent database files and read-only failures.
+The same cases run against native Mac SQLite, and handles survive two drained
+Objective-C runtimes. Six host sanitizer runs cover enabled/disabled backends
+and the protocol-method regression. Four isolated ARM64 phases, generated C,
+resolver disassembly and the complete SQLite archive disassembly are retained
+under `build/ios/fortnite/sqlite-checks`; no engine instruction uses x18 or w18.
+
+The `_$sBbWV` data import has required cell `0x10dc9b7b8` and consumer
+`0x1000657d8`. The consumer passes the table's layout tail (offset 64) to
+`swift_initStructMetadata`; this was inspected without executing application
+code.
+
+`Builtin.BridgeObject` now has its own eight-slot value-witness table, following
+the [Swift runtime's bridge-aware ownership operations](https://github.com/swiftlang/swift/blob/main/stdlib/public/runtime/MetadataImpl.h).
+Copy and destroy preserve the encoded word while using bridge-object ARC.
+Assignment publishes the replacement before releasing the old owner, so
+reentrant destructors see the new value. Takes leave moved bytes unchanged.
+The table has size/stride eight, flags `0x10007` and `0x7fffffff` extra
+inhabitants. Its take and enum operations share the existing object-reference
+implementations; its ownership operations differ. Both tables are populated
+before sealing their shared page and retire together at quiescent shutdown.
+Resolving this import adds no extra mapping or per-witness allocation.
+
+`tests/ios/native-checks.v build-bridge-value` compares all eight native slots,
+encoded native/Objective-C ownership, spare bridge bits, self copy/take,
+null/tagged values and guarded eight/nine-byte enum boundaries. Raw ARM64 calls
+check protected unused inputs and result registers. Eight concurrent publishers
+and workers, destructor reentry, read-only tables and two unmapped runtime
+lifetimes are also checked. Six host sanitizer runs cover both C++ backend
+configurations and the existing UnknownObject regression. Native measurements,
+generated C/ARM64 review and four isolated ARM64 phases are retained under
+`build/ios/fortnite/bridge-value-checks`.
+
+The Dictionary metadata accessor `_$sSDMa` has required cell `0x10dc9b7c8`,
+stub `0x10c63ac80`, branch forwarder
+`0x107c28a50` and call `0x10006df64` were inspected without executing app code.
+
+The accessor now returns complete metadata in ARM64 x0/x1 for each exact
+Key/Value/Key:Hashable triple. The three supplied identities remain borrowed;
+the one-word dictionary layout does not require inspecting or completing them.
+The generic descriptor records two type parameters, the Key:Hashable requirement,
+three key arguments and the field-offset vector at metadata word five, matching
+the native runtime. Its descriptor accessor and instantiation pattern return
+the same canonical records as direct calls. Specialization pages are sealed
+before publication; cache hits allocate nothing. All specialization pages, the
+descriptor/accessor arena and cache storage retire after workers and owners
+drain. The witnesses share the existing BridgeObject ownership and enum code.
+Dictionary construction, mutation, field reflection, String hashing and generic
+Encodable/Decodable conformances remain separate unsupported operations.
+
+`tests/ios/native-checks.v build-dictionary-metadata` compares twelve generic
+combinations (including Date, Any, Void and a nested Dictionary), six request
+states, descriptor fields, all eight value-witness slots and native/Cocoa
+ownership. Guarded opaque arguments, invalid and retired requests, raw ARM64
+responses, eight publishers/workers, destructor reentry and two unmapped runtime
+lifetimes are checked. A caller-supplied Hashable fixture traps on invocation;
+metadata construction never invokes it. The host build also corrected the
+`mach_timebase_info` pointer declaration to match its native header.
+Eight sanitizer runs cover both C++ backend configurations, Array metadata and
+process-usage regressions. Native measurements, generated C/ARM64 review and
+four isolated ARM64 phases are retained under
+`build/ios/fortnite/dictionary-metadata-checks`.
+
+Dictionary's generic Encodable descriptor `_$sSDyxq_GSEsSERzSER_rlMc` now
+supports conditional witness specialization. Its required cell `0x10dc9b7d0`
+and consumer `0x10006e108` were inspected without executing app code; the
+consumer passes Dictionary metadata and two conditional witnesses to
+`swift_getWitnessTable`. The descriptor names the canonical Encodable protocol,
+the existing Dictionary nominal descriptor, Key/Value conformance requirements
+and a two-word pattern with two private words. Specialization follows the
+[Swift runtime's conditional argument layout](https://github.com/swiftlang/swift/blob/main/stdlib/public/runtime/Metadata.cpp):
+the Key witness precedes the table address point, then the Value witness.
+The cache uses canonical Dictionary metadata identity. Hits read no argument
+array; misses copy the two borrowed witness identities and seal the page before
+publication. Shutdown unmaps these tables before Dictionary metadata, and a
+remembered descriptor address rejects stale lookups before reading freed pages.
+
+This implements conformance metadata and table specialization. Calling the
+encode witness still stops with `iOS: Swift Dictionary encoding is not
+implemented`; Dictionary iteration, Encoder containers and JSONEncoder
+serialization remain unsupported.
+
+`tests/ios/native-checks.v build-dictionary-encoding` compares six native
+String/Int-key and String/Int/Date-value specializations, descriptor requirements,
+private witness order, expired argument cache hits and ARM64 x20/x21 preservation.
+Protected borrowed witnesses, an exact argument-array boundary, sealed pages,
+eight concurrent publishers/workers, invalid/foreign/retired requests, an encode
+diagnostic child process and two drained/unmapped lifetimes are checked.
+Eight ASan/UBSan runs cover both C++ backend configurations, Dictionary metadata
+and Date regressions. Four isolated ARM64 phases pass. Fresh binaries, generated
+C/ARM64 reviews, native measurements and logs are retained under
+`build/ios/fortnite/dictionary-encoding-checks`.
+
+Dictionary's generic Decodable descriptor `_$sSDyxq_GSesSeRzSeR_rlMc` now
+supports the same conditional specialization. Its required cell `0x10dc9b7d8`
+and consumer `0x10006deec` were inspected without executing application code.
+The descriptor names the canonical Decodable protocol and its Key/Value
+requirements. Encodable and Decodable share the descriptor/table construction
+code while keeping distinct method entries, patterns and caches. Both tables
+for a type remain canonical under concurrent mixed lookups; neither cache reads
+expired argument arrays. Both sets of sealed pages retire before Dictionary
+metadata, and stale descriptor lookups fail before reading unmapped storage.
+Calling the decoding initializer still stops with `iOS: Swift Dictionary
+decoding is not implemented`, without inspecting the Decoder or writing its
+indirect result. Dictionary construction, iteration, Encoder/Decoder containers
+and JSON serialization remain unsupported.
+
+`tests/ios/native-checks.v build-dictionary-decoding` compares six native
+String/Int-key and String/Int/Date-value specializations, conditional descriptor
+fields, private witness order, expired input hits and distinct Encodable and
+Decodable tables. Guarded witnesses and argument boundaries, x20/x21 preservation,
+read-only tables, eight cold publishers and mixed workers, invalid/foreign/retired
+requests, a diagnostic child with protected x8 output, and two drained/unmapped
+lifetimes are checked. Ten ASan/UBSan runs cover both C++ backend configurations
+and the existing Encodable, Dictionary metadata and Date fixtures. Four isolated
+ARM64 validation phases pass. Native measurements, binaries, generated C/ARM64
+reviews and logs are retained under
+`build/ios/fortnite/dictionary-decoding-checks`.
+
+String's `hash(into:)` entry `_$sSS4hash4intoys6HasherVz_tF` now feeds NFC UTF-8
+and a separate `0xff` terminator into the existing Hasher, following the
+[Swift String hashing contract](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/StringHashable.swift).
+Its required cell `0x10dc9b800`, stub `0x10c63acd4`, forwarder `0x107c2892c`
+and eight call sites were inspected without executing application code. The
+entry borrows the inout Hasher in x0 and String in x1/x2, preserving x20/x21
+and the source's ownership. Checked inline strings, immutable literal spans,
+registered native tails and registered foreign NSString/decoded constants are
+supported up to 1 MiB. Shared/custom storage remains unsupported. Invalid
+inputs are rejected before changing the Hasher. ASCII hashing allocates nothing.
+
+Unicode normalization is implemented in V using canonical decomposition,
+stable combining-class ordering, blocked composition and algorithmic Hangul.
+The tables are generated by `tests/ios/unicode-nfc.v` from pinned Unicode 17.0.0
+data, with the Unicode license included in the generated source. The generator
+verifies download hashes and can check byte-for-byte reproducibility:
+
+```sh
+v run tests/ios/unicode-nfc.v check
+```
+
+`tests/ios/native-checks.v build-string-hash` prepares the pinned conformance
+data. Its fixture checks all 20,034 records and the five NFC invariants in
+[Unicode's normalization conformance test](https://www.unicode.org/Public/17.0.0/ucd/NormalizationTest.txt).
+Native Swift comparisons check all 72 Hasher bytes across eight incoming tail
+lengths and repeated strings, including composed/decomposed text, Hangul,
+combining-order changes, compatibility characters and embedded NULs. Guarded
+source boundaries, native-tail/foreign ownership, invalid/retired input rejection,
+four workers and two drained lifetimes also pass. Eight ASan/UBSan runs cover
+both C++ backend configurations and the existing Hasher and String replacement
+fixtures. Four isolated ARM64 phases, generated C/ARM64 reviews, original-image
+traces and native measurements are retained under
+`build/ios/fortnite/string-hash-checks`.
+
+String's `count` getter `_$sSS5countSivg` now counts extended grapheme clusters,
+following [Swift's Character collection contract](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/StringCharacterView.swift)
+and the [Unicode 17 segmentation rules](https://www.unicode.org/reports/tr29/tr29-47.html).
+Its required cell `0x10dc9b808`, stub `0x10c63ace0`, forwarder `0x107c28a80`
+and call `0x10006fb98` were inspected without executing application code. Native
+Swift measurements confirm borrowed String arguments in x0/x1, a signed Int
+result in x0, preserved x20/x21 and unchanged ownership. Inline strings,
+immutable literals, registered native tails and registered foreign NSString
+storage use the existing checked UTF-8 reader, with a 1 MiB limit. Shared/custom
+storage remains unsupported.
+
+The allocation-free V scan keeps constant-sized context for regional indicator
+parity, emoji joiners and Indic consonant/linker sequences. It also handles
+CRLF, controls, combining marks, spacing marks, prepending characters and Hangul.
+Its 1,631 merged property ranges are generated from pinned Unicode 17 GCB,
+Extended_Pictographic and Indic_Conjunct_Break data, with the Unicode license
+included in the generated source:
+
+```sh
+v run tests/ios/unicode-grapheme.v check
+v run tests/ios/native-checks.v build-string-count
+```
+
+The fixture checks all 766 records and 1,990 scalar boundary decisions in
+[Unicode's grapheme conformance corpus](https://www.unicode.org/Public/17.0.0/ucd/auxiliary/GraphemeBreakTest.txt),
+including each full-string count. Native Swift comparisons cover Unicode and
+ASCII storage forms. Protected source boundaries, malformed/stale/retired
+inputs, 1 MiB CRLF and combining-mark runs, four concurrent readers and two
+drained runtimes also pass. Eight ASan/UBSan runs cover both C++ backend
+configurations and the existing String hashing and foreign UTF-8 count fixtures.
+Four isolated ARM64 phases, generated C/ARM64 reviews, pinned data, original
+image traces and native measurements are retained under
+`build/ios/fortnite/string-count-checks`.
+
+String's Hashable witness table `_$sSSSHsWP` now contains concrete `hashValue`,
+`hash(into:)` and `_rawHashValue(seed:)` witnesses plus its inherited Equatable
+table. The required cell `0x10dc9b820` and five consumers were traced in the
+original image without executing application code. Native Swift confirms the
+five-word Hashable layout, two-word Equatable layout and concrete conformance
+descriptors. The new records extend String's existing sealed metadata arena;
+local indirect relative references preserve the canonical core protocol
+identities without requiring nearby mappings. Existing metadata teardown
+retires all new records and thunks after readers drain.
+
+Instance witnesses borrow indirect Self in x20 and preserve x20/x21. They use
+the existing process-seeded Hasher and NFC String hashing implementation.
+Equality compares canonical Unicode forms, following
+[Swift's String comparison contract](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/StringComparison.swift);
+case folding and compatibility equivalence do not apply. Validated inline,
+literal, registered native-tail and registered foreign NSString storage retain
+the existing 1 MiB bound. ASCII equality allocates nothing, and Unicode
+comparison frees both normalization buffers before returning. Shared/custom
+storage and runtime-wide conformance discovery remain unsupported.
+
+`tests/ios/native-checks.v build-string-hashable` uses the existing pinned NFC
+data preflight. Its fixture checks canonical equality for all 20,034 Unicode
+normalization records through witnesses and protocol dispatch, in both argument
+orders. Native comparisons cover five signed seeds, complete 72-byte Hasher
+states, eight incoming tail lengths, repeated combines, inherited equality,
+default/generic hashing dispatch and unchanged borrowed ownership. Guarded
+source/receiver boundaries, read-only tables, eight cold publishers/workers,
+invalid/retired inputs and two drained/unmapped lifetimes pass. Ten ASan/UBSan
+runs cover both C++ backend configurations and String hashing, String metadata
+and Int hashing regressions. Four ARM64 phases, original-image traces, native
+measurements and generated C/ARM64 reviews are retained under
+`build/ios/fortnite/string-hashable-checks`.
+
+String's StringProtocol conformance descriptor `_$sSSSysMc` now resolves as a
+declaration-only data export. Its required cell `0x10dc9b828` and consumer
+`0x10006e198` were traced in the original executable. Native macOS 26.5
+measurements establish seven inherited conformances, 26 StringProtocol
+requirements and a 27-word generic witness pattern that requires instantiation.
+The checked-in schema covers all 20 reachable protocol declarations, including
+generic signatures, associated type names and requirement discriminators.
+It follows the [StringProtocol declaration](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/StringProtocol.swift)
+and [Swift's generic witness control layout](https://github.com/swiftlang/swift/blob/main/include/swift/ABI/Metadata.h).
+
+The schema generator is deterministic and checks the complete generated image:
+
+```sh
+v run tests/ios/string-protocol-schema.v check
+v run tests/ios/native-checks.v build-string-protocol
+```
+
+The declaration arena has separate executable and read-only pages and reuses
+the existing core protocol identities where implemented. Its uninstantiated
+pattern remains private. StringProtocol witness lookup and the instantiation
+callback stop with an explicit unsupported diagnostic; encoded views, character
+collections and the remaining inherited requirements still need implementation.
+No usable StringProtocol witness table is returned. Descriptor identity survives
+arena retirement so stale lookup is rejected before reading unmapped memory.
+
+Native schema comparisons, protected callback arguments, read-only mappings,
+eight cold readers and two drained/unmapped lifetimes pass. Ten ASan/UBSan runs
+cover both C++ backend configurations plus String Hashable, String metadata and
+generic witness regressions. Four isolated ARM64 phases, generated C/ARM64
+reviews, primary references and original-image traces are retained under
+`build/ios/fortnite/string-protocol-checks`.
+
+Sequence's `_copyContents(initializing:)` default now resolves as a functional
+generic operation. The original executable's required cell `0x10dc9b838`, stub
+`0x10c63ad04`, branch island `0x107c28d20` and consuming witness forwarder
+`0x100072f94` were traced without executing application code. The implementation
+follows the [Swift Sequence contract](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Sequence.swift):
+it consumes Self through `makeIterator`, initializes the destination by moving
+owned elements and returns an owned iterator plus the number copied. Empty and
+partial buffers preserve the remaining elements; filling a buffer does not call
+`next()` again. The Iterator result is explicitly indirect in ARM64 `x0`, with
+the initialized count returned in `x0`; it does not use `x8` for that result.
+
+Complete direct associated witnesses use the existing checked Sequence profile;
+tagged/accessor entries still require separate instantiation. Alignment, extent,
+negative capacity and retired-runtime checks precede consuming callbacks.
+Optional scratch is bounded and allocated in the current frame, and registry
+locks do not cross user witnesses. The caller owns the returned Iterator and
+each initialized destination element.
+
+```sh
+v run tests/ios/native-checks.v build-sequence-contents
+```
+
+Native macOS comparisons cover 180 custom Sequence cases with Int, String and
+Objective-C elements and three Iterator sizes. The shim checks 360 cases per
+runtime lifetime, adding zero-sized, padded and 32-byte-aligned elements.
+Resumption, repeated exhaustion, exact ownership, protected `x8`, destination
+guards, invalid witnesses, eight concurrent readers, reentrant callbacks and two
+drained/unmapped lifetimes pass. Ten ASan/UBSan runs cover both C++ backend
+configurations and generic Sequence, Array Sequence and Collection regressions.
+Four isolated ARM64 phases, generated C/ARM64 reviews, native measurements and
+original-image traces are retained under
+`build/ios/fortnite/sequence-contents-checks`.
+
+Sequence's `withContiguousStorageIfAvailable` default now resolves as a
+functional generic operation. The [standard default](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Sequence.swift)
+returns `nil` without invoking the closure or reading the borrowed Sequence,
+its metadata or its conformance table. Result metadata is in ARM64 `x3` and
+the indirect Optional output is in `x8`; the result's
+`storeEnumTagSinglePayload` witness encodes `.none` with its own spare
+inhabitants. The incoming Swift error register `x21` is preserved. No value is
+copied, retained or destroyed, and no registry lock crosses that witness.
+The existing bounded Result metadata profile applies; invalid layouts, store
+callbacks, output alignment/extents and retired runtimes are checked before
+output initialization. The original required cell `0x10dc9b840`, stub
+`0x10c63ad10`, branch island `0x107c28d24` and caller `0x100072fac` were traced
+without executing application code.
+
+```sh
+v run tests/ios/native-checks.v build-sequence-storage
+```
+
+Native macOS comparisons cover 96 cases with Int, String, Objective-C, Void
+and four custom Result layouts. Tests compare every output byte and its guards
+for three initial fills, preserve both zero and nonzero incoming `x21`, and
+place inaccessible pointers in all unused arguments. Read-only metadata,
+unchanged borrowed ownership, zero-sized/padded/aligned/spare-inhabitant
+layouts, invalid/retired inputs, eight cold publishers and workers, reentrant
+store callbacks and two drained/unmapped lifetimes pass. Ten ASan/UBSan runs
+cover both C++ backend configurations and `_copyContents`, Array Sequence and
+Collection regressions. Four isolated ARM64 phases, generated C/ARM64 reviews,
+native measurements and original-image traces are retained under
+`build/ios/fortnite/sequence-storage-checks`.
+
+The integer-backed RawRepresentable `encode(to:)` default now resolves as a
+functional protocol dispatch. It follows the [Swift Codable default](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Codable.swift):
+obtain an owned single-value container, read `rawValue` as Int, invoke the
+container's Int encoding witness, then destroy the container on success or
+throw while forwarding the original owned error. It also destroys an
+initialized container if a later checked dispatch fails. Encoder and Self
+remain borrowed. The fixed Int constraint needs no associated-type lookup or
+RawValue destruction; the Self Encodable table is unused.
+
+The supported profile accepts inline and borrowed boxed Encoders and owned
+inline mutable containers. Boxed mutable containers still require separate
+copy-on-write support and are rejected explicitly. Frame-local scratch holds
+the container and Int, and no registry lock crosses user callbacks. This
+default does not implement the JSONEncoder serializer or Dictionary encoding.
+The original required cell `0x10dc9b848`, stub `0x10c63ad1c`, branch island
+`0x107c284e0` and caller `0x1000659bc` were traced without running app code.
+
+```sh
+v run tests/ios/native-checks.v build-raw-integer-encoding
+```
+
+Native macOS comparisons cover 128 cases: eight signed Int bit patterns,
+inline/boxed Encoders, both guarded-record boundaries, zero/nonzero incoming
+errors and success/throw paths. Tests check container/getter/encode/destroy
+ordering, original owned error transfer, exact reference balance, a one-byte
+read-only Self and getters that clobber `x21`. Protected unused witnesses,
+checked dispatch failure cleanup, invalid/retired inputs, eight workers,
+reentrant callbacks and two drained/unmapped lifetimes pass. Ten ASan/UBSan
+runs cover both C++ backend configurations and RawRepresentable, Date and
+Dictionary conformance regressions. Four isolated ARM64 phases, generated
+C/ARM64 reviews, native measurements and original-image traces are retained
+under `build/ios/fortnite/raw-integer-encoding-checks`.
+
+The integer-backed RawRepresentable `init(from:)` default now dispatches
+through the Decoder's single-value container, decodes Int, and calls the
+failable `init(rawValue:)` witness. It consumes Decoder exactly once on success,
+getter/decode throws and checked dispatch failures. The owned container is
+destroyed before the raw initializer runs, matching native Swift. Shared boxes
+release their owned reference without destroying another reader's payload.
+Successful Self values move through their value witness into the caller's
+indirect result; no result is written on failure. The associated RawValue
+metadata and Self Decodable conformance are unused under the Int constraint.
+
+This is a bounded decoding profile. When the raw initializer rejects a value,
+native Swift constructs `DecodingError.dataCorrupted` with the decoder's
+coding path and type/value description. Generic Swift error boxes and that
+Context metadata are still unsupported here. This branch consumes its owned
+temporaries, then stops with an explicit diagnostic; it does not return a
+substitute error or pretend the value decoded successfully. Errors thrown by
+the getter or Int decoder transfer unchanged with their original ownership.
+This default also does not implement the JSONDecoder serializer.
+
+```sh
+v run tests/ios/native-checks.v build-raw-integer-decoding
+```
+
+Native macOS comparisons cover 288 cases: six Int bit patterns, inline/boxed
+Decoder and container, unique/shared boxes, both guarded-record boundaries and
+success/getter-throw/decode-throw paths. Tests check callback order, non-POD
+Self ownership, original error transfer and unreadable unused generic arguments.
+Additional compatibility tests cover guarded 1/24/32-byte results, an enum
+with an extra inhabitant, rejected raw values, checked dispatch failures,
+initialized Self cleanup after invalid output, eight workers, reentrant
+callbacks and two drained/unmapped lifetimes. The original required cell
+`0x10dc9b850`, stub `0x10c63ad28`, branch island `0x107c284dc` and caller
+`0x10006596c` were inspected without executing app code.
+
+Ten ASan/UBSan runs cover both C++ backend configurations and integer-backed
+encoding, Date and Dictionary encoding conformance regressions. Four isolated
+ARM64 phases pass: the decoding fixture, launch probe and two import audits.
+Generated C/ARM64 reviews, native measurements, compressed artifacts and
+original-image traces are retained under
+`build/ios/fortnite/raw-integer-decoding-checks`.
+
+Array's conditional Encodable conformance, `_$sSayxGSEsSERzlMc`, now supplies
+a genuine descriptor and canonical witness tables with one private
+Element:Encodable word. The conditional witness remains borrowed; cache hits
+read neither the argument array nor later replacement witnesses. Only
+canonical Array metadata from this runtime can specialize the conformance.
+The generic table pattern is never returned as a specialized table.
+
+Its encoding witness creates an owned unkeyed container even for an empty
+array. For each element it calls the element's copy witness, invokes the
+container's generic encoding requirement, then destroys the temporary before
+continuing or forwarding the original owned error. The container is destroyed
+after the last element temporary on success, throw or checked dispatch failure.
+Array and Encoder remain borrowed, and no registry lock spans user callbacks.
+This matches the [Swift Array Codable implementation](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Codable.swift).
+
+The supported profile accepts typed native array storage and the immortal
+empty array, inline or borrowed boxed Encoders, and owned inline mutable
+containers. Empty arrays also release owned boxed containers correctly,
+including shared boxes. Nonempty boxed mutable containers need copy-on-write
+support and stop explicitly after cleanup. Bridged Objective-C array storage,
+the JSONEncoder serializer and Dictionary serialization remain unsupported.
+The required data cell `0x10dc9b868` and its four consumers at `0x100065cc0`,
+`0x10006ed00`, `0x10006f1c0` and `0x1000730c4` were inspected without running
+application code.
+
+```sh
+v run tests/ios/native-checks.v build-array-encoding
+```
+
+Native macOS comparisons cover 144 Int/String/Date cases: empty and nonempty
+arrays, inline/boxed Encoders, both guarded-record boundaries and errors at
+different element positions. They check element ownership and callback order,
+original error transfer, nested Array conformance specialization and expired
+conditional argument cache hits. Compatibility checks also cover sealed
+descriptor/table publication, eight cold publishers and workers, reentrant
+callbacks, checked dispatch failures, shared-box cleanup, invalid/retired
+requests and two drained/unmapped lifetimes.
+
+Ten ASan/UBSan runs cover both C++ backend configurations and Array Sequence,
+integer-backed decoding and Dictionary encoding conformance regressions.
+Four isolated ARM64 phases, generated C/ARM64 reviews, native measurements and
+original-image traces are retained under `build/ios/fortnite/array-encoding-checks`.
+
+Array's conditional Decodable conformance, `_$sSayxGSesSeRzlMc`, now supplies
+its own descriptor and sealed canonical witness tables with a borrowed private
+Element:Decodable word. It uses the native throwing unkeyed-container getter,
+nonthrowing `isAtEnd` and generic `decode(Element.self)` requirements. Successful
+elements move into typed native Array storage; growing the buffer moves the
+initialized prefix without extra retains or destruction. The builder uses the
+existing 1 MiB storage bound.
+
+The decoding witness consumes the Decoder, releases its owned container and
+publishes an Array only on success. A throwing container getter initializes no
+container; a throwing element decode initializes no element. On an element
+error or checked growth failure, the current initialized temporary and partial
+Array are released before the container and Decoder. The original owned Swift
+error is forwarded unchanged, and the failure result remains unwritten. No
+registry lock spans application callbacks. This follows the
+[Swift Array decoding implementation](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Codable.swift).
+
+The supported profile includes inline and boxed/shared Decoders, inline mutable
+containers and empty boxed/shared containers. Nonempty boxed mutable containers
+stop explicitly after cleanup because they require copy-on-write support.
+This conformance does not add JSON serialization or the remaining decoding APIs.
+The required data cell `0x10dc9b878` and all four consumers at `0x100065fa8`,
+`0x10006f30c`, `0x100070950` and `0x100073268` were inspected without executing
+application code.
+
+```sh
+v run tests/ios/native-checks.v build-array-decoding
+```
+
+Native macOS comparisons cover 384 Int/String/Date cases, including empty
+arrays, inline/boxed/shared Decoders, guarded ABI records, throwing container
+getters and errors at different element positions. Additional 130-element
+cases check repeated growth and large partial-prefix cleanup. Compatibility
+checks cover expired conditional arguments, nested Array specialization,
+sealed descriptor/table publication, eight cold publishers and workers,
+reentrant callbacks, shared-box cleanup, missing dispatch, invalid output,
+bounded-growth failure and two drained/unmapped runtime lifetimes.
+
+Ten ASan/UBSan runs cover both C++ backend configurations and Array encoding,
+integer-backed decoding and Dictionary encoding regressions. Four isolated
+ARM64 phases pass: the decoding fixture, fresh launch probe and both import
+audits. Generated C/ARM64 reviews, native measurements, compressed artifacts
+and original-image traces are retained under
+`build/ios/fortnite/array-decoding-checks`.
+
+Swift Bool now exports canonical metadata, its nominal descriptor and complete
+metadata accessor through `_$sSbN`, `_$sSbMn` and `_$sSbMa`. Bool has a distinct
+metadata identity and value-witness table from Int, UInt8 and ObjectiveC.ObjCBool.
+The one-byte inline POD layout has 254 extra inhabitants. Copy/take operations
+preserve the payload byte, and the existing measured ObjCBool enum operations
+supply the same tag-width transitions and UInt32 wrapping as native Bool.
+Copy/take never widens beyond the payload byte.
+
+The accessor returns complete metadata for every request. Its code is sealed
+RX, its metadata/descriptors/witnesses RO, and publication is synchronized.
+Metadata remains alive while Swift owners and typed Array metadata drain;
+quiescent retirement unmaps both pages and prevents cache recreation. Only
+libswiftCore receives these three exports. Reflection field records, textual
+Bool mangling, dynamic-cast admission and additional Bool protocol/API exports
+remain outside this profile. The layout follows the
+[Swift metadata ABI](https://github.com/swiftlang/swift/blob/main/docs/ABI/TypeMetadata.rst).
+
+```sh
+v run tests/ios/native-checks.v build-bool-metadata
+```
+
+Native macOS comparisons cover all 256 payload bytes, guarded one-byte
+copy/take and zero-footprint destruction, all 254 extra inhabitants, enum-tag
+width boundaries and UInt32 count/tag wrapping, complete metadata responses
+and preserved x20/x21. Bool values inside Any exercise copy, take, same/different
+type assignment and destruction against native witnesses. Compatibility checks
+also cover symbolic descriptor lookup, typed POD arrays, scoped exports, actual
+RX/RO protection, eight cold publishers/readers and two drained/unmapped lifetimes.
+The original required cell `0x10dc9b888` and its consumer `0x10003e810`, which
+stores Bool metadata beside its payload in an existential, were inspected
+without executing application code.
+
+Ten ASan/UBSan runs cover both C++ backend configurations and ObjCBool metadata,
+Int8/UInt8 metadata and Any ownership regressions. Four isolated ARM64 phases
+pass: the Bool fixture, fresh launch probe and both import audits. Generated
+C/ARM64 reviews, primary ABI references, native measurements, compressed
+artifacts and original-image traces are retained under
+`build/ios/fortnite/bool-metadata-checks`.
+
+Int now supplies a genuine CustomStringConvertible conformance and witness
+table through `_$sSis23CustomStringConvertiblesMc` and
+`_$sSis23CustomStringConvertiblesWP`. It references the canonical protocol
+already used by String. The shared declaration now carries the measured
+getter discriminator, and its requirement/base aliases are exported.
+The generic `description` dispatcher forwards the caller's metadata, witness
+table and borrowed Self to the selected getter, including application witnesses.
+
+The Int witness borrows exactly eight bytes and returns an owned decimal String
+in x0/x1. Values through 15 characters use inline text; larger results use the
+existing registered String owner and ARC. Decimal formatting uses stack scratch
+and the same formatter as the consuming Int branch of String(describing:).
+It covers Int.min without negating it or overflowing a signed magnitude.
+This follows the [Swift integer description implementation](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Integers.swift).
+
+A separate two-page arena holds RX call adapters and an RO concrete table and
+conformance. Int and String metadata initialize before publication, avoiding an
+initialization cycle. No registry lock spans generic getter callbacks. Owners
+and workers drain before this arena retires, while both metadata dependencies
+are still live; retired exports cannot recreate it. General conformance
+discovery, reflection and other types' description conformances remain outside
+this profile.
+
+```sh
+v run tests/ios/native-checks.v build-integer-description
+```
+
+Native macOS comparisons cover 247 integer inputs at both guarded record
+boundaries, through direct witnesses and generic dispatch: signed limits,
+powers of ten and neighboring values, and deterministic random bit patterns.
+They check exact decimal bytes, borrowed readonly inputs, owned inline/large
+results, retain/release balance and x20/x21. Generic dispatch also checks String's
+shared protocol and a caller-supplied owned String getter. Compatibility checks
+cover concrete lookup with protected unused arguments, RX/RO mappings, scoped
+exports, eight cold publishers/workers, reentrant callbacks and two drained,
+unmapped runtime lifetimes. The original required cell `0x10dc9b898` and its
+consumer `0x10006aa60` were inspected without running application code.
+
+Ten ASan/UBSan runs cover both C++ backend configurations and consuming
+descriptions, integer hashing and String protocol regressions. Four isolated
+ARM64 phases pass: the new fixture, fresh launch probe and both import audits.
+Generated C/ARM64 reviews, primary contracts, native measurements, compressed
+artifacts and original-image traces are retained under
+`build/ios/fortnite/integer-description-checks`.
+
+Optional now exports its generic metadata accessor `_$sSqMa` and nominal
+descriptor `_$sSqMn`. Specializations are canonical by the exact Wrapped
+metadata pointer and return complete responses in x0/x1. Each has a sealed
+metadata/value-witness page with Optional's distinct metadata kind, its Wrapped
+argument, and the computed size, stride, flags and remaining extra inhabitants.
+Wrapped's first spare representation encodes nil; payloads without one gain a
+tag byte. Nested Optionals consume further spare representations before growing.
+This follows the [Swift single-payload enum implementation](https://github.com/swiftlang/swift/blob/main/stdlib/public/runtime/Enum.cpp).
+
+Copy, take, assignment and destruction operate on live payloads through Wrapped's
+witnesses. Nil values never retain or destroy a payload. Enum witnesses support
+projection, injection and enclosing single-payload enums, including native tag
+widths and UInt32 arithmetic. Some-to-nil assignment publishes nil before
+destroying the old payload from bounded stack storage, so destructor callbacks
+can reenter safely. Typed arrays use these witnesses to retire only live values.
+The profile requires complete, copyable, bitwise-takable inline Wrapped values,
+alignment at most eight, and an Optional layout fitting the 24-byte value buffer.
+Unsupported layouts fail explicitly. General generic metadata allocation and
+reflection remain unsupported. Bounded Optional Codable support is described
+below; other Optional protocol conformances remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-optional-metadata
+```
+
+Native macOS comparisons cover three Optional nesting levels over Int, Bool,
+UInt8 and String: complete metadata responses, layouts/flags, remaining spare
+representations, byte footprints across tag-width/UInt32 boundaries, protected
+copy/take inputs, owned String payloads and x20/x21. Compatibility checks also
+cover Bool's spare-representation exhaustion through 256 levels, typed Array
+destruction, reentrant destructors, RX/RO mappings, eight cold publishers/workers
+and two drained/unmapped lifetimes. The original required cell `0x10dc9b8a0`,
+stub `0x10c63ae00`, branch island `0x107c28d18` and four callers were inspected,
+including Array<Optional<Element>> construction and a value-witness copy.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and Array
+Sequence, Bool metadata and Int description regressions. Four isolated ARM64
+phases pass: the Optional fixture, fresh launch probe and both import audits.
+Generated C/ARM64 reviews, primary contracts, native measurements, compressed
+artifacts and original-image traces are retained under
+`build/ios/fortnite/optional-metadata-checks`.
+
+The Swift core `_bridgeAnyObjectToAny` entry,
+`_$ss018_bridgeAnyObjectToB0yypyXlSgF`, now returns owned Any values from borrowed
+object references. Its ARM64 adapter accepts the object in x0 and the indirect
+32-byte result in x8. It writes the object word and metadata at offset 24 while
+preserving the intervening padding. A nonnull result carries its dynamic/formal
+class metadata and one acquired strong reference. A null input becomes an Any
+containing Optional<AnyObject>.none, using canonical class-constrained AnyObject
+metadata and the existing generic Optional witnesses. This matches
+[Swift's Objective-C bridge](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/BridgeObjectiveC.swift).
+
+The bridge supports live registered Objective-C instances/constants and Swift
+class instances with complete one-reference witnesses. Tagged references,
+private buffers and nonclass contexts remain unsupported; rejected inputs leave
+the result untouched and do not consume the source. Formal-class callbacks run
+without a registry lock. The sealed RX/RO adapter and AnyObject metadata retire
+after Optional specializations and before their shared UnknownObject witnesses,
+once all values and callbacks have drained. The export is scoped to Swift core.
+
+```sh
+v run tests/ios/native-checks.v build-object-any
+```
+
+Native macOS comparisons cover nil and dynamic base/subclass objects, exact
+result metadata and padding, guarded result boundaries, readonly Any sources,
+copy/take/assignment/destruction ownership and preserved x20/x21. Compatibility
+checks additionally cover registered constants, a Swift heap class whose last
+owner is an Any, rejection during deallocation, unlocked formal-class reentry,
+eight cold publishers/workers and two drained/unmapped lifetimes. The original
+cell `0x10dc9b8a8`, stub `0x10c63ae18`, branch island `0x107c29354` and two callers
+were inspected without executing application code.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and Any,
+dynamic-cast and object-type regressions. Four isolated ARM64 phases pass: the
+bridge fixture, fresh launch probe and both import audits. Generated C/ARM64
+reviews, primary contracts, native measurements, compressed artifacts and
+original-image traces are retained under
+`build/ios/fortnite/object-any-checks`.
+
+Swift core now exports `_HashTable.previousHole(before:)`,
+`_$ss10_HashTableV12previousHole6beforeAB6BucketVAF_tF`. The direct ARM64 entry
+accepts the bucket offset in x0 and the frozen table's words pointer and mask in
+x1/x2, returning the preceding hole in x0 while preserving x20/x21. It searches
+strictly before the given bucket, wraps through earlier words and can return
+the starting bucket after a full circle when that is the only hole. These
+semantics follow [Swift's HashTable implementation](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/HashTable.swift).
+
+The caller borrows a complete, stable, aligned occupancy bitmap. Its bucket
+count must be a positive signed power of two; unused bits in a partial word
+must be set. Checked failures reject malformed arguments and full bitmaps
+finitely. Valid searches only read the bitmap, allocate no memory and use no
+locks, ARC or runtime-owned storage. Publication is scoped to the active Swift
+core runtime; an existing direct function pointer can still read caller-owned
+storage after runtime teardown. Other HashTable operations remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-hash-previous-hole
+```
+
+Native macOS comparisons exhaust every nonfull bitmap with one, two, four,
+eight or sixteen buckets and every starting bucket. Both guarded readonly
+boundaries are checked through 32,768 buckets, including cross-word scans,
+wraparound, sole holes, random multiple holes and preserved x20/x21.
+Compatibility checks also cover finite full/malformed rejection, scoped
+exports, eight concurrent readers and two empty runtime teardowns. The required
+cell
+`0x10dc9b8b8`, stub `0x10c63ae30`, branch island `0x107c28b14` and two callers
+were inspected without executing application code.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and Set,
+Dictionary metadata and Hasher regressions. Four isolated ARM64 phases pass:
+the bitmap fixture, fresh launch probe and both import audits. Generated
+C/ARM64 reviews, primary contracts, native measurements, compressed artifacts
+and original-image traces are retained under
+`build/ios/fortnite/hash-previous-hole-checks`.
+
+Swift core now exports `_MergeError` metadata `_$ss11_MergeErrorON`, its
+complete accessor `_$ss11_MergeErrorOMa` and nominal descriptor
+`_$ss11_MergeErrorOMn`. The frozen enum has one `keyCollision` case, as defined
+in [Swift's Dictionary implementation](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Dictionary.swift).
+Its identity is distinct from Void, with enum metadata kind, size zero, stride
+one, alignment one and no extra inhabitants. All eleven value witnesses are
+implemented. Copies, takes, destruction, projection and injection need no value
+storage; the enum's own tag is always zero.
+
+Enclosing single-payload enum tags use one, two or four bytes as required.
+At UInt32.max empty cases, native `_MergeError` still uses one byte, unlike
+Void's zero-byte behavior. Dedicated tag witnesses preserve that distinction.
+Nested Optionals add a tag byte at each level, and typed Arrays use stride one
+with POD destruction. The canonical accessor is sealed RX; metadata,
+descriptors and witnesses are sealed RO before publication. Both pages retire
+after Array/Optional users and callbacks drain, and retired exports cannot
+recreate them. Reflection remains unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-merge-error-metadata
+```
+
+Native macOS comparisons cover complete metadata responses, all eleven
+witnesses, inaccessible zero-size storage, guarded tag-width boundaries and
+UInt32 wrap, three nested Optional representations and preserved x20/x21.
+Compatibility checks also cover symbolic descriptor lookup, typed Array
+destruction, RX/RO mappings, scoped exports, eight cold publishers/readers and
+two drained/unmapped lifetimes. The original required cell `0x10dc9b8c0` and
+consumer `0x10006845c`, which passes the metadata to `swift_allocError`, were
+inspected without executing application code.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and Void,
+Bool metadata and Optional metadata regressions. Four isolated ARM64 phases
+pass: the metadata fixture, fresh launch probe and both import audits.
+Generated C/ARM64 reviews, primary contracts, native measurements, compressed
+artifacts and original-image traces are retained under
+`build/ios/fortnite/merge-error-metadata-checks`.
+
+The concrete `_MergeError: Error` witness table
+`_$ss11_MergeErrorOs0B0sWP` and conformance descriptor
+`_$ss11_MergeErrorOs0B0sMc` now work with the canonical enum metadata. All four
+requirements are implemented: domain `Swift._MergeError`, code zero, an owned
+empty NSDictionary for userInfo and nil for the embedded NSError. The domain
+is an owned immortal String literal that supports normal copy/take/destruction.
+These results match native Swift's [Error defaults](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/ErrorType.swift).
+
+The table and adapters share the enum's sealed RX/RO pages. A local indirect
+reference identifies the shared canonical Error protocol. Concrete witness
+lookup requires the exact live enum metadata and rejects remembered retired
+descriptors before reading unmapped bytes. The shared Error declaration outlives
+the conformance during teardown. General conformance discovery, native Swift
+error boxes and their NSError bridging remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-merge-error-conformance
+```
+
+Native macOS comparisons check all four requirements, concrete table lookup,
+String copy/take/destruction, dictionary ownership, inaccessible zero-size Self
+and preserved x20/x21. Native Swift also consumes the compatibility descriptor
+and returned String. Compatibility checks cover RX/RO mappings, scoped exports,
+rejected foreign metadata/stale descriptors, eight cold publishers/workers and
+two drained/unmapped lifetimes. The original required cell `0x10dc9b8c8` and
+consumer `0x100068464`, which loads the table alongside the enum metadata for
+`swift_allocError`, were inspected without executing application code.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and enum
+metadata, CFError extraction and concrete witness lookup regressions. Four
+isolated ARM64 phases pass: the conformance fixture, fresh launch probe and
+both import audits. Generated C/ARM64 reviews, primary contracts, native
+measurements, compressed artifacts and original-image traces are retained under
+`build/ios/fortnite/merge-error-conformance-checks`.
+
+`_StringGuts.grow(_:)`, `_$ss11_StringGutsV4growyySiF`, now creates uniquely
+owned native UTF-8 storage with the requested total capacity. Small and negative
+hints still convert the representation to native storage, preserving at least
+the current byte count. Unique native storage applies Swift's 1.625x geometric
+growth; retained aliases copy without inheriting spare capacity. This matches
+the [Swift String growth contract](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/StringGutsRangeReplaceable.swift).
+
+The sealed adapter receives signed capacity in x0 and the two-word inout value
+in x20, preserving x20/x21. Small Strings, borrowed immutable literals,
+registered native owners and checked foreign NSString storage are supported.
+Contents, ASCII flags and a trailing NUL survive the conversion. The replacement
+is published before the old owner is released. Invalid UTF-8, inconsistent
+native headers, unregistered native owners and capacities beyond the supported
+48-bit count fail explicitly; shared/custom storage remains unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-string-grow
+```
+
+Native macOS comparisons cover negative, zero, small and large capacity hints,
+UTF-8 and embedded NULs, unique geometric growth, retained aliases and preserved
+registers. Compatibility checks add inaccessible source boundaries, foreign
+storage conversion, append after growth, rejected owners/headers, eight cold
+publishers/workers and two drained/unmapped lifetimes. The original required
+cell `0x10dc9b8d0`, stub `0x10c63ae3c`, branch island `0x107c2873c` and four
+callers were inspected without executing application code.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and interpolation,
+String replacement and NSString unbridging regressions. Four isolated ARM64
+phases pass: the growth fixture, fresh launch probe and both import audits.
+Generated C/ARM64 reviews, primary contracts, native comparisons, compressed
+artifacts and original-image traces are retained under
+`build/ios/fortnite/string-grow-checks`.
+
+The `StaticString` nominal descriptor `_$ss12StaticStringVMn`, canonical metadata
+and complete accessor now work. The frozen value contains two words and a flag
+byte: size 17, stride 24, alignment 8, POD, inline, and no extra inhabitants.
+The descriptor exposes three field offsets, 0, 8 and 16, matching the
+[Swift StaticString layout](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/StaticString.swift).
+
+Copy and take witnesses preserve exactly 17 initialized bytes without reading
+the borrowed pointer or interpreting scalar/count/flag bits. Destruction does
+not access the value. Enclosing single-payload enums use one external tag byte
+when empty cases exist, with UInt32 indices encoded in the payload. The
+accessor is sealed RX and metadata/descriptors/witnesses are sealed RO before
+publication. Both pages retire after Optional/Array users and callbacks drain;
+retired exports cannot recreate them. Reflection and protocol conformances
+remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-static-string-metadata
+```
+
+Native macOS comparisons cover complete metadata responses, field offsets,
+all eight witnesses, protected 17-byte copy/take boundaries, inaccessible
+destruction, UInt32 enum tags, three nested Optional layouts and x20/x21.
+Compatibility checks add symbolic descriptor lookup, typed Array/POD
+destruction, RX/RO mappings, scoped exports, eight cold publishers/readers and
+two drained/unmapped lifetimes. The original required cell `0x10dc9b8d8` and
+indirect `__swift5_typeref` reference at `0x10dc7fa50` were inspected without
+executing application code.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and Bool,
+Optional and Array metadata regressions. Four isolated ARM64 phases pass:
+the metadata fixture, fresh launch probe and both import audits. Generated
+C/ARM64 reviews, primary contracts, native measurements, compressed artifacts
+and original-image traces are retained under
+`build/ios/fortnite/static-string-metadata-checks`.
+
+`_print_unlocked`, `_$ss15_print_unlockedyyx_q_zts16TextOutputStreamR_r0_lF`,
+now borrows supported values and calls the supplied TextOutputStream write
+witness. The generic ABI passes source, inout target, source metadata, target
+metadata and table in x0...x4. The shared sealed adapter supplies target self
+in x20 and preserves x20/x21. No registry lock spans the callback, so streams
+can reenter printing or retain the supplied String. Inputs remain owned by
+their callers; temporary owners retire after write returns. This follows
+[Swift's printing and stream contracts](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/OutputStream.swift).
+
+The concrete source profile covers String, Int, Bool, Void, StaticString and
+`_MergeError`. Pointer/scalar StaticStrings preserve Unicode and embedded NULs;
+copied text is bounded to 1 MiB. A reflection path handles single-case,
+zero-payload enums in loaded images. It checks aligned, file-backed metadata,
+zero-size POD witnesses, enum/field records and bounded UTF-8 case names.
+Static printing conformances prevent this fallback. Other source types,
+general reflection and custom source-conformance dispatch remain unsupported
+and fail explicitly.
+
+```sh
+v run tests/ios/native-checks.v build-print-unlocked
+```
+
+Native macOS comparisons cover the concrete source profile, arbitrary stream
+tables, retained callback Strings, Unicode/NUL text, zero-size inaccessible
+values and preserved context registers. Native reflection and Vinix both print
+a synthetic `TimePeriod.daily` enum as `daily`. Compatibility checks add owned
+input reference counts, malformed/unaligned image records, custom printing
+conformance rejection, reentrant callbacks, eight cold publishers/workers and
+two drained/unmapped lifetimes.
+
+The original required cell `0x10dc9b8e0`, stub `0x10c63ae48`, branch island
+`0x107c28744` and caller `0x1000686ec` were inspected without executing
+application code. That caller passes image metadata `0x10dc9e438` for
+`TimePeriod`: size zero, stride one, one empty case `daily`, and six non-printing
+static conformances. The implementation validates this representation rather
+than depending on its name or address.
+
+Ten ASan/UBSan runs pass across both C++ backend configurations and interpolation,
+Int description and StaticString metadata regressions. Four isolated ARM64
+phases pass: the printing fixture, fresh launch probe and both import audits.
+Generated C/ARM64 reviews, primary contracts, native comparisons, compressed
+artifacts and original-image traces are retained under
+`build/ios/fortnite/print-unlocked-checks`.
+The C review verifies explicit stack scratch and rejects hidden helper heap
+allocations on the printing paths.
+
+`IndexingIterator` now exports its generic nominal descriptor, metadata accessor
+and `IteratorProtocol` conformance. The descriptor records one type parameter
+and its `Collection` requirement, with two key arguments: `Elements` metadata
+and its canonical Collection witness. Array, ArraySlice and Range<Int> iterators
+share this nominal identity and reuse the existing Sequence/Collection caches.
+Their metadata preserves the native generic arguments and field-offset vector;
+all supported metadata requests return the same complete specialization.
+
+Array iterator metadata does not complete or read Element metadata. Foreign
+collections and mismatched witnesses fail before reading their records.
+Publication seals both metadata pages under the existing recursive registry
+lock, with no callback across it; quiescent shutdown retires the pages and
+rejects stale conformance lookups. General Collection conformances, generic
+mangled-name substitution and field reflection remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-indexing-iterator-metadata
+```
+
+Installed ARM64 Swift comparisons cover the generic signature, accessor ABI,
+three metadata layouts and exact single-payload enum bytes through UINT32_MAX.
+The existing iterator witnesses now clear unused payload bytes when an external
+tag is required, matching native storage. Compatibility checks cover protected
+generic inputs, ownership transfer, eight concurrent publishers and two fully
+retired runtime lifetimes; Array Sequence, Collection and Array metadata provide
+regression coverage.
+
+The original required descriptor cell `0x10dc9b8e8` and indirect
+`__swift5_typeref` reference at `0x10dc7fb74` were inspected without executing
+application code. Its expression is `IndexingIterator<Array<T>>`.
+Evidence is retained under
+`build/ios/fortnite/indexing-iterator-metadata-checks`.
+Ten ASan/UBSan host runs and four isolated ARM64 phases pass, including the
+fixture, fresh launch probe and both import audits. Generated C/ARM64 reviews
+verify the metadata helpers introduce no hidden allocations.
+
+`_DictionaryStorage.copy(original:)` now implements the allocation half of
+Swift's dictionary copy and mapValues operations. Its Swift class-method ABI
+borrows the original in x0 and destination class metadata in x20, returning an
+owned storage object in x0. A sealed adapter preserves x20/x21 and ignores x8.
+
+The result preserves the original scale, age and hash seed, resets reserve and
+extra fields, and starts with zero entries and an empty occupancy bitmap with
+native padding bits. Key and Value tails use the destination metadata's strides
+and alignments, including zero-size values and 256-byte alignment. The caller
+copies occupancy and initializes entries after return; this helper never copies
+source entries, retains their owners or invokes Hashable/value witnesses.
+Source count, capacity and tail pointers remain unread.
+
+Source storage must be a registered live native dictionary or a canonical empty
+singleton. Class records remain borrowed; destination Key/Value metadata must
+remain readable and complete.
+The supported class layout has a 64-byte instance header, no instance prefix,
+and four immediate metadata members. Allocations are bounded to scale 14 and
+16 MiB. Other layouts fail explicitly; storage-class metadata instantiation
+and general Dictionary operations still require further support.
+
+Native dictionary destruction passes `_swift_deallocClassInstance` the fixed
+header size 64 and alignment mask 7, including for larger, over-aligned tails.
+Only storage allocated by these raw storage helpers receives a registry marker
+allowing that entry to use its actual recorded allocation extent. Ordinary heap allocations
+and `_swift_deallocObject` retain exact extent checks. The Dictionary bridge
+also accepts fresh scale-zero typed storage with zero capacity.
+
+```sh
+v run tests/ios/native-checks.v build-dictionary-storage-copy
+```
+
+Installed ARM64 Swift comparisons cover seven target layouts, boundary scales,
+protected source tails, unchanged source ownership and caller-initialized
+snapshots. Compatibility checks add overflow/size and lifetime rejection,
+reentrant element destruction, eight concurrent workers and two fully retired
+runtimes. Dictionary metadata, Dictionary bridging and Swift heap allocation
+provide regression coverage. Evidence is retained under
+`build/ios/fortnite/dictionary-storage-copy-checks`.
+Ten ASan/UBSan host runs and four isolated ARM64 phases pass: the fixture,
+fresh launch probe and both import audits. Generated C/ARM64 reviews verify
+one registered allocation per result, stack allocation bookkeeping and no
+hidden helper allocations.
+
+The original required cell `0x10dc9b908`, stub `0x10c63ae6c`, branch island
+`0x107c28a3c` and five caller sites were inspected without executing application
+code. That launch passed the copy import and identified
+`_DictionaryStorage.resize(original:capacity:move:)` as the next linking blocker.
+
+`_DictionaryStorage.resize(original:capacity:move:)` now implements its native
+allocation contract. Original, capacity and move arrive in x0/x1/x2, with class
+metadata in x20 and an owned result in x0. A sealed adapter preserves x20/x21.
+The helper leaves the original untouched and ignores the move flag; its caller
+rehashes and copies or moves initialized entries, then clears a moved source.
+
+Capacity is rounded to the smallest supported power-of-two bucket count with
+the native three-quarter load factor and at least one hole. Zero and negative
+capacities normalize to one. The result starts empty with fresh age (the low
+32 bits of its address hash), fresh seed (its address, or scale with deterministic
+hashing), zero reserve/extra fields and native bitmap padding. Copy and resize
+share checked tail allocation, including zero-size values and 256-byte
+alignment, with the existing scale-14 and 16-MiB bounds. Requested capacities
+above 12,288 fail before allocation. The unused source and Hashable witness
+may be inaccessible; destination class and complete Key/Value metadata remain
+borrowed and readable.
+
+```sh
+v run tests/ios/native-checks.v build-dictionary-storage-resize
+```
+
+Installed ARM64 comparisons cover seven layouts, capacity boundaries, fresh
+age/seed in normal and deterministic hashing modes, inaccessible source/x8,
+and caller-owned rehash copy/move lifecycles. Compatibility checks add rejected
+tail extents and retired lifetimes, reentrant destruction, eight concurrent
+workers and two drained/unmapped runtimes. Dictionary storage copy, Dictionary
+metadata and Swift heap allocation provide regression coverage. Evidence is
+retained under `build/ios/fortnite/dictionary-storage-resize-checks`.
+
+Ten ASan/UBSan host runs and four isolated ARM64 phases pass: the fixture,
+fresh launch probe and both import audits. Generated C/ARM64 review confirms
+one registered allocation per result and no hidden helper allocations. The
+original required resize cell `0x10dc9b910`, stub `0x10c63ae78`, branch island
+`0x107c28928` and four caller sites were inspected without executing app code.
+That launch passed resize and identified `_DictionaryStorage.allocate(capacity:)`
+as the next linking blocker.
+
+`_DictionaryStorage.allocate(capacity:)` now returns fresh empty storage through
+its native class-method ABI: capacity in x0, storage metatype in x20 and an
+owned result in x0. A sealed adapter preserves x20/x21 and ignores x8.
+It shares capacity rounding and fresh age/seed initialization with resize.
+Zero and negative capacities normalize to one, producing independent owned
+allocations rather than the canonical empty singleton. Occupancy starts empty,
+including native padding bits, and the caller initializes Key/Value entries.
+No Hashable or value witness is invoked during allocation.
+
+The supported borrowed class metadata and complete Key/Value layouts retain
+the scale-14 and 16-MiB limits; requested capacities above 12,288 fail before
+allocation. Seven native target layouts include zero-size values and 256-byte
+alignment. Comparisons cover every supported capacity transition, normal and
+deterministic hashing, inaccessible x8 and caller-initialized copy/move
+lifecycles. Compatibility checks add protected Hashable records, independent
+empty owners, rejected tail extents and retired lifetimes, reentrant destruction,
+eight concurrent workers and two drained/unmapped runtimes.
+
+```sh
+v run tests/ios/native-checks.v build-dictionary-storage-allocate
+```
+
+Dictionary storage resize/copy and Swift heap allocation provide regression
+coverage. Evidence is retained under
+`build/ios/fortnite/dictionary-storage-allocate-checks`.
+
+Ten ASan/UBSan host runs and four isolated ARM64 phases pass: the fixture,
+fresh launch probe and both import audits. Generated C/ARM64 reviews verify
+one registered allocation per result and no hidden helper allocations.
+The original required allocation cell `0x10dc9b918`, stub `0x10c63ae84`, branch
+island `0x107c28710` and five caller sites were inspected without executing app
+code. That launch passed allocation and identified the `_DictionaryStorage`
+nominal descriptor, `_$ss18_DictionaryStorageCMn`, as its next linking blocker.
+Its required cell `0x10dc9b920` has four indirect context references in
+`__swift5_typeref`.
+
+`_$ss18_DictionaryStorageCMn` now publishes a canonical nominal class
+declaration in the existing sealed Dictionary arena, separate from Dictionary
+value metadata and heap-owner headers. The declaration carries its Swift
+module/name, `__RawDictionaryStorage` superclass identity, metadata bounds
+(three prefix words, 26 suffix words and four immediate members), and two
+type parameters with the `Key: Hashable` requirement and three key arguments.
+Native complete storage metadata places Key, Value and Hashable at words
+22, 23 and 24.
+
+Bounded mangled-name lookup substitutes Key (`x`) and Value (`q_`) in this
+canonical class context, including nested Array expressions and the supported
+metadata-state requests. Protected-memory checks verify that scalar substitution
+reads only the selected argument word, without reading the other type word,
+Hashable record or child metadata. Callers must supply live, complete child
+metadata; deferred child completion is unsupported. Invalid contexts are rejected
+before reading their argument spans. Array contexts retain their single Element
+parameter and reject Value lookups.
+
+This declaration has no metadata accessor, reflection record, instantiation
+cache/pattern, or native override/vtable tables. Storage-class instantiation
+and Objective-C inheritance remain unsupported and fail explicitly; publishing
+the descriptor creates no class specialization or storage owner.
+
+```sh
+v run tests/ios/native-checks.v build-dictionary-storage-class
+```
+
+Installed ARM64 comparisons cover the declaration/signature, native argument
+positions, Key/Value and nested Array lookup, six request states and protected
+argument boundaries. Compatibility checks cover sealed publication, opaque
+children, invalid contexts/arguments, explicit unsupported instantiation,
+eight publishers/readers and two drained/unmapped lifetimes. Array storage
+declaration, both mangled-name lookup entry points and Dictionary capacity allocation
+provide regression coverage. Evidence is retained under
+`build/ios/fortnite/dictionary-storage-class-checks`.
+
+Twelve ASan/UBSan host runs pass. Generated C/ARM64 reviews confirm the new
+helper bodies introduce no hidden V allocations or additional owner/cache
+lifetimes; the parser's pre-existing unsupported-expression error paths remain.
+The ARM64 fixture, fresh launch probe and both import audits pass. The required
+descriptor cell `0x10dc9b920` and four indirect context references were inspected
+without executing app code. That launch stopped at
+`_$ss21_findStringSwitchCase5cases6stringSiSays06StaticB0VG_SStF`, before application
+entry. Its required cell `0x10dc9b928`, stub `0x10c63ae90`, branch island
+`0x107c28a74` and two caller sites were inspected read-only.
+
+`_$ss21_findStringSwitchCase5cases6stringSiSays06StaticB0VG_SStF` now searches
+borrowed `[StaticString]` case tables through its concrete ARM64 ABI: table owner
+in x0, String words in x1/x2 and a signed index in x0. The first canonically equal
+case wins; a miss returns `-1`. Equality uses the existing NFC implementation,
+including different UTF-8 lengths, combining marks and Hangul. Embedded NULs
+remain part of the string. Comparison does not fold case or compatibility forms.
+
+Supported tables are registered typed `Array<StaticString>` owners and readable,
+file-backed loaded-image tables with the native 32-byte header and 24-byte stride.
+Only the 17 initialized bytes of each visited case are read. Cases must use the
+pointer representation; scalar StaticStrings, arbitrary owners, Cocoa arrays and
+the cached switch intrinsic remain unsupported. Empty tables return `-1` without
+reading the String, capacity or tail. A hit leaves later cases untouched.
+
+The String reader supports inline values, immortal literals, registered native
+tails and registered foreign NSStrings. Both arguments remain borrowed under the
+existing registry lock, without table caches or ARC mutation. NFC temporaries
+are freed by the existing equality helper. The supported profile caps tables at
+4,096 cases, each String/case at 1 MiB and visited case bytes at 16 MiB.
+
+```sh
+v run tests/ios/native-checks.v build-string-switch
+```
+
+String Hashable, StaticString metadata and Array storage provide regression
+coverage. Evidence is retained under `build/ios/fortnite/string-switch-checks`.
+
+Ten ASan/UBSan host runs pass, including installed ARM64 comparisons of first
+matches, misses, canonical duplicates, embedded NULs, foreign ownership, preserved
+x20/x21, unused x8 and protected empty-table/case boundaries. Compatibility
+checks add typed/image tables, native String tails, limits, eight readers and
+two drained runtimes. The standalone ARM64 fixture, launch probe and both import
+audits pass. Generated C/ARM64 review confirms no hidden allocations in the new
+helpers, both NFC temporaries freed, and no new owner/cache lifetime.
+
+The fresh launch passes the switch import and exits 1 during linking at
+`_$ss22KeyedDecodingContainerV6decode_6forKeyS2Sm_xtKF`, the String decoding
+overload. Its required cell `0x10dc9b930`, stub `0x10c63ae9c`, branch island
+`0x107c28500` and two caller sites were inspected read-only. Fortnite still
+stops before application entry and remains unplayable.
+
+`_$ss22KeyedDecodingContainerV6decode_6forKeyS2Sm_xtKF` now forwards to the
+container box's String decoding override at class slot 128. The borrowed
+one-word container arrives through x20, the borrowed key through x0 and
+container metadata through x1. Metadata words 2 and 3 supply the key type and
+its CodingKey conformance. The override receives that type in x1/x8, the
+conformance in x2 and the box in x20. Its two-word String result and exact x21
+error channel pass through; the caller's x20 is restored after either outcome.
+
+This follows the [Swift Codable box forwarding implementation](https://github.com/swiftlang/swift/blob/main/stdlib/public/core/Codable.swift)
+and the installed ARM64 implementation. The dispatch entry reads only the
+container word, box metadata pointer, selected vtable slot and two generic
+argument words. It does not inspect key bytes or the box payload/refcount,
+retain/release arguments, decode JSON or manufacture errors. Callers supply
+live readable spans and a compatible override. Keyed decoding overloads beyond
+String and Int, container construction and the JSONDecoder backend remain
+unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-string-decoding
+```
+
+JSONDecoder dispatch, raw integer decoding and Array decoding provide regression
+coverage. Evidence is retained under
+`build/ios/fortnite/keyed-string-decoding-checks`.
+
+Ten ASan/UBSan host runs pass. Installed ARM64 comparisons cover all 16 protected
+container/header/generic-argument/slot placements, inline and long String
+returns, incoming and outgoing x21 errors, preserved context/vector registers
+and eight concurrent readers. Compatibility checks add concurrent sealed
+publication and two drained/unmapped runtime lifetimes. The standalone ARM64
+fixture also passes. The launch probe and both import audits complete in
+separate guests. Generated C/ARM64 review confirms no hidden allocations or
+new owner/cache lifetime in the emitter, resolver and existing arena path.
+
+The fresh launch passes this String overload and stops during linking at
+`_$ss22KeyedDecodingContainerV6decode_6forKeyS2im_xtKF`, the keyed Int decoding
+overload. Its required cell `0x10dc9b938`, stub `0x10c63aea8`, branch island
+`0x107c28508` and four caller sites were inspected read-only. Application entry
+is still unreached; Fortnite remains unplayable.
+
+`_$ss22KeyedDecodingContainerV6decode_6forKeyS2im_xtKF` now forwards keyed Int
+decoding through the box's class slot 152. It uses the same borrowed container,
+key, generic metadata and context ABI as the String overload. The actual
+override supplies the signed, full-width Int in x0 or its original owned error
+in x21. The thunk restores the caller's x20 after either outcome, without
+reading key bytes, the box payload or refcounts. It adds no ARC operations,
+owner/cache or JSON implementation, and uses the existing sealed runtime arena.
+
+The native and production-emitter probes compare zero, positive, negative,
+minimum, maximum and full-width Int results across all 16 protected placements
+of the borrowed container, header, generic arguments and selected method slot.
+They also check incoming/outgoing error registers, vector/context forwarding
+and eight concurrent readers.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-integer-decoding
+```
+
+Keyed String, raw integer and Array decoding provide regression coverage.
+Evidence is retained under `build/ios/fortnite/keyed-integer-decoding-checks`.
+
+Ten ASan/UBSan host runs pass, including both hash modes and the build without
+the optional C++ backend. The checks cover concurrent sealed publication and
+two drained/unmapped runtime lifetimes. The standalone ARM64 fixture, fresh
+launch probe and both import audits complete in four isolated guests.
+Generated C/ARM64 review confirms no hidden allocation or new owner/cache
+lifetime in the emitter, resolver and existing arena publication path.
+
+The fresh launch passes the Int overload and stops during linking at
+`_$ss22KeyedDecodingContainerV6decode_6forKeyqd__qd__m_xtKSeRd__lF`, generic keyed
+Decodable decoding. Its required cell `0x10dc9b940`, stub `0x10c63aeb4`, branch
+island `0x107c28504` and seven caller sites were inspected read-only. Application
+entry is still unreached; Fortnite remains unplayable.
+
+`_$ss22KeyedDecodingContainerV6decode_6forKeyqd__qd__m_xtKSeRd__lF` now forwards
+generic Decodable decoding through the box's class slot 248. The dispatcher
+passes the value metadata in x0/x2, key metadata and CodingKey witness in
+x3/x5, Decodable witness in x4 and indirect result address in x8. It restores
+the borrowed container context in x20 and preserves the override's original
+error in x21. The override initializes the result; the dispatcher adds no
+result, key, payload or refcount reads, ARC operations or JSON implementation.
+It uses the existing sealed runtime arena and retirement path.
+
+The installed native Swift method and production emitter are compared using
+opaque, protected key/type/witness addresses and all 16 boundary placements
+of the container, box header, generic arguments and selected method slot.
+Successful overrides initialize exactly 0, 1, 16, 32 or 64 result bytes at
+either end of a guarded page. Error cases use an inaccessible result address
+and check the unchanged result page, incoming/outgoing error registers,
+vector arguments and caller context. Eight readers exercise mixed success
+and failure results concurrently.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-generic-decoding
+```
+
+Keyed Int, keyed String and Array decoding provide regression coverage.
+Evidence is retained under `build/ios/fortnite/keyed-generic-decoding-checks`.
+
+Ten ASan/UBSan host runs pass in both hash modes, including the build without
+the optional C++ backend. They check concurrent sealed publication and two
+drained/unmapped runtime lifetimes. The standalone ARM64 fixture, fresh launch
+probe and both import audits complete in four isolated guests. Generated
+C/ARM64 review confirms no hidden allocation or new owner/cache lifetime in
+the emitter, resolver and existing arena publication path.
+
+The fresh launch passes generic decoding and stops during linking at
+`_$ss22KeyedDecodingContainerVMa`, the keyed decoding container metadata
+accessor. Its required cell `0x10dc9b948`, stub `0x10c63aec0`, branch island
+`0x107c28d30` and caller `0x1000731b4` were inspected read-only. Application
+entry is still unreached; Fortnite remains unplayable.
+
+`_$ss22KeyedDecodingContainerVMa` now returns complete, canonical metadata for
+each borrowed key metadata/CodingKey witness pair. Its frozen payload is one
+eight-byte native Swift box reference, with field offset zero and the generic
+arguments at metadata words two and three. Its eight value witnesses retain
+copies, transfer takes, publish assignments before releasing the old owner and
+preserve native single-payload enum bytes. Completing the compatibility layout
+does not read key metadata or invoke the borrowed conformance.
+
+The accessor, private descriptor and reference witnesses are sealed before
+publication. Specialization pages and cache records retire after workers and
+owned values drain. Private CodingKey declaration records describe the generic
+constraint; CodingKey witnesses/defaults, field reflection and additional
+nominal/protocol exports remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-container-metadata
+```
+
+The fixture compares native metadata request responses, field/generic layout,
+all eight ownership witnesses and protected eight/nine-byte enum storage.
+Compatibility checks cover paired cache identities, descriptor instantiation,
+eight cold publishers, assignment destructors that resolve/copy on another
+thread, invalid inputs and two drained/unmapped runtime lifetimes. Generic
+keyed decoding, Dictionary metadata and native heap ARC provide regressions.
+Evidence is retained under `build/ios/fortnite/keyed-container-metadata-checks`.
+
+Ten ASan/UBSan host runs pass in both hash modes, including the build without
+the optional C++ backend. The standalone ARM64 fixture, launch probe and both
+import audits complete in four isolated guests. Generated C/ARM64 review finds
+no hidden temporary allocations in the new cache or value-witness paths;
+cache records and sealed pages have explicit retirement after users drain.
+
+The fresh launch passes the accessor and stops during linking at
+`_$ss22KeyedDecodingContainerVMn`, the nominal descriptor data import. Its
+required GOT cell `0x10dc9b950` and four indirect context symbolic references
+in `__swift5_typeref` were inspected read-only. Application entry remains
+unreached; Fortnite is still unplayable.
+
+`_$ss22KeyedDecodingContainerVMn` now exports the canonical nominal descriptor
+from the existing sealed metadata arena. It identifies the Swift struct,
+one generic parameter, the CodingKey constraint and its two key arguments.
+The constraint uses the existing canonical CustomStringConvertible descriptor.
+The descriptor accessor and guarded two-word instantiation factory return the
+same complete metadata as the direct accessor, without another owner/cache.
+
+The native comparison checks the module/name, generic signature, CodingKey
+inheritance and six requirements, instantiation pattern's struct metadata kind
+and direct/descriptor responses. Native optimization flags for extra data and
+trailing flags do not apply to the compatibility factory. The fixture checks
+RO descriptor/metadata pages, an RX accessor, exact protected argument spans,
+eight cold publishers and two drained/unmapped lifetimes. Generic descriptors
+still reject invocation through the nongeneric mangled-lookup ABI; general
+generic type-expression lookup, CodingKey defaults and field reflection remain
+unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-container-nominal
+```
+
+Keyed container metadata, bounded mangled lookup and IndexingIterator metadata
+provide regression coverage. Evidence is retained under
+`build/ios/fortnite/keyed-container-nominal-checks`.
+
+The normal and deterministic ASan/UBSan runs passed for the new fixture with
+and without the C++ backend and all three regressions (ten runs), as did the
+ARM64 fixture, launch probe and both import audits. Generated C and ARM64
+review found no hidden temporary allocations in the metadata paths. Nine
+binary/generated-C archive pairs and the original IPA references are retained.
+
+The next launch blocker is the required Swift String encoding method
+`_$ss22KeyedEncodingContainerV6encode_6forKeyySS_xtKF`. Read-only inspection
+found GOT cell `0x10dc9b958`, stub `0x10c63aecc`, branch-island forwarder
+`0x107c284f0` and calls at `0x100065be8` and `0x10006ecbc`. Application
+entry remains unreached; Fortnite is still unplayable.
+
+`_$ss22KeyedEncodingContainerV6encode_6forKeyySS_xtKF` now forwards String
+encoding to the container box's virtual slot 112. It borrows the String in
+`x0/x1`, key in `x2` and one-word container in `x20`; container metadata in
+`x3` supplies K in `x3/x8` and K:CodingKey in `x4`. The entry restores the
+caller's `x20` and forwards the override's exact `x21` error. It does not read
+key bytes, String storage or refcounts, or add ARC, allocation or another owner.
+The existing sealed dispatch page owns and retires the entry.
+
+The native comparison checks all sixteen placements of the exact readable
+container/header/metadata/slot spans at protected boundaries, inline and long
+Strings, inaccessible String storage, success/error channels and scalar/vector
+forwarding. Eight cold publishers/readers and two drained/unmapped lifetimes
+exercise the compatibility entry. Keyed String decoding, RawRepresentable Int
+encoding and JSONEncoder virtual dispatch provide regression coverage. The
+default JSON encoding backend remains unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-string-encoding
+```
+
+Evidence is retained under `build/ios/fortnite/keyed-string-encoding-checks`.
+
+The normal and deterministic ASan/UBSan checks passed with and without the
+C++ backend and for all three regressions (ten runs). The ARM64 fixture,
+launch probe and both import audits passed. Generated C and ARM64 review found
+no hidden temporary allocations in the forwarding/resolution paths or shared
+page setup. Nine binary/generated-C archive pairs are retained.
+
+The next launch blocker is keyed Int encoding:
+`_$ss22KeyedEncodingContainerV6encode_6forKeyySi_xtKF`. Read-only inspection
+found GOT cell `0x10dc9b960`, stub `0x10c63aed8`, branch-island forwarder
+`0x107c284f8` and calls at `0x100065c80`, `0x10006ac7c`, `0x10006f210`
+and `0x10007311c`. Application entry remains unreached; Fortnite is still
+unplayable.
+
+`_$ss22KeyedEncodingContainerV6encode_6forKeyySi_xtKF` now forwards Int
+encoding through box slot 136. It preserves the full-width Int in `x0`,
+borrows the key in `x1` and one-word container in `x20`, and reads K and
+K:CodingKey from container metadata in `x2`. The override receives K in
+`x2/x8` and its conformance in `x3`; its original `x21` error is forwarded
+while restoring the caller's `x20`. No key bytes, box payload or refcounts
+are read, and no ARC, allocation or additional owner/cache is introduced.
+
+The native comparison checks zero, negative, minimum, maximum and mixed-bit
+Int arguments; all sixteen protected container/header/metadata/slot placements;
+scalar/vector forwarding and exact success/error channels. Eight publishers
+and readers plus two drained/unmapped lifetimes check sealed publication and
+retirement. Keyed String encoding, keyed Int decoding and RawRepresentable Int
+encoding provide regression coverage. Default JSON encoding remains unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-integer-encoding
+```
+
+Evidence is retained under `build/ios/fortnite/keyed-integer-encoding-checks`.
+
+The normal and deterministic ASan/UBSan checks passed with and without the
+C++ backend and for all three regressions (ten runs). The ARM64 fixture,
+launch probe and both import audits passed. Generated C and ARM64 review found
+no hidden temporary allocations in the dispatch/resolution paths or shared
+page setup. Nine binary/generated-C archive pairs are retained.
+
+The next launch blocker is generic keyed `encode<T: Encodable>(_:forKey:)`:
+`_$ss22KeyedEncodingContainerV6encode_6forKeyyqd___xtKSERd__lF`. Read-only
+inspection found GOT cell `0x10dc9b968`, stub `0x10c63aee4`, branch-island
+forwarder `0x107c284f4` and seven direct calls, including `0x100065c54`
+and `0x1000730f4`. Application entry remains unreached; Fortnite is still
+unplayable.
+
+`_$ss22KeyedEncodingContainerV6encode_6forKeyyqd___xtKSERd__lF` now forwards
+generic keyed encoding through box slot 232. It borrows the value/key in
+`x0/x1`, container in `x20` and container metadata in `x2`. T metadata from
+`x3` supplies `x2/x8`, K and K:CodingKey supply `x3/x5`, and T:Encodable in
+`x4` is preserved. The override returns Void or its exact owned `x21` error;
+the caller's `x20` is restored on either path. The entry does not read value,
+key, type, witness or refcount storage or add ARC, copying or another owner.
+
+The native comparison checks all sixteen protected container/header/metadata/
+slot placements, opaque type/conformance records and scalar/vector arguments.
+The box callback checksums 0/1/16/32/64-byte read-only payloads at both protected
+boundaries; empty and throwing values remain inaccessible. Eight cold
+publishers/readers and two drained/unmapped lifetimes exercise publication and
+retirement. Keyed Int encoding, generic keyed decoding and Array encoding
+provide regression coverage. The default JSON backend remains unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-generic-encoding
+```
+
+Evidence is retained under `build/ios/fortnite/keyed-generic-encoding-checks`.
+
+The normal and deterministic ASan/UBSan checks passed with and without the
+C++ backend and for all three regressions (ten runs). The ARM64 fixture,
+launch probe and both import audits passed. Generated C and ARM64 review found
+no hidden temporary allocations in the forwarding/resolution paths or shared
+page setup. Nine binary/generated-C archive pairs are retained.
+
+The next launch blocker is the keyed encoding container metadata accessor,
+`_$ss22KeyedEncodingContainerVMa`. Read-only inspection found GOT cell
+`0x10dc9b970`, stub `0x10c63aef0`, branch-island forwarder `0x107c28d28`
+and a direct call at `0x10007301c`. Application entry remains unreached;
+Fortnite is still unplayable.
+
+`_$ss22KeyedEncodingContainerVMa` now returns complete, canonical metadata
+for each borrowed K/CodingKey witness pair. Encoding and decoding containers
+have distinct nominal descriptors and specializations; they share the sealed
+arena, native-reference value witnesses and canonical CodingKey declaration.
+The encoding descriptor supplies its own accessor and guarded two-word
+instantiation factory. Its single box-reference field has size and stride 8.
+
+The installed Swift comparison covers metadata requests, the generic
+declaration graph, exact copy/take/destroy ownership and guarded enum bytes.
+The compatibility fixture also checks read-only metadata, executable accessor
+permissions, factories at both protected page boundaries, encoding/decoding
+identity separation, eight cold publishers, unlocked destructor reentry and
+two drained/unmapped lifetimes. Decoding metadata, its nominal descriptor and
+generic keyed encoding provide regression coverage.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-encoding-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/keyed-encoding-metadata-checks`.
+
+Normal and deterministic ASan/UBSan checks passed with and without the C++
+backend and for all three regressions (ten runs). The ARM64 fixture, launch
+probe and both import audits passed. Nine binary/generated-C archive pairs
+are retained. Generated C and ARM64 review cover specialization ownership,
+sealed publication and drained retirement without hidden temporary allocations.
+
+The next launch stops at `_$ss22KeyedEncodingContainerVMn`, the nominal
+descriptor data import. Read-only inspection found GOT cell `0x10dc9b978`
+and four indirect context symbolic references in `__swift5_typeref`.
+Application entry remains unreached; Fortnite is still unplayable.
+
+`_$ss22KeyedEncodingContainerVMn` now exports the canonical read-only nominal
+descriptor from the existing keyed-container metadata arena. It identifies
+the Swift struct, its K parameter and CodingKey constraint, the two generic
+arguments and its accessor/instantiation pattern. Encoding and decoding keep
+distinct nominal identities while sharing the same CodingKey declaration and
+canonical CustomStringConvertible parent. Looking up the descriptor does not
+instantiate a specialization or add another arena/cache owner.
+
+The native comparison checks the declaration graph and complete responses
+through both the direct and descriptor accessors. The compatibility fixture
+also checks read-only descriptor/metadata and executable accessor permissions,
+factory arguments at both protected page boundaries, generic-ABI rejection,
+eight cold publishers and two drained/unmapped lifetimes. Encoding metadata
+and the decoding metadata/descriptor fixtures provide regression coverage.
+
+```sh
+v run tests/ios/native-checks.v build-keyed-encoding-nominal
+```
+
+Evidence is retained under `build/ios/fortnite/keyed-encoding-nominal-checks`.
+
+Normal and deterministic ASan/UBSan checks passed with and without the C++
+backend and for all three regressions (ten runs). The ARM64 fixture, launch
+probe and both import audits passed. Nine binary/generated-C archive pairs
+are retained. Generated C and ARM64 review cover canonical publication,
+existing owner/cache retirement and symbol lookup without temporary allocations.
+
+The next launch stops at Swift's `_minimumMergeRunLength` sorting helper,
+`_$ss22_minimumMergeRunLengthyS2iF`. Read-only inspection found GOT cell
+`0x10dc9b980`, stub `0x10c63aefc`, branch-island forwarder `0x107c28a44`
+and a direct call at `0x10006c458`. Application entry remains unreached;
+Fortnite is still unplayable.
+
+`_$ss22_minimumMergeRunLengthyS2iF` now computes Swift's minimum merge-run
+length as a signed scalar function. Counts below 64 pass through unchanged,
+including negative values. Larger counts retain the highest six bits and
+round up if any discarded bits were set, without overflowing at Int.max.
+The function has no runtime state, arena, cache, ARC or pointer accesses.
+
+The native comparison checks every count from -1,024 through 65,535, signed
+extrema, rounding boundaries for every positive exponent and retained prefix,
+and 32,768 concurrent full-width patterns. A guarded ARM64 adapter checks the
+scalar result and preserved x20/x21/x22 with inaccessible unused arguments
+and indirect-result storage. Compatibility checks include concurrent symbol
+resolution, a stable entry across two empty runtime lifetimes, and regression
+coverage for Int, Array storage/buffer allocation and Array encoding.
+
+```sh
+v run tests/ios/native-checks.v build-minimum-merge-run
+```
+
+Evidence is retained under `build/ios/fortnite/minimum-merge-run-checks`.
+
+Normal and deterministic ASan/UBSan checks passed with and without the C++
+backend and for all three regressions (ten runs). The ARM64 fixture, launch
+probe and both import audits passed. Nine binary/generated-C archive pairs
+are retained. Generated C and ARM64 review confirm that the scalar helper
+adds no temporary allocations, ARC, runtime state or owner/cache lifetime.
+
+The next launch stops at generic DefaultStringInterpolation.appendInterpolation,
+`_$ss26DefaultStringInterpolationV06appendC0yyxlF`. Read-only inspection found
+GOT cell `0x10dc9b998`, stub `0x10c63af14`, branch-island forwarder
+`0x107c29128` and direct calls at `0x10215070c` and `0x102150910`.
+Application entry remains unreached; Fortnite is still unplayable.
+
+`_$ss26DefaultStringInterpolationV06appendC0yyxlF` now implements generic
+`DefaultStringInterpolation.appendInterpolation` for the existing bounded
+printing profile. It borrows the value in x0 and its type in x1, and appends
+through the inout interpolation in x20. Native inspection confirms delegation
+to `_print_unlocked`; the compatibility path uses that same formatter and
+releases its temporary String after writing. It preserves the source's
+ownership instead of using the consuming `String.init(describing:)` path.
+
+Supported values are String, Int, Bool, Void, StaticString, `_MergeError` and
+validated zero-payload, single-case image enums, including the required
+`TimePeriod.daily` shape. Arbitrary reflection and custom printing
+conformances remain unsupported and are rejected. The new entry shares the
+sealed interpolation arena and its existing retirement; it adds no owner or
+cache.
+
+The native comparison checks Unicode, embedded NULs, signed extrema, both
+protected page boundaries, preserved x20/x21/x22, exact source reference counts
+and retained destination aliases during copy-on-write growth. Compatibility
+checks also cover invalid metadata and values, eight cold publishers,
+independent workers and two drained/unmapped lifetimes. Literal interpolation,
+`_print_unlocked` and `String.init(describing:)` provide regression coverage.
+
+```sh
+v run tests/ios/native-checks.v build-generic-interpolation
+```
+
+Evidence is retained under `build/ios/fortnite/generic-interpolation-checks`.
+
+Normal and deterministic ASan/UBSan checks passed with and without the C++
+backend and for all three regressions (ten runs). The ARM64 fixture, launch
+probe and both import audits passed. Nine binary/generated-C archive pairs
+are retained. Generated C and ARM64 review confirm the borrowed formatting
+path, deferred temporary release and shared arena lifetime without hidden
+temporary allocations or a new owner/cache.
+
+The next launch stops at Swift's `_stringCompareWithSmolCheck` helper,
+`_$ss27_stringCompareWithSmolCheck__9expectingSbs11_StringGutsV_ADs01_G16ComparisonResultOtF`.
+Read-only inspection found GOT cell `0x10dc9b9c8`, stub `0x10c63af44`,
+branch-island forwarder `0x107c2853c` and 23 direct calls, including
+`0x10003d8fc`. Application entry remains unreached; Fortnite is still
+unplayable.
+
+`_$ss27_stringCompareWithSmolCheck__9expectingSbs11_StringGutsV_ADs01_G16ComparisonResultOtF`
+now provides checked canonical String equality and ASCII less-than comparison.
+The two borrowed String values arrive in x0/x1 and x2/x3; the low byte of x4
+selects equality (0) or less-than (1), and x0 returns Bool. Read-only inspection
+verified 17 equality calls and six less-than calls in Fortnite's 23 direct
+call sites. The entry needs no new thunk, arena, owner or cache.
+
+Equality reuses the existing checked String reader and Unicode 17 NFC helper,
+including deferred normalization-buffer frees. Inline, immortal literal,
+registered native tail and registered foreign NSString storage remain borrowed.
+ASCII ordering compares length-delimited bytes, including embedded NULs, with
+a prefix-length tie-break. Invalid tags, malformed/unsupported storage and
+calls outside the runtime lifetime are rejected.
+
+Unicode less-than remains explicitly unsupported. The installed native helper
+and public String `<` both report false in both directions for `E\u0304\u0300`
+versus `\u1E14\u0304`, while replacing the first value with its canonically equal
+`\u1E14` changes the result. The retained native measurements document this
+mixed-normalization discrepancy. Complete NFC scalar-array ordering is not
+used as a substitute. A Unicode value reaching one of the six sorting calls
+will still stop execution.
+
+Native and compatibility fixtures check all 20,034 normalization records,
+canonical equality and adjacent canonical distinctions, ASCII ordering and
+case sensitivity, Unicode/NULs, 15/16-byte storage boundaries, exact native and
+foreign reference counts, protected nonterminated spans, ignored x8 and
+preserved x20/x21/x22. Compatibility checks also cover invalid/retired inputs,
+eight cold publishers and workers, and two drained runtime lifetimes.
+
+```sh
+v run tests/ios/native-checks.v build-string-compare
+```
+
+Evidence is retained under `build/ios/fortnite/string-compare-checks`.
+
+Normal and deterministic ASan/UBSan checks passed with and without the C++
+backend and for String Hashable/equality, String switch tables and String
+hashing (ten runs). The ARM64 fixture, launch probe and both import audits
+passed. Nine binary/generated-C archive pairs are retained. Generated C and
+ARM64 review cover borrowed storage, deferred NFC frees and allocation-free
+ASCII comparison; the new entry adds no owner or cache.
+
+The next launch stops at Swift's `_copySequenceToContiguousArray`,
+`_$ss30_copySequenceToContiguousArrayys0dE0Vy7ElementQzGxSTRzlF`.
+Read-only inspection found GOT cell `0x10dc9b9d0`, stub `0x10c63af50`,
+forwarders at `0x107c28d38` and `0x100073774`, and a direct call at
+`0x100072f74`. Application entry remains unreached; Fortnite is still
+unplayable.
+
+`_$ss30_copySequenceToContiguousArrayys0dE0Vy7ElementQzGxSTRzlF` now builds
+owned contiguous storage from a borrowed Sequence. The indirect source, Self
+metadata and Sequence table arrive in x0/x1/x2; the result's owned storage word
+returns in x0. The source is copied before consuming `makeIterator`, preserving
+the caller's value and any retained aliases. Each `next` payload moves into the
+result, and the iterator is destroyed on completion or failure.
+
+The implementation shares the existing direct-associated-witness Sequence
+profile, typed Array storage, geometric growth and sealed callback adapter.
+Each result buffer is bounded to 1 MiB including capacity. Invalid estimates,
+incomplete/tagged metadata, unsupported storage layouts and retired calls are
+rejected. Partial results and a pending owned payload are released on failure.
+No registry lock crosses a value witness or Sequence callback. General tagged
+associated metadata and storage-class reflection remain unsupported; no new
+arena or cache is added.
+
+Native comparisons cover Int, String and Objective-C element ownership,
+retained source aliases, protected source boundaries, ignored x8 and preserved
+x20/x21/x22. Compatibility checks also exercise zero estimates and repeated
+growth, cleanup after a 65,536-element partial result and one pending payload,
+empty/padded/32-byte-aligned elements, a count callback that reenters metadata
+lookup on another thread, eight cold publishers and workers, and two drained
+runtime lifetimes with the shared adapter unmapped at teardown.
+
+```sh
+v run tests/ios/native-checks.v build-sequence-array
+```
+
+Evidence is retained under `build/ios/fortnite/sequence-array-checks`.
+
+Normal and deterministic ASan/UBSan checks passed with and without the C++
+backend and for Array Sequence, generic Sequence helpers and consuming
+`_copyContents` regressions (ten runs). The ARM64 fixture, launch probe and
+both import audits passed. Nine binary/generated-C archive pairs are retained.
+Generated C and ARM64 review confirm stack scratch, source borrowing,
+iterator/payload/result cleanup and bounded growth without hidden temporary
+allocations or a new cache/arena.
+
+The next missing import is Swift's dictionary Hashable-violation diagnostic,
+`_$ss53KEY_TYPE_OF_DICTIONARY_VIOLATES_HASHABLE_REQUIREMENTSys5NeverOypXpF`.
+Read-only inspection found GOT cell `0x10dc9b9d8`, stub `0x10c63af5c`,
+forwarder `0x107c28738` and five direct calls, including `0x10003da44` and
+`0x1000717c8`. The loader stops at the unresolved binding; the diagnostic has
+not executed. Application entry remains unreached; Fortnite is still unplayable.
+
+`_$ss53KEY_TYPE_OF_DICTIONARY_VIOLATES_HASHABLE_REQUIREMENTSys5NeverOypXpF`
+now reports duplicate dictionary keys and traps. Native inspection confirms
+key-type metadata in x0; all five Fortnite callers pass String metadata.
+The bounded naming profile recognizes already-published canonical String,
+Int and Bool metadata. Other metadata produces an explicit unsupported-type
+fatal diagnostic without dereferencing the pointer. General type reflection
+remains unsupported.
+
+The entry shares the existing sealed assertion code page, calls an
+allocation-free V reporter and executes `BRK #1`. It traps again if a signal
+handler returns, and a failed stderr write cannot turn `Never` into a return.
+No new arena, owner or cache is added; runtime teardown unmaps the shared page.
+
+Native comparisons verify the exact three diagnostics and actual SIGTRAP,
+including closed stderr and a returning control. Compatibility checks also
+cover nil/interior/protected metadata, exact library/symbol routing, eight
+cold publishers and two drained lifetimes.
+
+```sh
+v run tests/ios/native-checks.v build-dictionary-hashable
+```
+
+Evidence is retained under `build/ios/fortnite/dictionary-hashable-checks`.
+Normal and deterministic ASan/UBSan runs passed with and without the C++
+backend and for assertion, String Hashable and generic hashing regressions
+(ten runs). The ARM64 fixture, launch probe and both import audits passed.
+Nine binary/generated-C archive pairs and five C/ARM64 reviews are retained.
+
+The next missing import is Error's `_getEmbeddedNSError`,
+`_$ss5ErrorPsE19_getEmbeddedNSErroryXlSgyF`. Read-only inspection found
+GOT cell `0x10dc9b9e8`, stub `0x10c63af68`, branch-island forwarder
+`0x107c28d14` and tail forwarders `0x100072b50` and `0x1000738c8`.
+The loader still stops before application entry; the dictionary diagnostic
+has not executed in Fortnite. Fortnite remains unplayable.
+
+`_$ss5ErrorPsE19_getEmbeddedNSErroryXlSgyF` now implements Error's default
+embedded-NSError method. It returns `Optional<AnyObject>.none` in x0, matching
+the installed native entry's `MOV x0,#0; RET`. Self, metadata, witness tables
+and x8 stay opaque. The default performs no allocation, ownership operation
+or witness dispatch and adds no arena or cache. The existing concrete CFError
+witness separately returns a retained NSError; native Swift-box bridging
+remains outside the implemented profile.
+
+Native and compatibility fixtures compare 125 combinations of nil, boundary,
+protected and opaque Self/metadata/table arguments, protected x8, preserved
+x20/x21/x22 and a nonzero adapter control. They also verify unchanged borrowed
+CFError ownership and the concrete witness's owned result. Compatibility checks
+cover exact library/symbol routing, eight cold resolvers and workers, and two
+drained runtimes, including state-independent calls after teardown.
+
+```sh
+v run tests/ios/native-checks.v build-error-embedded
+```
+
+Evidence is retained under `build/ios/fortnite/error-embedded-checks`.
+Normal and deterministic ASan/UBSan runs passed with and without the C++
+backend and for Error extraction, NSError bridging and _MergeError conformance
+regressions (ten runs). The ARM64 fixture, launch probe and both import audits
+passed. Nine binary/generated-C archive pairs and five C/ARM64 reviews are retained.
+
+The next missing import is Error's default `_code` getter,
+`_$ss5ErrorPsE5_codeSivg`. Read-only inspection found GOT cell
+`0x10dc9b9f0`, stub `0x10c63af74`, branch-island forwarder `0x107c28d0c`
+and tail forwarders `0x100072b48` and `0x1000738c0`. Application entry
+remains unreached; Fortnite is still unplayable.
+
+`_$ss5ErrorPsE5_codeSivg` now implements Error's default code getter.
+For enum metadata kind `0x201`, it calls the value-witness table's
+`getEnumTag` entry at byte 88 with borrowed Self and metadata. Its UInt32
+result zero-extends into Swift.Int, including `0xffffffff`. Other metadata
+kinds, including Optional, return one without reading Self or value witnesses.
+The Error protocol table and x8 are unused. The concrete CFError code witness
+continues to return its stored signed code, independently of this default.
+
+Metadata and enum witness tables are borrowed readable ABI records; the tag
+witness defines the payload layout. The implementation checks alignment,
+overflow and callback completeness, and rejects inactive runtimes before
+reading inputs. No registry lock crosses the callback. Its ARM64 adapter
+shares the existing sealed Error arena and teardown, adding no owner or cache.
+
+Native comparisons cover exact readable metadata/VWT/value boundaries, tags
+through UInt32.max, zero-sized _MergeError, protected unused arguments,
+x20/x21/x22 preservation and CFError ownership. Compatibility checks add a
+tag callback that resolves the getter from another thread, eight cold
+publishers and workers, invalid/retired inputs and two drained lifetimes.
+
+```sh
+v run tests/ios/native-checks.v build-error-code
+```
+
+Evidence is retained under `build/ios/fortnite/error-code-checks`.
+Normal and deterministic ASan/UBSan checks passed with and without the C++
+backend and for Error extraction, _MergeError conformance and CocoaError code
+regressions (ten runs). The ARM64 fixture, launch probe and both import audits
+passed. Nine binary/generated-C archive pairs and five C/ARM64 reviews are retained.
+
+The next missing import is Error's default `_domain` getter,
+`_$ss5ErrorPsE7_domainSSvg`. Read-only inspection found GOT cell
+`0x10dc9b9f8`, stub `0x10c63af80`, branch-island forwarder `0x107c28d08`
+and tail forwarders `0x100072b44` and `0x1000738bc`. The loader still stops
+before application entry; Fortnite remains unplayable.
+
+`_$ss5ErrorPsE7_domainSSvg` now implements Error's default domain getter for
+file-backed, non-generic Swift enum and struct metadata with named nominal
+parents and a module context, plus the runtime's canonical `_MergeError`.
+It returns the qualified type name, including nested and Unicode names.
+Native Swift obtains the dynamic type before naming it; this value-type
+profile never reads Self, the Error table or x8. Class values, generic,
+private/anonymous, extension and imported C contexts are explicitly unsupported.
+
+Every metadata, descriptor and terminated name read requires a readable,
+file-backed image range. Names are bounded to 1,023 bytes each, 32 contexts
+and 8,192 result bytes; cycles, malformed relatives, invalid UTF-8 and inactive
+runtimes fail before returning a result. Stack scratch holds the borrowed
+parts. The returned String copies their bytes into its own small representation
+or the existing String owner registry, so it survives loss of access to the
+metadata. The ARM64 adapter shares the sealed Error arena and its teardown.
+
+Read-only conformance inspection identifies the two Fortnite witness contexts
+as `FirebaseCoreInternal.StorageError` (descriptor flags `0x52`) and
+`FirebaseCoreInternal.RingBuffer.Error` (generic descriptors `0xd1`/`0xd2`).
+The first fits this profile; naming the second with its substituted generic
+arguments remains unsupported. Resolving the getter does not establish that
+both error paths can execute.
+
+```sh
+v run tests/ios/native-checks.v build-error-domain
+```
+
+Evidence is retained under `build/ios/fortnite/error-domain-checks`.
+Native comparisons and normal/deterministic ASan/UBSan checks passed with and
+without the C++ backend, together with Error code/extraction and _MergeError
+conformance regressions (ten runs). The ARM64 fixture, launch probe and both
+import audits passed. Nine binary/generated-C pairs and five C/ARM64 reviews
+retain the bounded reads, owned result path and shared arena lifetime evidence.
+
+The next missing import is Error's default `_userInfo` getter,
+`_$ss5ErrorPsE9_userInfoyXlSgvg`: GOT cell `0x10dc9ba00`, stub `0x10c63af8c`,
+branch-island forwarder `0x107c28d10`, and tail forwarders `0x100072b4c`
+and `0x1000738c4`. Application entry remains unreached; Fortnite is unplayable.
+
+`_$ss5ErrorPsE9_userInfoyXlSgvg` now implements the default getter for the
+runtime's concrete CFError and `_MergeError` conformances. Native Swift forwards
+to Foundation's generic default-userInfo helper; for these types the result is
+an owned empty NSDictionary. It differs from CFError's concrete userInfo
+witness, which returns the error's stored dictionary. Both results remain
+valid after the Error is destroyed and require their own release.
+
+The implementation checks the canonical metadata/table pair before reading
+Self. CFError requires a borrowed readable reference word and a live registered
+owner. Zero-sized `_MergeError` reads no Self bytes. Unknown metadata, witness
+tables, owners and retired runtimes fail explicitly. General value errors,
+LocalizedError, CustomNSError, RecoverableError and Swift error boxes still
+need protocol discovery and property dispatch; the empty fallback is not used
+for those unsupported inputs. The ARM64 adapter reuses the sealed Error arena.
+
+```sh
+v run tests/ios/native-checks.v build-error-user-info
+```
+
+Evidence is retained under `build/ios/fortnite/error-user-info-checks`.
+Native comparisons and normal/deterministic ASan/UBSan checks passed with and
+without the C++ backend, with Error domain/extraction and _MergeError
+conformance regressions (ten runs). Checks cover exact read-only input bounds,
+preserved registers, owned dictionaries after Error destruction, concurrent
+resolution/allocation, invalid inputs and two drained lifetimes. The ARM64
+fixture, launch probe and both import audits passed; nine binary/generated-C
+pairs and five C/ARM64 reviews are retained.
+
+The next missing import is Error's self-conformance witness data,
+`_$ss5ErrorWS`, at GOT cell `0x10dc9ba08`. It has no call stub; four GOT
+consumers include async task operations. No application code has executed,
+and Fortnite remains unplayable.
+
+`_$ss5ErrorWS` now exports Error's self-conformance witness table as read-only
+data. Its descriptor refers to the Error protocol context in both relative
+type/protocol fields, then to the concrete table pattern. The four entries
+open the one-word Error existential through the existing extraction path and
+invoke the contained error's domain, code, userInfo and embedded-NSError
+witnesses. They preserve the caller's Swift context and forward owned results.
+
+This reuses the existing CFError extraction profile. Swift error boxes and
+other owners remain unsupported; this table does not add general error-box
+allocation or conformance discovery. Opening uses stack scratch and releases
+the registry lock before calling a contained witness. Incoming metadata,
+self-conformance table and x8 are unused. The descriptor, table and four ARM64
+adapters share the existing sealed Error arena and its teardown.
+
+```sh
+v run tests/ios/native-checks.v build-error-self
+```
+
+Evidence is retained under `build/ios/fortnite/error-self-checks`. Native Swift
+comparisons and ten normal/deterministic ASan/UBSan runs passed, including
+both C++ configurations and Error extraction, default userInfo and _MergeError
+conformance regressions. Checks cover all four witnesses, native descriptor
+lookup, exact read-only input bounds, protected unused arguments, preserved
+registers, signed code extrema, Unicode/NUL domains and owned results surviving
+Error destruction. Eight concurrent publishers/workers and two fully drained,
+unmapped lifetimes passed. The ARM64 fixture, launch probe and both import
+audits passed; nine binary/generated-C pairs and five C/ARM64 reviews are
+retained.
+
+The next missing import is Never's nominal type descriptor, `_$ss5NeverOMn`,
+at GOT cell `0x10dc9ba10`. Its indirect context symbolic reference is at
+`0x10dc7fe28` in `__swift5_typeref`. Application entry remains unreached;
+Fortnite is still unplayable.
+
+`_$ss5NeverOMn` now exports Never's nominal descriptor through Swift core.
+It shares the existing SwiftUI Never descriptor, complete accessor and
+zero-sized enum metadata, preserving the type identity used by Body witnesses.
+The accessor returns Complete in x0/x1; its eight value witnesses preserve
+zero-sized copies/destruction and native single-payload tag widths, including
+UInt32 population wrap. Direct and bound indirect symbolic references use the
+existing nongeneric metadata lookup.
+
+The descriptor remains nonreflectable. Only this exact Swift core import is
+added; standalone metadata/accessor imports and graph construction remain
+unsupported. The existing sealed opacity arena owns these records and stays
+available during draining callbacks before it is unmapped. No new arena,
+metadata owner or cache is introduced.
+
+```sh
+v run tests/ios/native-checks.v build-never-nominal
+```
+
+Evidence is retained under `build/ios/fortnite/never-nominal-checks`. Native
+comparisons and ten normal/deterministic ASan/UBSan runs passed, including
+both C++ configurations, opacity and Never/View witnesses, and mangled metadata
+state lookup. Checks cover complete accessor responses, eight zero-sized
+witnesses, protected tag spans and UInt32 wrap, bounded symbolic references,
+unused contexts/arguments, preserved registers and empty typed Array capacity.
+Eight concurrent publishers/readers, both resolution orders and two drained,
+unmapped lifetimes with callback access passed. The ARM64 fixture, launch probe
+and both import audits passed; nine binary/generated-C pairs and five C/ARM64
+reviews are retained.
+
+The next missing import is Swift's `print(_:separator:terminator:)`,
+`_$ss5print_9separator10terminatoryypd_S2StF`: GOT cell `0x10dc9ba18`, stub
+`0x10c63af98` and branch-island forwarder `0x107c29130`. Callers are at
+`0x10003ec84`, `0x1021507bc` and `0x1021509c0`. Application entry remains
+unreached; Fortnite is still unplayable.
+
+`_$ss5print_9separator10terminatoryypd_S2StF` now implements public console
+printing for the existing bounded value profile: String, Int, Bool,
+StaticString, Void, _MergeError and reflected zero-sized single-case image
+enums without custom printing conformances. It borrows Array<Any> and both
+String arguments, preserves Unicode and embedded NULs, inserts separators
+between values and always appends the terminator. Zero/one-item calls never
+open the unused separator.
+
+Inputs require registered typed Array<Any> storage, the canonical empty Array,
+or a registered heap allocation with file-backed native storage metadata
+referring to the canonical _ContiguousArrayStorage declaration and Any type.
+Generic storage-class instantiation remains separate. The renderer validates
+up to 512 items and 1 MiB of output, releases all temporary Strings on failure,
+and finishes one owned message before locking stdout. The registry lock never
+crosses stdio. Complete messages serialize, and write errors have no result,
+matching native print. General boxed values, other printing conformances,
+unregistered/native static storage and debug/to-stream overloads remain
+unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-print-console
+```
+
+Evidence is retained under `build/ios/fortnite/print-console-checks`. Native
+stdout comparisons and ten normal/deterministic ASan/UBSan runs passed with
+both C++ configurations, plus _print_unlocked, generic interpolation and Any
+ownership regressions. Checks cover mixed values, signed extrema, Unicode/NUL
+separators and terminators, protected literal bounds, preserved x20/x21/x22
+and unused x8, unchanged borrowed owners and reference counts, exact limits,
+late-failure cleanup and failed stdout. Eight concurrent publishers/writers
+and two drained runtime lifetimes passed. Native inspection confirmed the
+storage header and stdio locking. The ARM64 fixture, launch probe and both
+import audits passed; nine binary/generated-C pairs and five C/ARM64 reviews
+are retained.
+
+The next missing import is Result's generic enum descriptor, `_$ss6ResultOMn`,
+at GOT cell `0x10dc9ba38`. Its indirect context symbolic reference is at
+`0x10dc7f940` in `__swift5_typeref`. Application entry remains unreached;
+Fortnite is still unplayable.
+
+`_$ss6ResultOMn` now exports Result's nominal identity and copyable generic
+signature: Success and Failure, with Failure constrained to the canonical
+Swift Error protocol. The descriptor records two payload cases, no empty
+cases and the payload-size metadata offset at word five. It shares Error's
+sealed arena and canonical Swift module; the added records need no separate
+allocation or retirement path. Cached identity remains readable by draining
+callbacks, and cold publication is rejected once retirement starts.
+
+The generic bit remains set. Direct/indirect symbolic lookup rejects this
+generic descriptor before invoking it as a nongeneric accessor. An explicit
+access attempt diagnoses unsupported Result specialization without reading
+its generic arguments. Complete Result metadata, value witnesses, reflection,
+and newer invertible-protocol trailers remain unsupported. Native comparisons
+check the stable copyable signature separately from those newer trailers;
+their format is described in Swift's [ABI declarations](https://github.com/swiftlang/swift/blob/main/include/swift/ABI/MetadataValues.h).
+
+```sh
+v run tests/ios/native-checks.v build-result-nominal
+```
+
+Evidence is retained under `build/ios/fortnite/result-nominal-checks`. Native
+signature comparisons and ten normal/deterministic ASan/UBSan runs passed
+with both C++ configurations, including Error ownership, Optional metadata
+and mangled-state regressions. Checks cover eight cold readers, both Error
+publication orders, read-only descriptor/executable adapter permissions,
+protected direct/indirect symbolic spans and unused generic arguments,
+explicit specialization diagnostics and two drained/unmapped lifetimes
+with callback access. The ARM64 fixture, launch probe and both import audits
+passed; nine binary/generated-C pairs and five C/ARM64 reviews are retained.
+
+The next missing import is UInt64's descriptor, `_$ss6UInt64VMn`, at GOT cell
+`0x10dc9ba40`. Its indirect context symbolic reference is at `0x10dc7fed8`
+in `__swift5_typeref`. Application entry remains unreached; Fortnite is still
+unplayable.
+
+UInt64 now exports canonical metadata (`_$ss6UInt64VN`), its nominal descriptor
+(`_$ss6UInt64VMn`) and a complete metadata accessor (`_$ss6UInt64VMa`). UInt64
+keeps its own metadata and descriptor identity while sharing Int/Builtin.Int64's
+eight POD value witnesses, as native Swift does. Size and stride are eight bytes,
+alignment is eight, no extra inhabitants are available, and the one stored
+word has field offset zero. Copies preserve every unsigned bit, including the
+high bit and UInt64.max; single-payload enum operations use an external tag.
+
+The records share the existing sealed integer arena and canonical Swift module,
+with no new allocation or retirement path. Cached identity remains available
+to draining callbacks; cold publication is rejected after retirement starts.
+Direct and indirect symbolic references resolve to the same metadata, which
+the existing typed Array, Optional and Any paths can consume. Reflection,
+unsigned protocol conformances, arithmetic and formatting exports remain
+separate; signed integer formatting is not used for UInt64.
+
+```sh
+v run tests/ios/native-checks.v build-uint64-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/uint64-metadata-checks`. Native
+layout/value comparisons and ten normal/deterministic ASan/UBSan runs passed
+with both C++ configurations, including Int/Builtin.Int64, byte metadata and
+Optional regressions. Checks cover exact eight-byte copies/aliases, nine-byte
+single-payload enums at UInt32 boundaries, protected absent values, read-only
+guarded words, preserved x20/x21/x22 and protected unused x8. Direct/indirect
+symbolic references use protected contexts and arguments; Array/Optional/Any
+retain UInt64's identity and full bit patterns. Eight cold readers, both integer
+publication orders, sealed pages and two drained/unmapped callback lifetimes
+passed. The ARM64 fixture, launch probe and both import audits passed;
+nine binary/generated-C pairs and five C/ARM64 reviews are retained.
+
+The next missing import is Decoder's `container(keyedBy:)` dispatch entry,
+`_$ss7DecoderP9container7keyedBys22KeyedDecodingContainerVyqd__Gqd__m_tKs9CodingKeyRd__lFTj`,
+at GOT cell `0x10dc9ba48` and import stub `0x10c63afc8`. V/Mach-O/LLVM inspection
+found five actual call sites and a branch-island forwarder without executing
+application code. Application entry remains unreached; Fortnite is still
+unplayable.
+
+The Decoder dispatch entry now calls the supplied Decoder witness at byte 24
+of the witness table in `x4`. It forwards `x0` through `x8`, vector arguments,
+borrowed Self in `x20` and the incoming/returned error in `x21`. The witness
+initializes the indirect KeyedDecodingContainer result or throws its original
+error. The adapter does not inspect values, metadata, descriptors or results,
+and performs no ARC or error ownership work. It uses eight bytes in the
+existing sealed dispatch page, with no additional allocation or retirement
+path. Publication is rejected once runtime retirement starts.
+
+This implements protocol dispatch through a supplied conformance. A JSON
+decoder backend and unsupported Decoder witnesses remain separate work.
+
+```sh
+v run tests/ios/native-checks.v build-decoder-keyed-dispatch
+```
+
+Evidence is retained under `build/ios/fortnite/decoder-keyed-dispatch-checks`.
+Native slot and code-authentication measurements and eight normal/deterministic
+ASan/UBSan runs passed with both C++ configurations, including generic keyed
+decoding/encoding regressions. Two supplied witnesses are checked with
+read-only guarded table slots, protected values/types and exact eight-byte
+result spans at both page boundaries. Throwing callbacks leave the protected
+absent result untouched. Checks compare scalar/vector/indirect arguments,
+full-width returned bits, incoming/returned errors and preserved context.
+Eight publishers/callers, both publication orders, sealed pages and two
+drained/unmapped lifetimes passed. The ARM64 fixture, launch probe and both
+import audits passed; eight binary/generated-C pairs and five C/ARM64 reviews
+are retained.
+
+The next missing import is Encoder's `container(keyedBy:)` dispatch entry,
+`_$ss7EncoderP9container7keyedBys22KeyedEncodingContainerVyqd__Gqd__m_ts9CodingKeyRd__lFTj`,
+at GOT cell `0x10dc9ba50` and import stub `0x10c63afd4`. V/Mach-O/LLVM inspection
+found five actual call sites and a branch-island forwarder without executing
+application code. Application entry remains unreached; Fortnite is still
+unplayable.
+
+The Encoder dispatch entry now forwards to the supplied Encoder witness at
+byte 24 of `x4`, passing method/generic arguments in `x0` through `x4`, the
+indirect KeyedEncodingContainer result in `x8` and borrowed Self in `x20`.
+The nonthrowing witness initializes the result and preserves the caller's
+`x21` context. Native uses `x5`/`x6` as scratch rather than method arguments.
+
+Encoder shares Decoder's existing unsigned ARM64 adapter and sealed entry
+address. Both exports use the same generated code and allocation/retirement
+path. The adapter performs no ARC or result ownership work; publication is
+rejected once retirement starts. JSON encoding and unsupported Encoder
+witnesses remain separate work.
+
+```sh
+v run tests/ios/native-checks.v build-encoder-keyed-dispatch
+```
+
+Evidence is retained under `build/ios/fortnite/encoder-keyed-dispatch-checks`.
+Native slot/code-authentication measurements and eight normal/deterministic
+ASan/UBSan runs passed with both C++ configurations, including Decoder dispatch
+and generic keyed encoding regressions. Checks cover two supplied witnesses,
+read-only guarded slots, protected Self/types, exact eight-byte initialized
+results at both page boundaries, full-width bits, forwarded arguments and
+preserved nonthrowing `x21`/`x22`. Eight publishers/callers, both Encoder-first
+and Decoder-first publication, the identical sealed entry and two drained
+and unmapped lifetimes passed. The ARM64 fixture, launch probe and both import
+audits passed; eight binary/generated-C pairs and five C/ARM64 reviews are
+retained.
+
+The next missing import is CodingKey's default `description` getter,
+`_$ss9CodingKeyPsE11descriptionSSvg`, at GOT cell `0x10dc9ba58` and import stub
+`0x10c63afe0`. V/Mach-O/LLVM inspection found five tail-call wrappers and a
+branch-island forwarder without executing application code. Application entry
+remains unreached; Fortnite is still unplayable.
+
+CodingKey's default `description` now calls the supplied `intValue` getter at
+witness byte 40, then `stringValue` at byte 24, with borrowed Self in `x20`
+and Self metadata/conformance in `x0`/`x1`. It returns an owned String of the
+native form `CodingKeys(stringValue: "key", intValue: nil)`. String bytes,
+including quotes, backslashes, Unicode and embedded NULs, are copied verbatim;
+optional integers use signed decimal text. Getter results are released on
+success and checked failures, and no registry lock spans a witness callback.
+The adapter shares the existing sealed dispatch page and retirement path.
+
+Type names support canonical Int/Bool/_MergeError and readable, file-backed
+nongeneric struct/enum metadata. Nested names are unqualified; class, generic
+and foreign metadata names remain unsupported. Static inspection of Fortnite's
+five wrappers found four nongeneric `CodingKeys` enums and one generic enum.
+That generic consumer still requires metadata/type-name support. The complete
+description is bounded to one MiB, including its name and punctuation.
+
+```sh
+v run tests/ios/native-checks.v build-coding-key-description
+```
+
+Evidence is retained under `build/ios/fortnite/coding-key-description-checks`.
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including Encoder dispatch and integer-description regressions. Native and
+compatibility checks cover getter order, exact text and signed limits,
+read-only guarded Self/table spans, owned results, cleanup after invalid UTF-8
+or excessive output, reentrant getters, eight publishers/callers and two
+drained/unmapped lifetimes. The ARM64 fixture, launch probe and both import
+audits passed; eight binary/generated-C pairs and five C/ARM64 reviews are
+retained. The first guest attempt exposed a test assumption about immediate
+allocator address reuse; the corrected fixture passed without an implementation
+change, and the failed serial log is retained.
+
+The next missing import is CodingKey's default `debugDescription` getter,
+`_$ss9CodingKeyPsE16debugDescriptionSSvg`, at GOT cell `0x10dc9ba60` and stub
+`0x10c63afec`. Static V/Mach-O/LLVM inspection found five tail-call wrappers
+and a branch-island forwarder. Application entry remains unreached; Fortnite
+is still unplayable.
+
+CodingKey's default `debugDescription` now forwards to the supplied inherited
+CustomStringConvertible table at byte 16 of the CodingKey witness, then its
+`description` getter at byte 8. It preserves Self metadata in `x0`, borrowed
+Self in `x20`, the nonthrowing `x21` context and the owned String result in
+`x0`/`x1`. The inherited getter supplies all formatting; a custom description
+is returned unchanged. The three-instruction adapter shares the existing
+sealed dispatch page and retirement path and performs no ARC work.
+
+This dispatch does not inspect type metadata or key properties. The bounded
+type-name support in CodingKey's default `description` still applies when
+that implementation is the inherited getter; generic CodingKeys metadata
+remains separate work.
+
+```sh
+v run tests/ios/native-checks.v build-coding-key-debug-description
+```
+
+Evidence is retained under
+`build/ios/fortnite/coding-key-debug-description-checks`. Native slot and code
+authentication measurements and eight normal/deterministic ASan/UBSan runs
+passed with both C++ configurations, including CodingKey and integer-description
+regressions. Checks cover two supplied getters, exact full-width results,
+protected Self/metadata and read-only eight-byte table slots at both page
+boundaries. Native and compatibility checks preserve `x20`/`x21`/`x22`, forward
+owned Int descriptions through the inherited table and release results after
+use. Eight publishers/callers, both publication orders, sealed pages and two
+drained/unmapped lifetimes passed. The ARM64 fixture, launch probe and both
+import audits passed; eight binary/generated-C pairs and five C/ARM64 reviews
+are retained.
+
+The next missing import is Optional's conditional Encodable conformance,
+`_$sxSgSEsSERzlMc`, at GOT cell `0x10dc9ba68`. Static V/Mach-O/LLVM inspection
+found its descriptor load at `0x1000730ac`, followed by `swift_getWitnessTable`
+and an Array Encodable witness lookup before generic keyed encoding. No
+application code was executed. Application entry remains unreached; Fortnite
+is still unplayable.
+
+Optional's conditional Encodable conformance, `_$sxSgSEsSERzlMc`, now has a
+native-layout declaration and canonical specialized witnesses. Each table owns
+its sealed allocation and borrows one Wrapped:Encodable witness in the private
+word preceding the table. Cache hits use Optional metadata identity without
+rereading expired instantiation arguments. Registered Optional identities are
+checked before metadata access; the existing complete, copyable inline Wrapped
+profile and 24-byte Optional buffer bound still apply.
+
+The encoding witness obtains an owned single-value container before copying
+the Optional. Nil calls `encodeNil`; some moves the copied Wrapped payload into
+temporary storage and calls generic `encode` with its metadata and Encodable
+witness. The payload is destroyed before the container on success, throw and
+checked dispatch failures. The original owned Swift error is transferred
+unchanged, and the incoming `x21` context survives the nonthrowing container
+getter. Borrowed Encoder boxes are supported; mutable boxed containers and
+unsupported Wrapped layouts fail explicitly. Specialized tables and declaration
+pages retire before Optional metadata after users and callbacks drain.
+
+```sh
+v run tests/ios/native-checks.v build-optional-encoding
+```
+
+Evidence is retained under `build/ios/fortnite/optional-encoding-checks`.
+Native comparisons cover 48 Int/String/Date some/nil cases with inline and
+boxed borrowed Encoders, success/throw and protected boundary placement.
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including Array encoding and Optional metadata regressions. The metadata
+regression's obsolete assertion that this export was absent was updated; its
+initial failure log is retained. Checks cover nested conditional witnesses,
+expired argument cache hits, exact String retains/releases, reentrant callbacks,
+eight cold publishers/workers, sealed pages and two drained/unmapped lifetimes.
+The ARM64 fixture, launch probe and both import audits passed; eight
+binary/generated-C pairs and five C/ARM64 reviews are retained.
+
+The next missing import is Optional's conditional Decodable conformance,
+`_$sxSgSesSeRzlMc`, at GOT cell `0x10dc9ba70`. Static V/Mach-O/LLVM inspection
+found its descriptor load at `0x100073250`, followed by Optional and Array
+Decodable witness lookups before generic keyed decoding. No application code
+was executed. Application entry remains unreached; Fortnite is still unplayable.
+
+Optional's conditional Decodable conformance, `_$sxSgSesSeRzlMc`, now uses a
+native-layout declaration and canonical specialized tables with one private
+borrowed Wrapped:Decodable witness. Registered Optional metadata identities
+are checked before dereferencing them, and cache hits do not reread expired
+instantiation arguments. The existing bounded inline Wrapped profile applies.
+
+The initializer consumes Decoder and obtains an owned single-value container.
+It tests the low bit of `decodeNil`; otherwise generic `decode` initializes a
+temporary Wrapped value, which moves into Optional.some. The container is
+destroyed before publishing the result, and Decoder is consumed afterward.
+Getter and decode errors transfer the original owned error without writing
+the caller's output. Invalid output alignment or bounds destroys the temporary
+Optional before consuming Decoder. Container calls borrow Self, so inline and
+shared boxed Decoders and containers are supported. The incoming Swift error
+context reaches the getter; its successful result supplies the cleared context
+for decoding even if `decodeNil` clobbers `x21`.
+
+```sh
+v run tests/ios/native-checks.v build-optional-decoding
+```
+
+Evidence is retained under `build/ios/fortnite/optional-decoding-checks`.
+Native comparisons cover 288 Int/String/Date cases across nil and some,
+inline and shared Decoder/container boxes, protected boundary placement,
+getter throws and payload throws. Eight normal/deterministic ASan/UBSan runs
+passed with both C++ configurations, including Array decoding and Optional
+metadata regressions. Checks cover exact String ownership, destruction before
+result publication, unwritten failure output, `decodeNil` low-bit handling,
+expired argument cache hits, nested conditional witnesses, reentrant callbacks,
+eight cold publishers/workers and two drained/unmapped lifetimes. The initial
+guest build caught a typo in the adapted fixture's `/proc/self/maps` reader;
+the corrected fixture passed, and the failed build log is retained. The ARM64
+fixture, launch probe and both import audits passed; eight binary/generated-C
+pairs and five C/ARM64 reviews are retained.
+
+The next missing import is `_swift_allocError`, at GOT cell `0x10dc9baa8` and
+stub `0x10c63eb08`. Static V/Mach-O/LLVM inspection found six direct calls and
+the branch-island forwarder at `0x107c28724`. Consumers supply value metadata
+and an Error witness, then use the returned owner in `x0` and payload address
+in `x1`. Generic Swift error allocation remains unsupported. No application
+code was executed; application entry remains unreached and Fortnite is still
+unplayable.
+
+`_swift_allocError` now returns an opaque owner and aligned payload address in
+`x0`/`x1`. A null source leaves payload construction to the caller; otherwise
+the supplied value is copied or taken through its value witnesses. The existing
+complete-value layout checks bound payloads to 64 KiB and alignment 256. Value
+metadata and the supplied Error conformance remain borrowed for the box's lifetime.
+The payload must be initialized before the final release.
+
+Generic boxes use the existing native Swift heap registry and ARC states.
+Error retain/release and Error existential copy/assignment witnesses distinguish
+these boxes from toll-free NSError/CFError owners. Final release marks the owner
+as deinitializing, calls its payload destructor outside the registry lock, then
+removes and frees both allocation records. Initializer callbacks also run outside
+that lock. `_swift_getErrorValue` borrows the payload, metadata and supplied
+Error witness directly and leaves scratch untouched, including absent or guarded
+scratch. CFError extraction keeps its existing scratch representation. The
+private box metadata retires only after error owners and callbacks drain.
+
+```sh
+v run tests/ios/native-checks.v build-error-allocation
+```
+
+Generic error-to-NSError bridging, lazy domain/code/userInfo caches, Error dynamic
+casts and arbitrary application class payload metadata remain separate work.
+
+Evidence is retained under `build/ios/fortnite/error-allocation-checks`.
+Native comparisons cover 54 uninitialized/copy/take cases over Int, String,
+empty `_MergeError` and custom owned values through 64 KiB/alignment 256.
+Checks cover protected source and scratch, exact initializer/destructor calls,
+payload retains/releases, borrowed extraction, Error existential assignments,
+eight cold allocation workers, shared-owner ARC and reentrant callbacks, with
+two drained/unmapped lifetimes. Eight normal/deterministic ASan/UBSan runs
+passed with both C++ configurations, including existing CFError ownership and
+extraction regressions. The ARM64 fixture, launch probe and both import audits
+passed; eight binary/generated-C pairs and five C/ARM64 reviews are retained.
+
+The next missing import is `_swift_allocateGenericValueMetadata`, at GOT cell
+`0x10dc9bab8` and stub `0x10c63eb20`. Static V/Mach-O/LLVM inspection found four
+allocation wrappers and the branch-island forwarder at `0x107c28d34`. The
+wrappers place eight or sixteen in `w3` before tail-calling the allocator.
+General generic value metadata allocation remains unsupported. No application
+code was executed; application entry remains unreached and Fortnite is still
+unplayable.
+
+`_swift_allocateGenericValueMetadata` now implements the ordinary four-argument
+allocation ABI for version-zero generic struct and enum contexts. It creates a
+fresh, writable metadata record with the borrowed value-witness pattern, kind,
+descriptor and key argument words. A partial extra-data pattern has a zeroed
+prefix and copied suffix; argument installation follows that copy and takes
+precedence where they overlap. Instantiation and completion callbacks are not
+invoked, and incomplete witnesses and argument pointees are not dereferenced.
+This follows the allocation phase in the
+[Swift runtime](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Metadata.cpp).
+
+The supported subset bounds extra storage to 64 KiB and parameter, requirement
+and key-argument counts to 64 each. Direct and indirect relative witness
+references are checked for alignment and address overflow, as are argument and
+partial-pattern spans. Generic packs, older extra arguments, newer pattern flags,
+class metadata, metadata uniquing and completion remain separate work. The
+allocator does not report a Complete metadata response or make an incomplete
+value layout usable. Fresh mappings remain writable for their owning completion
+machinery, and retire only after all metadata users drain at runtime shutdown.
+
+```sh
+v run tests/ios/native-checks.v build-generic-value-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/generic-value-metadata-checks`.
+Native comparisons cover fresh struct/enum allocation, zero to 64 borrowed key
+arguments, direct/indirect guarded witnesses, 64 KiB extra storage, signed
+relative references in both directions, partial patterns and overlapping
+arguments. Tests exercise read-only descriptors and argument vectors, protected
+span ends, unused guarded inputs, writable output, rejected layouts, eight cold
+workers and two drained/unmapped lifetimes. Eight normal/deterministic ASan/UBSan
+runs passed with both C++ configurations, including existing error allocation
+and Optional metadata regressions. The ARM64 fixture, launch probe and both
+import audits passed; eight binary/generated-C pairs and five C/ARM64 reviews
+are retained.
+
+Static V/Mach-O inspection confirmed all four app descriptors and their
+instantiation patterns: two enums requesting eight extra bytes, and two structs
+requesting sixteen, including partial field-offset patterns. The next missing
+import is `_swift_arrayInitWithCopy`, at GOT cell `0x10dc9bac8` and stub
+`0x10c63eb38`. LLVM inspection found seven direct callers and the branch-island
+forwarder at `0x107c28930`; the calls supply destination, source, element count
+and value metadata in `x0` through `x3`. General runtime array initialization
+remains separate work. No application code was executed; application entry
+remains unreached and Fortnite is still unplayable.
+
+`_swift_arrayInitWithCopy` now implements the ordinary C, void-returning entry
+for disjoint initialized source and uninitialized destination buffers. Zero
+elements returns without reading any pointer or metadata in an active runtime.
+For complete copyable values, POD copying includes all stride padding;
+non-POD copying calls `initializeWithCopy` in forward element order and leaves
+padding untouched. Copy callbacks run without a registry lock and may reenter
+runtime symbol lookup. The caller retains ownership of source and metadata,
+and owns every initialized destination value after the call.
+
+The implementation reuses the existing complete value-metadata checks, with
+value size bounded to 64 KiB and alignment to 256. Counts and total stride
+storage are limited to 1,048,576 elements and 1 MiB, respectively. Invalid
+layouts, noncopyable values, unaligned or overflowing spans, overlapping
+nonempty buffers and invalid non-POD copy entries reject before writes or
+callbacks. Non-POD span checks cover the last value's size without requiring
+its trailing padding to be readable. This entry allocates no Array owner,
+changes no source or storage counts, and adds no runtime arena or registry.
+Take and assignment runtime entries remain separate work.
+
+```sh
+v run tests/ios/native-checks.v build-array-init-copy
+```
+
+Evidence is retained under `build/ios/fortnite/array-init-copy-checks`.
+Native comparisons cover Int, String, empty `_MergeError`, Date and custom
+POD/owned values, zero/one/many counts, 64 KiB values, alignment 256 and 1 MiB
+spans. Checks verify exact copy order and retains, source preservation, POD
+padding versus witness copies, protected source and destination boundaries,
+zero-count guarded inputs, rejected layouts and overlap, unlocked reentrant
+callbacks, eight workers and two drained lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including existing array storage and generic value metadata regressions. The
+ARM64 fixture, launch probe and both import audits passed. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews are retained; generated C
+confirms no allocation in the new checked copy path.
+
+The next missing import is `_swift_arrayInitWithTakeBackToFront`, at GOT cell
+`0x10dc9bad0` and stub `0x10c63eb44`. Static V/Mach-O/LLVM inspection found six
+direct callers and the branch-island forwarder at `0x107c28934`, with destination,
+source, element count and metadata supplied in `x0` through `x3`. Backward take
+initialization remains unsupported. No application code was executed;
+application entry remains unreached and Fortnite is still unplayable.
+
+`_swift_arrayInitWithTakeBackToFront` now implements the ordinary C,
+void-returning backward take entry. For zero elements it reads no input pointers
+or metadata in an active runtime. Complete bitwise-takable values, including
+non-POD and noncopyable values, transfer through `memmove`, including stride
+padding. This handles either overlap direction and identical pointers without
+copy, take or ARC callbacks. Non-bitwise values invoke `initializeWithTake`
+from the last element to the first, outside the runtime registry lock.
+
+The caller must destroy only the initialized destination values: source
+ownership has been consumed, even when its bytes remain unchanged. Metadata
+stays borrowed and no Array owner, storage count, arena or registry is created.
+The existing complete-value bounds apply: 64 KiB value size, alignment 256,
+1,048,576 elements and 1 MiB total stride storage. Non-bitwise buffers may be
+disjoint or overlap by whole-element shifts to the right; other overlapping
+arrangements reject before callbacks or writes. Their final value's padding
+need not be accessible. Invalid layouts, spans and take entries also reject
+before writes. Forward take and assignment runtime entries remain separate work.
+
+```sh
+v run tests/ios/native-checks.v build-array-take-back
+```
+
+Evidence is retained under `build/ios/fortnite/array-take-back-checks`.
+Native comparisons cover Int, String, empty `_MergeError`, Date and custom
+POD/non-POD/noncopyable values through 64 KiB/alignment 256 and 1 MiB spans.
+Checks cover separate buffers, whole-element overlap, bitwise left shifts and
+self-aliases, exact ownership transfer without extra retains, reverse take
+order, consumed source prefixes, protected buffers and padding, zero-count
+guarded inputs, rejected overlap and spans, reentrant callbacks, eight workers
+and two drained lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including existing copy initialization and array storage regressions. The ARM64
+fixture, launch probe and both import audits passed. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews are retained; generated C
+confirms no allocation in the new checked take path.
+
+The next missing import is `_swift_arrayInitWithTakeFrontToBack`, at GOT cell
+`0x10dc9bad8` and stub `0x10c63eb50`. Static V/Mach-O/LLVM inspection found six
+direct callers and the branch-island forwarder at `0x107c28978`, supplying
+destination, source, element count and metadata in `x0` through `x3`. Forward
+take initialization remains unsupported. No application code was executed;
+application entry remains unreached and Fortnite is still unplayable.
+
+`_swift_arrayInitWithTakeFrontToBack` now implements the ordinary C,
+void-returning forward take entry. An active runtime returns for zero elements
+without reading source, destination or metadata. Complete bitwise-takable
+values, including non-POD and noncopyable values, transfer through `memmove`
+with stride padding, either overlap direction and identical pointers. This
+path invokes no copy, take or ARC callback. Non-bitwise values invoke
+`initializeWithTake` from the first element to the last, outside the metadata
+registry lock.
+
+Source ownership is consumed; the caller must destroy only the initialized
+destination values, even if source bytes remain unchanged. Metadata stays
+borrowed and no Array owner, storage count, arena or registry is created.
+Complete-value limits remain 64 KiB value size, alignment 256, 1,048,576
+elements and 1 MiB total stride storage. Non-bitwise buffers may be disjoint
+or overlap by whole-element shifts to the left; other overlapping arrangements
+reject before callbacks or writes. The final value's padding need not be
+accessible for witness moves. Invalid layouts, spans and take entries reject
+before writes. Assignment runtime entries remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-array-take-front
+```
+
+Evidence is retained under `build/ios/fortnite/array-take-front-checks`.
+Native comparisons cover Int, String, empty `_MergeError`, Date and custom
+POD/non-POD/noncopyable values through 64 KiB/alignment 256 and 1 MiB spans.
+Checks cover separate buffers, whole-element overlap, bitwise right shifts and
+self-aliases, exact ownership transfer without extra retains, ascending take
+order, consumed source suffixes, guarded buffers and padding, zero-count
+guarded inputs, rejected overlap and spans, reentrant callbacks, eight workers
+and two drained lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including existing backward take and copy initialization regressions. The
+ARM64 fixture, launch probe and both import audits passed. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews are retained; generated C
+confirms no allocation in the new checked forward take path.
+
+The next missing import is `_swift_beginAccess`, at GOT cell `0x10dc9bae0`
+and stub `0x10c63eb5c`. Static V/Mach-O/LLVM inspection found 21 direct callers
+and the branch-island forwarder at `0x107c28ab4`. Dynamic access tracking remains
+unsupported. No application code was executed; application entry remains
+unreached and Fortnite is still unplayable.
+
+`_swift_beginAccess` and `_swift_endAccess` now implement bounded synchronous
+Swift access scopes through their ordinary C, void-returning entries. Flags
+0/1 check an instantaneous read/modification against the current thread's
+tracked scopes and write only a zero Pointer word to scratch. Flags 32/33
+also track the scope using the caller's three-word Pointer, diagnostic PC,
+and tagged next-pointer record. A null diagnostic PC uses the caller's return
+address. The identity pointer is compared without reading its payload.
+
+Nested reads of the same identity are allowed; any simultaneous modification
+on that thread fails explicitly. Different threads have independent sets.
+End supports both stack order and removal from the middle of the chain,
+preserving the removed record's bytes while updating the live predecessor.
+An untracked end reads only its zero Pointer word. Scratch remains borrowed
+and must stay valid for the scope; no record, value owner or registry entry
+is allocated per access.
+
+The profile supports at most 4,096 tracked scopes per thread. Unsupported
+flags, null identities, invalid or overlapping scratch, active scratch reuse,
+foreign/double endings, retired runtimes and current Swift task contexts
+reject explicitly. Task-local migration and the debugger's global disable
+switch remain unsupported. One runtime-owned TLS key is created at startup;
+all scopes must drain before it is deleted at shutdown. A thread exiting
+with tracked scopes also fails explicitly.
+
+```sh
+v run tests/ios/native-checks.v build-swift-access
+```
+
+Evidence is retained under `build/ios/fortnite/swift-access-checks`, including
+the [Swift 5.10 runtime reference](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Exclusivity.cpp)
+and ABI declarations. Native comparisons cover exact scratch fields and
+writes, read nesting, fatal read/write conflicts in separate processes,
+non-LIFO removal, readonly ending records, guarded identity and scratch,
+diagnostic PCs and eight concurrently active threads. Compatibility checks
+also cover rejected inputs before writes, the 4,096-scope limit, undrained
+shutdown, current-task rejection, scratch reuse and two drained lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including forward array take and task-switch regressions. The ARM64 fixture,
+launch probe and both import audits passed. Eight compressed binary/generated-C
+pairs and five C/ARM64 reviews are retained; generated C confirms no per-access
+allocation and lock release on every checked failure.
+
+Static inspection traced the begin entry through GOT cell `0x10dc9bae0`, stub
+`0x10c63eb5c`, 21 direct callers and the island at `0x107c28ab4`. The paired end
+uses cell `0x10dc9bb28` and stub `0x10c63ebc8`; its seven consumer/forwarder sites
+include a returned function address and four direct calls.
+
+The next missing import is `_swift_checkMetadataState`, at GOT cell
+`0x10dc9bb00` and stub `0x10c63eb8c`. Static V/Mach-O/LLVM inspection found two
+direct callers and the branch-island forwarder at `0x107c28d2c`. Metadata-state
+checking remains unsupported. No application code was executed; application
+entry remains unreached and Fortnite is still unplayable.
+
+`_swift_checkMetadataState` now supports a bounded complete-type profile.
+Its two arguments are the metadata request and borrowed type metadata; the
+two-word result preserves that exact metadata identity and reports Complete
+(state zero). Complete, NonTransitiveComplete, LayoutComplete and Abstract
+requests are accepted with or without the nonblocking bit. The request does
+not weaken the reported state or copy its nonblocking flag into the response.
+
+Supported types include function, existential, metatype, Objective-C wrapper
+and existential-metatype metadata, the empty tuple, and version-zero
+nongeneric struct/enum metadata whose descriptor specifies
+NoMetadataInitialization. Only the kind/header and descriptor flags are read;
+value witnesses, generic arguments, accessor code and payloads are untouched.
+The runtime's published Array, Optional, Dictionary, Set, keyed-container,
+ArraySlice and iterator specializations are recognized by exact cached
+identity under the runtime lock.
+
+A usable value witness table does not establish transitive completion.
+Fresh `swift_allocateGenericValueMetadata` allocations are rejected by their
+allocation identity before their headers are read. External generic metadata,
+classes, nonempty tuples, singleton/foreign initialization, unsupported request
+bits and retired runtimes fail explicitly. This profile does not wait on
+private Swift caches or run completion callbacks. Metadata and descriptors
+remain borrowed; workers must drain before their owner or runtime retires.
+The check creates no arena, owner, cache entry or per-call allocation.
+
+```sh
+v run tests/ios/native-checks.v build-metadata-state
+```
+
+Evidence is retained under `build/ios/fortnite/metadata-state-checks`, including
+the [Swift 5.10 metadata runtime reference](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Metadata.cpp)
+and ABI declarations. Native comparisons cover all eight request forms,
+canonical and generic metadata, minimal readonly headers at both protected
+page boundaries, the exact x0/x1 result, preserved x20/x21/x22 and an inaccessible
+indirect-result pointer. Compatibility checks also cover four-byte borrowed
+descriptor flags, rejected deferred initialization and unknown generics,
+protected raw allocations, exact cached iterator identities, eight concurrent
+readers and two drained lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations plus
+generic-value allocation and mangled-state lookup regressions. The ARM64 fixture,
+launch probe and both import audits passed with separate joined logs. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested artifacts
+and allocation-free checked paths.
+
+Static V/Mach-O/LLVM inspection traced the required import through GOT cell
+`0x10dc9bb00`, stub `0x10c63eb8c`, two direct callers and the branch-island
+forwarder at `0x107c28d2c`. Both callers request blocking Complete metadata for
+their keyed-container key type after obtaining Abstract metadata from its
+accessor. Static inspection executes no application code.
+
+The next missing import is `_swift_deallocPartialClassInstance`, at GOT cell
+`0x10dc9bb18` and stub `0x10c63ebb0`. Static inspection found two direct callers
+and the branch-island forwarder at `0x107c29358`. Partial-class-instance
+deallocation remains unsupported. Application entry remains unreached and
+Fortnite is still unplayable.
+
+`_swift_deallocPartialClassInstance` now implements bounded constructor-failure
+cleanup through its four-argument C, void-returning entry: object, cleanup
+boundary metadata, allocated size and alignment mask. Nil is a no-op without
+reading the other arguments or requiring a live runtime.
+
+For a registered ordinary Objective-C object, the entry releases one reference
+and ignores the boundary metadata and allocation layout, matching native Swift's
+pure-ObjC fast path. Shared objects survive until their last release; registered
+immutable placeholders remain untouched. Weak slots, associated references and
+custom deallocation use the existing Objective-C ownership path. Deallocation
+callbacks execute after the registry lock is released and may reenter runtime
+lookup or wait for another thread.
+
+For a registered native Swift class allocation, this profile requires the
+cleanup boundary to equal the allocated class, an exact size/alignment match,
+native reference counting, a zero instance address point and a unique live
+owner without side tables. That allocation is reclaimed without invoking its
+deallocating destructor, superclass or ivar destroyers. The failed initializer
+remains responsible for any values it initialized in its own class.
+
+Superclass-boundary cleanup, Swift/ObjC hierarchy traversal, native shared or
+deinitializing owners, private heap contexts, tagged/unknown pointers, invalid
+layouts and retired nonnull calls fail explicitly before ownership changes.
+Metadata stays borrowed; no new arena, owner or per-call allocation is created.
+This does not implement general Swift superclass ivar cleanup or ownership
+transitions between Swift and Objective-C classes.
+
+```sh
+v run tests/ios/native-checks.v build-partial-class
+```
+
+Evidence is retained under `build/ios/fortnite/partial-class-checks`, including
+the [Swift 5.10 heap runtime reference](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/HeapObject.cpp),
+class-metadata layout and ABI declarations. Native comparisons cover nil,
+shared CF ownership, ignored unreadable metadata and invalid ObjC layouts,
+custom Objective-C deallocation, forty native class layouts across two metadata
+positions, guarded superclass/destructor/ivar fields, x20/x21/x22 preservation
+and eight workers. Compatibility checks also cover rejected native ownership
+and layouts without mutation, protected immutable placeholders, weak and
+associated-object cleanup, unlocked reentrant deallocation and two drained
+lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including native heap and object-type regressions. The ARM64 fixture, launch
+probe and both import audits passed. Eight compressed binary/generated-C pairs
+and five C/ARM64 reviews retain the tested artifacts, allocation-free checked
+paths and lock release before Objective-C callbacks.
+
+Static V/Mach-O/LLVM inspection traces the import through GOT cell
+`0x10dc9bb18`, stub `0x10c63ebb0`, two direct callers and the branch-island
+forwarder at `0x107c29358`. The callers supply an object, a previously queried
+type, size 12 and alignment mask 7; native's pure-ObjC path ignores those layout
+arguments. Static inspection executes no application code.
+
+The next missing import is `_swift_getEnumCaseMultiPayload`, at GOT cell
+`0x10dc9bb40` and stub `0x10c63ebec`. Static inspection found two direct callers
+and the branch-island forwarder at `0x107c2891c`. General multi-payload enum
+case lookup remains unsupported. Application entry remains unreached and
+Fortnite is still unplayable.
+
+`_swift_getEnumCaseMultiPayload` now supports bounded case lookup for enums
+with an explicit payload-size metadata word and a trailing discriminator.
+Its ordinary C entry takes value and enum metadata pointers and returns the
+UInt32 case index in w0. The value, metadata, descriptor and layout witnesses
+remain borrowed and immutable for the call.
+
+The profile accepts version-zero enum descriptors with two or more payload
+cases, payload-size word offsets 2 through 255, payloads up to 1 MiB and zero
+through four trailing tag bytes. The enum witnesses must have an initialized
+layout, a valid alignment/stride and enum operations. Generic arguments,
+reflection names, the descriptor's empty-case count and witness callbacks are
+not read or invoked; this lookup does not instantiate or complete metadata.
+
+Tag bytes are read little-endian without requiring aligned value storage.
+A payload-case tag returns without inspecting its payload. An empty-case tag
+combines the leading zero to four payload bytes with the tag, matching native
+UInt32 arithmetic and wrap. For payloads of four bytes or more, only the leading
+four bytes contribute to the empty-case index. Zero tag bytes select case zero
+without reading the value pointer. Remaining payload bytes and stride padding
+are untouched; no copying, destruction, reference counting or writes occur.
+
+Missing payload-size words, single-payload or other metadata kinds, incomplete
+layouts, oversized payloads/tags, invalid pointer forms, overflowing spans and
+retired runtimes fail explicitly. Fixed layouts that encode cases in spare bits
+remain unsupported.
+As with the native helper, decoding does not validate the resulting case index
+against an empty-case count. Owners and runtime users must drain before the
+borrowed spans retire. No arena, specialization or per-call allocation is made.
+
+```sh
+v run tests/ios/native-checks.v build-enum-case-multi
+```
+
+Evidence is retained under `build/ios/fortnite/enum-case-multi-checks`, including
+the [Swift 5.10 enum runtime reference](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Enum.cpp),
+byte-load helpers, metadata layouts and ABI declarations. Native comparisons
+cover exact matrix hashes across payload sizes, all five tag widths, 24-bit
+payload-case counts and UInt32 transitions. Readonly descriptors, metadata,
+witness layouts and values sit at protected boundaries; unused payload pages,
+generic context trailers and witness callbacks are inaccessible. Raw ARM64
+calls also preserve x20/x21/x22 with an inaccessible indirect-result pointer.
+Compatibility checks assert the native matrix hash `dc421a95655debe5` on both
+hosts and guests, reject unsupported layouts, and cover eight concurrent readers
+and two drained lifetimes without allocating a metadata cache entry or value owner.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including Optional metadata and generic-value allocation regressions. The ARM64
+fixture asserted the same native matrix hash in both lifetimes; the launch
+probe and both import audits passed. Eight compressed binary/generated-C pairs
+and five C/ARM64 reviews retain the tested artifacts and allocation-free paths.
+
+Static V/Mach-O/LLVM inspection traces the required import through GOT cell
+`0x10dc9bb40`, stub `0x10c63ebec`, two direct callers and the branch-island
+forwarder at `0x107c2891c`. Each caller supplies value and metadata pointers
+and compares the returned w0 with case one. Static inspection executes no
+application code.
+
+The next missing import is `_swift_getEnumTagSinglePayloadGeneric`, at GOT cell
+`0x10dc9bb48` and stub `0x10c63ebf8`. Static inspection found the branch-island
+forwarder at `0x107c284c0` and another forwarder at `0x100065650` that supplies
+a callback address. General single-payload tag lookup with an app-supplied
+extra-inhabitant callback remains unsupported. Application entry remains
+unreached and Fortnite is still unplayable.
+
+`_swift_getEnumTagSinglePayloadGeneric` now supports bounded generic
+single-payload enum tag lookup. The entry takes a value pointer, UInt32 empty-case
+count, payload metadata and an app callback in x0/w1/x2/x3, returning a UInt32 in
+w0. Its scalar SwiftCC arguments and callback use the same ARM64 registers as
+the corresponding C function types; no indirect result or Swift self argument
+is required.
+
+The supported profile borrows an initialized payload VWT layout with a size up
+to 1 MiB and valid alignment/stride. Only the metadata's preceding VWT pointer,
+size, stride, flags and extra-inhabitant count are read. The metadata kind,
+descriptor, generic arguments and VWT function pointers stay opaque; the helper
+does not instantiate or complete metadata. Zero through four trailing tag bytes
+and the leading zero through four payload bytes are decoded little-endian,
+including native UInt32 rounding and overflow. Remaining payload storage and
+stride padding are untouched.
+
+A nonzero trailing tag returns its decoded case without invoking the callback.
+Otherwise, a payload with extra inhabitants invokes the supplied callback with
+the original value pointer, the payload's total extra-inhabitant count and its
+metadata. This also happens when the requested empty-case count is zero. The
+callback's UInt32 result is returned unchanged, without clamping it to the number
+of empty cases. With no extra inhabitants and no nonzero trailing tag, the
+helper returns zero. An unused callback is never inspected or invoked, and a
+zero-width tag does not read the value pointer.
+
+The layout lock is released before calling borrowed app code. Callbacks may
+perform runtime lookups and nested tag queries; owners and runtime users must
+drain before retiring the borrowed value, metadata or callback. Incomplete or
+oversized layouts, invalid alignment/stride, invalid required pointer forms,
+overflowing read spans and retired runtimes fail explicitly. No metadata cache,
+per-call allocation, value write, copying, destruction or reference counting is
+performed by the helper. Callback behavior remains the application's responsibility.
+
+```sh
+v run tests/ios/native-checks.v build-enum-tag-single
+```
+
+Evidence is retained under `build/ios/fortnite/enum-tag-single-checks`, including
+the [Swift 5.10 enum runtime](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Enum.cpp)
+and its ABI declarations and tag-width calculation. Native and compatibility
+matrices match hash `163855d6a05abae5`, asserted on both hosts and Linux guests.
+The matrix covers zero to 1 MiB payloads, UInt32 case/extra-inhabitant boundaries,
+all tag widths, arbitrary callback returns, protected metadata/VWT/value ends,
+inaccessible unused callbacks and payloads, and preserved x20/x21/x22. Eight
+workers exercise concurrent callbacks that re-enter through runtime lookup and
+nested tag decoding, across two drained runtime lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including Optional metadata and generic-value allocation regressions. The ARM64
+fixture, launch probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested artifacts,
+allocation-free paths and callback invocation outside the layout lock.
+
+Static inspection traces the implemented import through GOT cell `0x10dc9bb48`,
+stub `0x10c63ebf8`, branch island `0x107c284c0` and tail forwarder `0x100065650`.
+The forwarder supplies the app callback at `0x100065654` in x3. No application
+code is executed by this inspection.
+
+The next missing import is `_swift_getGenericMetadata`, at GOT cell
+`0x10dc9bb50`, stub `0x10c63ec04` and branch island `0x107c28d3c`. Its caller at
+`0x1000737e8` assembles three generic arguments on the stack and forwards the
+descriptor in x2. General generic metadata lookup remains unsupported.
+Application entry remains unreached and Fortnite is still unplayable.
+
+`_swift_getGenericMetadata` now supports bounded generic struct/enum metadata
+lookup for patterns that produce complete metadata directly. Its scalar SwiftCC
+entry takes request, argument vector and descriptor in x0/x1/x2 and returns the
+metadata/Complete pair in x0/x1. The pattern's ordinary C instantiator receives
+the original descriptor, argument vector and pattern pointers.
+
+The supported signature is a version-zero generic value descriptor with zero
+through 64 type parameters, all of them key arguments, and no requirements or
+old extra arguments. Each type key must already be complete according to the
+supported metadata-state profile. Class contexts, packs, constrained signatures,
+witness-table equivalence and newer descriptor extensions remain unsupported.
+The pattern must have a null completion function and the matching value metadata
+kind. Deferred completion, dependency scheduling and allocation cycles require
+separate support; a usable VWT alone does not establish transitive completeness.
+
+An owned cache holds up to 64 descriptor/type-key combinations. Equal argument
+values in different vectors select the same specialization; different descriptors
+or type keys select different entries. The instantiator runs once for each new
+key, outside the runtime registry lock. Other callers wait on that entry's mutex,
+also outside the registry lock, then receive the same complete result. This
+includes nonblocking requests, which must still wait for allocation to finish.
+All eight supported metadata request forms return state zero for this profile.
+Callbacks can perform runtime lookup and instantiate another supported key;
+same-thread recursive allocation of the current key fails explicitly.
+
+Before publication, the result must have the matching value kind, descriptor and
+generic arguments, plus an initialized VWT with valid alignment/stride and size
+up to 1 MiB. Malformed results are recorded as failed entries and never returned
+or instantiated again. Cache exhaustion rejects new keys while keeping existing
+entries usable. Unsupported requests, signatures, patterns, type keys and numeric
+pointer forms fail before instantiation.
+
+Descriptors, patterns, arguments and returned metadata remain borrowed. The cache
+does not overwrite the descriptor's private cache storage, retain type arguments,
+take ownership of callback results, or invoke value witnesses, completion or ARC.
+One mapping holds the cache and mutex storage; successful lookups allocate no V
+heap objects. Cached complete results are recognized by `_swift_checkMetadataState`,
+including results created by the otherwise incomplete generic-value allocator.
+Teardown requires all users to drain, destroys each cache mutex and unmaps cache
+storage before metadata providers retire. Borrowed metadata stays with its owner.
+
+```sh
+v run tests/ios/native-checks.v build-generic-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/generic-metadata-checks`, including
+the [Swift 5.10 generic metadata runtime](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Metadata.cpp)
+and metadata/ABI declarations. Native comparisons cover both value kinds,
+zero/one/three/64 type keys, all request forms, exact response registers,
+argument-vector identity independence and one instantiation across eight readers.
+Readonly descriptors, patterns and argument vectors sit at protected boundaries;
+raw ARM64 callers preserve x20/x21/x22 with an inaccessible indirect-result pointer.
+Compatibility checks also cover runtime lookup from another thread during a
+callback, nested instantiation, recursive-allocation rejection, malformed results,
+the 64-entry limit, readonly borrowed results and two drained/unmapped lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including metadata-state and generic-value allocation regressions. The ARM64
+fixture, launch probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested cache,
+allocation, locking and teardown paths.
+
+Static inspection traces this required import through GOT cell `0x10dc9bb50`,
+stub `0x10c63ec04`, branch island `0x107c28d3c` and caller `0x1000737e8`.
+The caller assembles three generic arguments on the stack and forwards the
+descriptor in x2. No application code is executed by the inspection.
+
+The next missing import is `_swift_getInitializedObjCClass`, at GOT cell
+`0x10dc9bb58`, stub `0x10c63ec10` and branch island `0x107c284ac`. Static
+inspection found 18 consumer/forwarder sites, including calls with Foundation
+class imports and app class addresses. Swift-mediated Objective-C class
+initialization remains unsupported. Application entry remains unreached and
+Fortnite is still unplayable.
+
+`_swift_getInitializedObjCClass` now supports registered ordinary Objective-C
+classes. Its ordinary C entry takes one class pointer in x0 and returns that
+same pointer in x0. Nil returns nil even outside the runtime lifetime, without
+inspecting class storage.
+
+The helper uses the existing Objective-C lifecycle to initialize superclasses
+before subclasses, once for each class. Inherited initializers receive the
+subclass as their receiver; same-thread recursive initialization uses the
+lifecycle's recursive serialization. After initialization, the helper looks up
+the inherited or overridden `+self` method and releases its lookup lock before
+calling it. This dispatch happens on every call, including for initialized
+classes. Its result is ignored, so an override returning another object or nil
+does not change the class returned by the helper. No `+class` message is sent.
+
+Only registered, non-metaclass class identities with bounded ordinary class
+ancestry and known metaclasses are accepted. Registration is checked before
+reading borrowed class headers. Unknown classes, unregistered dynamic pairs,
+Swift wrapper metadata, classes requiring Swift realization, cyclic ancestry
+and retired runtimes fail explicitly. Realization of Swift classes and arbitrary
+unregistered image metadata remain unsupported.
+
+The entry creates no Swift wrapper or metadata cache and performs no ARC,
+object allocation or class-header writes. Class storage and method implementations
+remain borrowed; callers must drain before classes, their implementations or
+the runtime retire. Initialization retains the existing Objective-C lifecycle's
+serialization rules. The helper adds no lock or arena requiring separate teardown.
+
+```sh
+v run tests/ios/native-checks.v build-initialized-objc-class
+```
+
+Evidence is retained under `build/ios/fortnite/initialized-objc-class-checks`,
+including the [Swift 5.10 implementation](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/SwiftObject.mm)
+and ABI declarations. Native comparisons cover exact scalar C registers,
+superclass ordering, inherited/overridden initialization, recursive entry,
+per-call `+self`, ignored inaccessible return values and absence of `+class`
+dispatch. Eight concurrent readers initialize a cold subclass once. Raw ARM64
+calls preserve x20/x21/x22 with an inaccessible indirect-result pointer.
+Compatibility checks additionally cover runtime lookup from a `+self` callback
+on another thread, rejected class forms and states, builtin Foundation classes,
+a readonly 40-byte borrowed class header at a protected boundary, unchanged
+borrowed storage after shutdown and two drained runtime lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including object-type and partial-class deallocation regressions. The ARM64
+fixture, launch probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested artifacts,
+borrowed lifetimes and allocation-free runtime paths.
+
+Static inspection traces this required import through GOT cell `0x10dc9bb58`,
+stub `0x10c63ec10`, branch island `0x107c284ac` and 18 consumer/forwarder sites.
+Callers include imported Foundation classes and app class addresses; the call at
+`0x10003cee4`, for example, uses the NSUserDefaults class import. No application
+code is executed by the inspection.
+
+`_swift_getObjCClassFromMetadata` now converts bounded Swift metadata to a
+borrowed Objective-C class pointer. Its ordinary C entry accepts metadata in
+x0 and returns the class in x0. Nil returns nil even outside the runtime
+lifetime, matching native Swift's preserved historical behavior.
+
+An Objective-C wrapper has kind `0x305` and a class pointer at offset eight.
+Both canonical runtime wrappers and caller-owned 16-byte wrappers are accepted
+when their payload names a registered ordinary class. Unknown payloads,
+metaclasses and unregistered dynamic classes fail before payload storage is
+dereferenced. A Swift class instead returns its own address: its first word
+must be zero or above the enumerated-kind limit `0x7ff`, and its class-data
+word at offset 32 must carry the Swift type-metadata bit. This path also
+accepts borrowed artificial class prefixes without a nominal descriptor.
+
+Callers provide immutable readable metadata spans: eight bytes for the kind,
+16 for a wrapper or 40 for a Swift class prefix. Alignment and address overflow,
+unsupported kinds, pure Objective-C class inputs and retired runtimes are
+checked explicitly. The conversion reads no value witnesses, nominal
+descriptor or superclass chain. It performs no initialization, realization,
+Objective-C message dispatch, ARC, allocation, cache publication or metadata
+writes. Conversion alone does not add Swift class allocation or realization
+support. Metadata and class storage remain borrowed; callers must drain before
+either storage or the runtime retires.
+
+```sh
+v run tests/ios/native-checks.v build-objc-class-from-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/objc-class-from-metadata-checks`,
+including the [Swift 5.10 implementation](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Metadata.cpp)
+and metadata/ABI declarations. Native comparisons cover canonical and borrowed
+wrappers, genuine Swift array-storage class metadata, zero/isa class kinds,
+exact readonly wrapper and class-prefix boundaries, nil and eight concurrent
+readers. Raw ARM64 calls preserve x20/x21/x22 with an inaccessible x8 result
+pointer. Cold classes have forbidden `+initialize`, `+self` and `+class`
+callbacks to check that conversion sends no messages. Compatibility checks
+also cover rejected forms and states, unchanged borrowed storage after shutdown
+and two drained runtime lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including object-type and partial-class deallocation regressions. The ARM64
+fixture, launch probe and both import audits passed their checks. Eight
+compressed binary/generated-C pairs and five C/ARM64 reviews retain the tested
+artifacts and allocation-free conversion paths.
+
+Static inspection traces this required import through GOT cell `0x10dc9bb60`,
+stub `0x10c63ec1c`, branch island `0x107c28e2c` and caller `0x1015be5d0`.
+The caller moves its metadata context from x20 to x0 and passes the returned
+class to `_objc_allocWithZone`. No application code is executed by inspection.
+
+`_swift_getOpaqueTypeConformance2` now supports opaque descriptors whose selected
+underlying argument is a standalone symbolic C accessor. The ARM64 SwiftCC
+entry takes the original argument vector, descriptor and index in x0/x1/x2
+and returns a borrowed pointer in x0. The index uses its low 32 bits. The
+accessor receives exactly the original vector pointer, including nil, and its
+result is returned unchanged, including nil.
+
+Descriptors may have the ordinary nongeneric or generic layout. The helper
+uses the generic header's parameter and requirement counts to find the
+underlying argument table, including four-byte parameter padding. It accepts
+up to 64 parameters, 64 requirements, 128 key arguments and 64 underlying
+entries. Only the selected relative entry is resolved. The selected name may
+have up to 64 leading `0xff` alignment bytes, followed by `0x09`, a signed
+relative 32-bit accessor reference and an immediate null terminator. Unaligned
+reference fields and embedded zero bytes are handled with byte loads.
+
+The caller provides immutable readable descriptor/name spans and live accessor
+code. The helper reads no parent context, generic parameter/requirement bodies,
+unselected expressions, argument-vector contents or witness-table contents.
+It performs no generic substitution or conformance discovery; the supplied
+accessor owns that work. Other mangled expressions, trailing padding, packs,
+unsupported descriptor flags/versions, excessive counts, invalid indices,
+null/overflowing references, misalignment and retired runtimes fail explicitly
+before any callback. Other opaque-type lookup forms remain unsupported.
+
+Runtime validation releases its lock before parsing or calling the accessor.
+The entry creates no arena or cache, performs no allocation or ARC, and writes
+no caller storage. All storage remains borrowed; callers must drain before
+descriptor, name, code, result storage or runtime retirement.
+
+```sh
+v run tests/ios/native-checks.v build-opaque-conformance
+```
+
+Evidence is retained under `build/ios/fortnite/opaque-conformance-checks`,
+including [Swift 5.10 lookup and accessor dispatch](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/MetadataLookup.cpp),
+generic-layout declarations and mangling/parser sources. Native comparisons
+cover scalar registers, index wrapping, original vector identity, zero and
+inaccessible results, padded and unaligned names, descriptor counts through
+64, exact readonly boundaries, selected-entry isolation and eight readers.
+A separate native probe checks that trailing padding prevents accessor
+execution. Compatibility checks add malformed-input rejection before callbacks,
+registry lookup from another thread during a callback, unchanged borrowed
+storage after shutdown and two drained runtime lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including mangled-state lookup and witness-table regressions. The ARM64 fixture,
+launch probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested artifacts
+and allocation-free runtime paths.
+
+Static inspection traces this import through GOT cell `0x10dc9bb78`, stub
+`0x10c63ec40`, branch island `0x107c28eec` and caller `0x1015c1030`. That caller
+selects index one of descriptor `0x10dc806a8`: one parameter, one requirement,
+two key arguments and two underlying entries. Its selected name at
+`0x10dc7fdfe` encodes a leading padding byte and a direct accessor reference to
+`0x1015c1004`. That thunk forwards x0 unchanged to a witness accessor and
+returns its scalar pointer. No application code is executed by inspection.
+
+`_swift_getSingletonMetadata` now supports bounded in-place initialization of
+version-zero nongeneric struct and enum metadata. Its ARM64 SwiftCC entry takes
+a request and descriptor in x0/x1 and returns metadata/state in x0/x1. The
+eight supported Complete, NonTransitiveComplete, LayoutComplete and Abstract
+request forms include their nonblocking variants.
+
+The descriptor's singleton-initialization record supplies signed relative
+pointers to an initially zero 16-byte cache, writable metadata and completion
+code. The helper calls the completer once with the metadata, a writable zeroed
+four-word context and a null pattern. A nil dependency plus a valid completed
+value layout publishes the original metadata pointer with release ordering in
+the public cache word. The private cache word is left unchanged. Published
+results are recognized by `_swift_checkMetadataState` through the existing
+complete-cache identity checks.
+
+While a completer runs, nonblocking requests and requests already satisfied by
+the allocated state return Abstract or LayoutComplete without waiting. Other
+threads can wait for completion without holding the runtime registry lock.
+Same-thread satisfied requests can reenter; recursive blocking completion fails
+explicitly. Callback code can resolve symbols or initialize another descriptor
+without the outer registry lock. A reported dependency or invalid result rejects
+the entry without publishing it, and later calls do not repeat that callback.
+Dependency resumption and standalone deferred metadata-state queries remain
+unsupported.
+
+Singleton and generic metadata share the existing arena, user accounting and
+64-entry limit, including rejected entries. The generic path uses the same
+arena allocator and keeps its own descriptor/type-key matching. Quiescent
+teardown destroys the entry mutexes and unmaps only that arena. Descriptor,
+metadata, witnesses, public cache and callback storage remain borrowed; callers
+must drain before retirement or freeing those spans. The entry performs no ARC
+or hidden V heap allocations; cold use may allocate the bounded shared arena.
+
+Unsupported descriptor versions/flags, generics, classes and relocation
+patterns fail before callbacks. Struct field counts are limited to 64, with
+bounded field-offset-vector positions. Pointer alignment/relative bounds,
+metadata kind/descriptor identity and completed witness layout are checked.
+Nonempty foreign cache words, cache aliasing, capacity exhaustion, malformed
+completion results and retired runtimes fail explicitly. The helper does not
+implement class realization or general metadata dependency graphs.
+
+```sh
+v run tests/ios/native-checks.v build-singleton-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/singleton-metadata-checks`, with
+the [Swift 5.10 singleton implementation](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Metadata.cpp)
+and ABI declarations. Native comparisons cover both value kinds, all eight
+cold/warm requests, completion context and pattern, partial states while a
+callback is blocked, one completion across eight readers and raw register
+preservation. Compatibility checks add mixed generic/singleton caching,
+metadata-state recognition, nested and registry reentry, recursive rejection,
+failed-result isolation, capacity bounds, readonly descriptor/finished-metadata
+boundaries and two drained lifetimes with the shared arena unmapped.
+
+Eight normal/deterministic ASan/UBSan runs passed with both C++ configurations,
+including generic metadata and metadata-state regressions. The ARM64 fixture,
+launch probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested artifacts,
+shared allocation/retirement paths and borrowed metadata lifetimes.
+
+Static inspection traces the required import through GOT cell `0x10dc9bb80`,
+stub `0x10c63ec4c`, branch island `0x107c284c8` and three consumer/forwarder
+sites. Caller `0x100065780` selects struct descriptor `0x10dc80294`, with four
+fields and an in-place singleton record. Caller `0x100073c18` selects class
+descriptor `0x10dc80568`; that class-initialization path remains unsupported.
+No application code is executed by inspection.
+
+`_swift_getTupleTypeMetadata` now constructs bounded unlabelled inline tuple
+metadata. The SwiftCC entry accepts request, flags/count, ordered element
+vector, labels and proposed witnesses in `x0` through `x4`, returning metadata
+and Complete state in `x0`/`x1`. All eight supported metadata request modes
+return complete records. Empty tuples use canonical Void metadata without
+reading the element, label or proposed-witness pointers.
+
+Nonempty tuples accept up to 64 complete child types whose combined layout fits
+the 24-byte, eight-aligned Swift value buffer. Layout rounds each element offset
+to its alignment, keeps interior padding, computes final stride and combines
+POD/extra-inhabitant properties. POD witnesses copy Size bytes; non-POD copy,
+assignment, take and destruction compose child witnesses in element order.
+Buffer copying uses the inline value address. Enum witnesses select the child
+with the most extra inhabitants, favoring the first on ties, and implement the
+native UInt32 discriminator-width and wrapping rules.
+
+The registry lock protects a 64-entry canonical cache keyed by ordered child
+identities and arity. Each cold entry owns one anonymous page, sealed readonly
+before publication; warm lookups allocate nothing. Exact cache identities are
+recognized by metadata-state checks. Value callbacks run without holding the
+registry lock. Child metadata, witness tables and callback code remain borrowed
+and immutable for the entire lifetime. Shutdown requires drained users and
+destroyed values, then unmaps every owned tuple page before child metadata is
+retired. Generated-C review found no hidden V heap allocations on these paths.
+
+Labels, nonconstant-label flags, proposed witnesses, larger or more aligned
+values, noncopyable/non-bitwise-takable children, deferred child completion,
+unknown witness flags and cache exhaustion fail explicitly. This does not
+implement boxed tuple buffers or general metadata dependency resolution.
+
+```sh
+v run tests/ios/native-checks.v build-tuple-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/tuple-metadata-checks`, including
+the [Swift 5.10 tuple implementation](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/Metadata.cpp)
+and ABI layouts. Native comparisons cover scalar register passing, all eight
+request modes, padded element layouts, POD copying, composed foreign String
+ownership across copy/assignment/take/destruction, Bool/String extra inhabitants
+and enum count transitions. Compatibility checks also cover canonical results
+across eight readers, metadata-state recognition, 64 zero-sized elements,
+invalid/inaccessible inputs, capacity and two drained/unmapped lifetimes.
+
+Eight normal/deterministic ASan/UBSan runs passed across both C++ configurations,
+with generic-metadata and metadata-state regressions. The ARM64 tuple fixture,
+launch probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested artifacts
+and allocation/retirement paths.
+
+Static inspection traces this required import through GOT cell `0x10dc9bb88`,
+stub `0x10c63ec58`, branch island `0x107c28ed0` and caller `0x1015c040c`.
+The caller forwards an element count/vector with a complete request and null
+labels/proposed witnesses. Inspection does not establish that its runtime
+element types fit the supported subset, and executes no application code.
+
+`_swift_getTypeByMangledNameInContext2` now resolves the established bounded
+mangled-type subset through the shared parser and metadata caches. Its SwiftCC
+entry receives name address, byte length, context descriptor and generic
+argument vector in `x0` through `x3`, returning one metadata pointer in `x0`.
+It checks the runtime lifetime before inspecting caller storage. Native traces
+confirm that symbolic nominal accessors receive request `0xff` (Abstract);
+the compatibility path requires their returned metadata to be Complete.
+
+The [Swift 5.10 version-2 entry](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/MetadataLookup.cpp#L2224-L2251)
+uses the signed context-descriptor ABI on arm64e. The runner targets plain ARM64
+and preserves its unsigned loaded descriptor identities. It does not add
+arm64e execution or a second name-resolution engine. String, Int, Void, nested
+Arrays, known generic substitutions, Objective-C names and supported direct or
+indirect symbolic references retain their existing canonical metadata identity.
+Unsupported expressions and contexts still fail explicitly; this is not a
+general Swift demangler or arbitrary generic-instantiation implementation.
+
+Names are bounded byte spans, including embedded symbolic-reference zeros.
+The parser validates supported syntax before calling accessors, limits name
+length to 1 MiB and Array nesting to 64, and leaves unused generic inputs
+untouched. Accessors run without the registry lock. Names, descriptors, generic
+arguments and callbacks remain borrowed and live until readers drain; returned
+metadata retains the ownership of the existing caches. The new entry owns no
+arena. The shared nominal-kind check now uses a fixed array, removing a V
+allocation on each successful symbolic lookup. Existing boxed literal-error
+diagnostics remain confined to rejection paths in the reviewed generated C.
+
+```sh
+v run tests/ios/native-checks.v build-context2
+```
+
+Evidence is retained under `build/ios/fortnite/context2-checks`, including native
+version-2 comparisons, ABI declarations and runtime sources. Tests cover raw
+scalar calls with inaccessible `x8`, preserved `x20`/`x21`/`x22`, canonical
+builtins/Arrays/Objective-C metadata, generic Array substitution, direct and
+indirect nominal references, native Abstract-request traces, protected span
+ends and ignored inputs, malformed syntax before callbacks, incomplete accessor
+responses, unlocked reentry, eight readers and two drained runtime lifetimes.
+Eight normal/deterministic ASan/UBSan runs passed across both C++ configurations,
+including legacy mangled and metadata-state lookup regressions. The ARM64
+fixture, launch probe and both import audits passed their checks. Eight
+compressed binary/generated-C pairs and five C/ARM64 reviews retain the tested
+entry, shared parser/accessor paths and lifetime checks.
+
+Static inspection traces this required import through GOT cell `0x10dc9bb98`,
+stub `0x10c63ec70`, branch island `0x107c28e64` and caller `0x1015be9a0`.
+The caller decodes a relative mangled-name address and length, passes null
+context/generic arguments and caches the returned metadata pointer. Inspection
+executes no application code and does not establish support for every name
+that helper may resolve.
+
+`_swift_getTypeByMangledNameInContextInMetadataState2` now resolves the shared
+bounded mangled-type subset through the existing metadata-state lookup engine.
+Its SwiftCC entry receives request, name address, byte length, context descriptor
+and generic argument vector in `x0` through `x4`, returning one metadata pointer
+in `x0`. Native comparisons cover requests `0`, `0x3f`, `0xff`, `0x100`, `0x13f`
+and `0x1ff`: Complete, LayoutComplete and Abstract, with their nonblocking forms.
+All supported requests use synchronous resolution and request `0xff` from
+nominal accessors; this subset requires their responses to be Complete.
+
+As in the [Swift 5.10 version-2 metadata-state entry](https://github.com/swiftlang/swift/blob/swift-5.10-RELEASE/stdlib/public/runtime/MetadataLookup.cpp#L2284-L2295),
+the versioned context uses the signed descriptor ABI on arm64e. This plain-ARM64
+runner preserves its loaded unsigned descriptor identities. Request/lifetime
+validation precedes caller-storage reads. Parsing, canonical metadata caches,
+generic substitution limits, complete-response checks and unlocked accessor
+calls remain shared with the existing engine. The entry owns no arena or cache;
+caller storage remains borrowed until readers drain. Other request states,
+unsupported expressions/contexts and deferred accessor responses fail explicitly.
+
+```sh
+v run tests/ios/native-checks.v build-mangled-state2
+```
+
+Evidence is retained under `build/ios/fortnite/mangled-state2-checks`. Native
+comparisons verify the five-scalar pointer-result ABI, all six request forms,
+Abstract accessor traces, canonical String/Int/Void/nested Arrays and generic
+Array substitution. Tests also cover direct/indirect symbolic class/struct/enum
+accessors, readonly names/descriptors, protected span ends and unused inputs,
+inaccessible `x8`, preserved `x20`/`x21`/`x22`, request/syntax rejection before
+callbacks, incomplete responses, unlocked reentry, eight readers and two drained
+runtime lifetimes. Eight normal/deterministic ASan/UBSan runs passed across both
+C++ configurations, including context2 and legacy metadata-state regressions.
+The ARM64 fixture, launch probe and both import audits passed their checks.
+Eight compressed binary/generated-C pairs and five C/ARM64 reviews retain the
+tested entry and shared request/parser/accessor paths. Existing boxed literal
+diagnostics occur only on rejection paths in the reviewed generated C.
+
+Static inspection traces this required import through GOT cell `0x10dc9bba0`,
+stub `0x10c63ec7c`, branch island `0x107c28ee0` and caller `0x1015c0660`.
+It passes request `0xff`, a relative name/length pair and null context/generic
+arguments, then caches the returned metadata pointer. Inspection executes no
+application code and does not establish support for every possible name.
+
+`_swift_initStaticObject` now initializes caller-owned static object storage.
+Its SwiftCC entry takes metadata and an object address in `x0`/`x1` and returns
+the object in `x0`. The caller supplies an aligned writable once word immediately
+before the 16-byte object header and keeps the storage alive until runtime users
+drain. The first initialization publishes metadata and the native immortal
+refcount header; later calls preserve the winning metadata and payload.
+Completed compatible storage can be registered again across runtime lifetimes.
+
+A fixed registry holds up to 1,024 borrowed objects. Registry membership grants
+immortal retain/release, bridge and unknown-object ARC behavior without reading
+the caller's header. Header-shaped values alone grant no ARC provenance.
+Invalid tokens, exhausted capacity, owned-object collisions and retired runtimes
+fail explicitly. Shutdown clears only the registry, without reading, modifying,
+destroying or freeing caller storage. This plain-ARM64 implementation stores
+unsigned metadata identities; native arm64e comparisons account for metadata PAC.
+
+```sh
+v run tests/ios/native-checks.v build-static-object
+```
+
+Evidence is retained under `build/ios/fortnite/static-object-checks`. Native
+comparisons verify the two-scalar pointer-result ABI, preserved `x20`/`x21`,
+first-winner metadata, the exact immortal header, payload guards and repeated ARC.
+Tests cover opaque nil/protected metadata, eight concurrent callers, completed
+tokens, registry limits, fake immortals, guarded header boundaries, rejected heap
+deallocation and inaccessible borrowed storage during retirement across two
+drained lifetimes. Eight normal/deterministic ASan/UBSan runs passed across both
+C++ configurations, including stack-object and heap-object regressions. The
+ARM64 fixture, launch probe and both import audits passed their checks. Eight
+compressed binary/generated-C pairs and five C/ARM64 reviews retain the tested
+entry and allocation-free initialization, ARC provenance and retirement paths.
+
+Static inspection traces this required import through GOT cell `0x10dc9bbb8`,
+stub `0x10c63eca0` and branch island `0x107c28a70`. Inspected callers
+`0x10006ef94` and `0x10006f050` retain the returned object and use it in
+string-switch lookup. Inspection executes no application code.
+
+`_swift_initStructMetadata` now initializes mutable Swift 5 struct layouts through
+the five-scalar, void-result C ABI. It accepts up to 64 fields and a layout of up
+to 1 MiB, uses field sizes to reuse tail padding, computes alignment and stride,
+combines supported value flags and extra inhabitants, and publishes UInt32 field
+offsets. Already-correct offsets can reside in read-only image storage.
+
+Inline POD layouts receive copy witnesses; supported non-POD layouts preserve
+their inherited callbacks, with a bitwise take callback where appropriate.
+Metadata, witnesses and field storage remain borrowed. Initialization allocates
+no runtime objects and adds no shutdown ownership; callers must drain runtime
+users before retiring that storage. Immutable witness-table cloning, out-of-line
+POD layouts and newer noncopyable layout traits remain unsupported.
+
+```sh
+v run tests/ios/native-checks.v build-struct-metadata
+```
+
+Evidence is retained under `build/ios/fortnite/struct-metadata-checks`. Native
+comparisons verify the void five-scalar ABI, preserved `x20`/`x21`, layout flags,
+tail padding, offsets, callbacks and scalar enum extra inhabitants. Guarded tests
+cover malformed inputs, retained callback validation, read-only offsets, 512
+repeated initializations and inaccessible borrowed storage across two drained
+lifetimes. Eight normal/deterministic ASan/UBSan runs passed across both C++
+configurations, including singleton and tuple regressions. The ARM64 fixture,
+launch probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested paths.
+
+Static inspection traces this required import through GOT cell `0x10dc9bbc0`,
+stub `0x10c63ecac` and branch island `0x107c284cc`. Inspected caller
+`0x1000657f8` passes metadata, layout flags, four field layouts and a field-offset
+vector. A synthetic fixture covers that four-field layout shape; inspection
+executes no application code.
+
+`_swift_isEscapingClosureAtFileLocation` now checks borrowed Swift closure
+headers without registering them for ARC or changing their reference counts.
+Nil and unique inline closures return false; nonunique and immortal closures
+write the appropriate `withoutActuallyEscaping` or Objective-C noescape
+diagnostic and return true. The caller decides whether to trap. The six-scalar
+C ABI uses explicit signed 32-bit filename length, line and column arguments;
+diagnostics print the line and column as unsigned values, matching Swift.
+Filenames are bounded by the supplied length and stop at an embedded NUL.
+
+Stack closures and read-only heap headers work without reading metadata.
+Side-table and deinitializing headers remain unsupported and are rejected;
+host debugger crash annotations and backtraces are unavailable. No allocation,
+ownership or shutdown cleanup is added to the query path.
+
+```sh
+v run tests/ios/native-checks.v build-escaping-closure
+```
+
+Evidence is retained under `build/ios/fortnite/escaping-closure-checks`. Native
+Swift comparisons cover both diagnostic modes, nil, inline uniqueness,
+immortality, protected metadata, read-only page-end headers, bounded filenames,
+the boolean return and preserved `x20`/`x21`. Tests also cover eight concurrent
+stack-closure workers, malformed arguments, unsupported headers and two empty
+runtime lifetimes. Eight normal/deterministic ASan/UBSan runs passed across both
+C++ configurations, including stack and heap regressions. Generated C checks
+verify the 32-bit arguments and allocation-free implementation. The ARM64
+fixture, launch probe and both import audits passed their checks. Eight
+compressed binary/generated-C pairs and five C/ARM64 reviews retain the tested
+paths.
+
+Static inspection traces this required import through GOT cell `0x10dc9bbc8`,
+stub `0x10c63ecb8` and branch island `0x107c28624`. Inspected caller
+`0x100066e50` checks its boolean result after synchronous dispatch. This
+inspection executes no application code.
+
+`_swift_isaMask` now resolves as imported data from Swift Core. Its address
+points to one aligned, statically initialized 64-bit cell containing
+`0xfffffffffffffff8`. Vinix stores raw, aligned class pointers in object headers;
+the mask preserves all guest address bits and clears only the three alignment
+bits. The cell's address and value remain stable before runtime startup and
+across shutdown/restart, without allocation or ownership changes.
+
+```sh
+v run tests/ios/native-checks.v build-isa-mask
+```
+
+Evidence is retained under `build/ios/fortnite/isa-mask-checks`. The native
+comparison loads Swift's exported mask through a GOT cell and checks the decoded
+Objective-C class against `object_getClass`. The Vinix fixture covers synthetic
+full-width addresses, real Objective-C and Swift heap headers, borrowed Swift
+stack objects, virtual dispatch through `x20`, eight concurrent readers and two
+empty runtime lifetimes. Eight normal/deterministic ASan/UBSan runs passed across
+both C++ configurations, including stack and heap regressions. The ARM64
+fixture, launch probe and both import audits passed their checks. Eight
+compressed binary/generated-C pairs and five C/ARM64 reviews retain the tested
+paths.
+
+Static inspection identifies GOT cell `0x10dc9bbd8` and five consumers, including
+`0x100064f78`, which load the mask, apply it to an object's first word and
+dispatch through the resulting metadata. This inspection executes no
+application code.
+
+`_swift_lookUpClassMethod` now resolves from Swift Core using its ordinary
+three-argument C ABI. Lookup identifies the method's vtable slot from a borrowed
+class descriptor and reads the entry from the dynamic class metadata, preserving
+inherited overrides. The supported layout is initialized, immutable class
+metadata with a version-zero, nongeneric descriptor, a vtable and no resilient
+superclass or initialization trailer. Unsupported profiles, invalid bounds,
+unrelated or cyclic ancestry and retired runtimes are rejected. Lookup does not
+invoke methods or metadata accessors, allocate, or change ownership. Callers must
+drain readers before unmapping the borrowed metadata and descriptor.
+
+```sh
+v run tests/ios/native-checks.v build-class-method
+```
+
+Evidence is retained under `build/ios/fortnite/class-method-checks`. Native Swift
+comparisons cover all six measured Fortnite descriptor shapes, direct and
+inherited overridden slots, null entries, exact guarded read-only allocations,
+eight concurrent readers and ARM64 register preservation. The Vinix fixture
+also checks unsupported layouts, bounds, ancestry and two drained runtime
+lifetimes. Eight normal/deterministic ASan/UBSan runs passed across both C++
+configurations, including stack and heap regressions. The ARM64 fixture, launch
+probe and both import audits passed their checks. Eight compressed
+binary/generated-C pairs and five C/ARM64 reviews retain the tested paths.
+
+Static inspection traces GOT cell `0x10dc9bbe0` through stub `0x10c63ecd0` and
+branch island `0x107c284b0` to six lookup thunks. Their descriptor vtables contain
+one, three or four methods, with offsets measured from each metadata address
+point. This inspection executes no application code.
+
+The launch probe now stops at required Swift Core import
+`_swift_makeBoxUnique`, before application entry. Fortnite remains unplayable.
+
 `run-ios --audit BINARY` now checks each bundled library's imports as well as
 the executable, without mapping or executing app code. The static C++ runner reports:
 
 | Image | Resolved | Unresolved strong | Unresolved weak |
 | --- | ---: | ---: | ---: |
-| Fortnite executable | 1,762 | 398 | 79 |
-| EOSSDK | 659 | 3 | 18 |
-| MarketplaceKitWrapper | 176 | 0 | 23 |
-| All images | 2,597 | 401 | 120 |
+| Fortnite executable | 1,982 | 179 | 78 |
+| EOSSDK | 661 | 3 | 16 |
+| MarketplaceKitWrapper | 179 | 0 | 20 |
+| All images | 2,822 | 182 | 114 |
 
-The C++/GLES/Text variant reports 2,611 resolved imports, 387 unresolved strong
-imports and 120 unresolved weak imports, including its native zlib/text backends.
+The C++/GLES/Text variant reports 2,836 resolved imports, 168 unresolved strong
+imports and 114 unresolved weak imports, including its native zlib/text backends.
+Both measurements include the optional SQLite backend.
+
+Resolved imports measure linker bindings. Diagnostic entries such as the
+StringProtocol witness instantiator, view and view-list factories and
+identified-tree hook still stop execution when reached; the count does not
+measure functional API coverage.
 
 The executable's available imports include the bundled frameworks' exports;
 their own unresolved dependencies still prevent execution. Results depend on
@@ -9372,6 +16364,8 @@ native C++ archives, private GLES closure, preserved socket kernel, existing
 fixtures and extracted IPA under `build/ios/fortnite`:
 
 ```sh
+v -nocache -cc clang run tests/ios/sqlite-build.v \
+  build/package-sqlite-work/inputs/source build/ios/sqlite
 v -nocache -cc clang run tests/ios/native-checks.v build
 v -nocache -cc clang run tests/ios/native-checks.v regression
 v -nocache -cc clang run tests/ios/native-checks.v swift
@@ -9398,7 +16392,7 @@ CoreFoundation dictionary, supplied Objective-C storage, associated-object,
 property, object-monitor, Swift string/buffer and String metadata/witness checks before the
 existing Mach-O suite and requires the guest PASS marker.
 
-`swift` runs all twenty-eight Swift ABI checks in a small, independent guest and
+`swift` runs the Swift ABI checks in a small, independent guest and
 requires `VINIX iOS SWIFT: PASS`. It does not establish full regression success.
 Probe, audit and Swift modes retire their staging copies after archiving the
 root filesystem, before constructing the boot disk, to limit host disk use.

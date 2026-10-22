@@ -58,6 +58,16 @@ fn mach_map(fd i32, offset u64, size u64, address u64, anywhere bool) ?u64 {
 	return u64(mapped)
 }
 
+// Caller holds the namespace lock; size is already rounded to native pages.
+// MIG out-of-line arrays use the same registry and deallocation as vm_allocate.
+fn mach_allocate(rounded u64, requested u64, anywhere bool) ?u64 {
+	fd := mach_backing(rounded)
+	if fd < 0 { return none }
+	mapped := mach_map(fd, 0, rounded, requested, anywhere) or { C.close(fd); return none }
+	system_data.vm_mappings << MachMapping{address: mapped, size: rounded, fd: fd}
+	return mapped
+}
+
 fn darwin_vm_allocate(task u32, address &u64, size u64, flags i32) i32 {
 	previous := unsafe { *C.ios_errno_address() }
 	defer { darwin_set_errno(previous) }
@@ -65,11 +75,8 @@ fn darwin_vm_allocate(task u32, address &u64, size u64, flags i32) i32 {
 	rounded := mach_size(size) or { return 4 }
 	C.ios_mach_threads_lock()
 	defer { C.ios_mach_threads_unlock() }
-	fd := mach_backing(rounded)
-	if fd < 0 { return 3 } // KERN_NO_SPACE
 	requested := unsafe { *address } & ~(mach_page_size() - 1)
-	mapped := mach_map(fd, 0, rounded, requested, flags == 1) or { C.close(fd); return 3 }
-	system_data.vm_mappings << MachMapping{address: mapped, size: rounded, fd: fd}
+	mapped := mach_allocate(rounded, requested, flags == 1) or { return 3 } // KERN_NO_SPACE
 	unsafe { *address = mapped }
 	return 0
 }
@@ -134,6 +141,8 @@ fn mach_memory_stop() {
 fn mach_memory_symbol(symbol string) ?u64 {
 	if address := mach_memory_entry_symbol(symbol) { return address }
 	return match symbol {
+		'_vm_region_64' { u64(unsafe { voidptr(darwin_vm_region_64) }) }
+		'_vm_read_overwrite' { u64(unsafe { voidptr(darwin_vm_read_overwrite) }) }
 		'_vm_allocate' { u64(unsafe { voidptr(darwin_vm_allocate) }) }
 		'_vm_remap' { u64(unsafe { voidptr(darwin_vm_remap) }) }
 		'_vm_deallocate' { u64(unsafe { voidptr(darwin_vm_deallocate) }) }

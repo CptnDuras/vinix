@@ -43,8 +43,10 @@ pub fn defaults(root string) map[string]ah.Value {
 	for key in ['runtime_arg', 'split_apk', 'split_apk_sha256'] {
 		result[key] = ah.Value([]ah.Value{})
 	}
-	result['click'] = ah.Value([ah.Value(360), ah.Value(202)])
-	result['focus'] = ah.Value([ah.Value(240), ah.Value(120)])
+	// The V options bar precedes Arity's result and input. These points lie
+	// inside the input in desktop and window-relative coordinates.
+	result['click'] = ah.Value([ah.Value(360), ah.Value(198)])
+	result['focus'] = ah.Value([ah.Value(240), ah.Value(115)])
 	return result
 }
 

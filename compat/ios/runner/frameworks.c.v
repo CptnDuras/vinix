@@ -6,6 +6,47 @@ import os
 // Framework class descriptors provide inheritance and native subclass layout.
 // Their API methods are implemented individually; absent methods still fail.
 fn framework_symbol(library string, symbol string) ?u64 {
+	if library == '/System/Library/Frameworks/SwiftUI.framework/SwiftUI' {
+		if address := swiftui_vstack_symbol(symbol) { return address }
+		if address := swiftui_vstack_init_symbol(symbol) { return address }
+		if address := swiftui_vstack_nominal_symbol(symbol) { return address }
+		if address := swiftui_tree_symbol(symbol) { return address }
+		if address := swiftui_zstack_symbol(symbol) { return address }
+		if address := swiftui_zstack_init_symbol(symbol) { return address }
+		if address := swiftui_zstack_nominal_symbol(symbol) { return address }
+		if address := swiftui_tuple_nominal_symbol(symbol) { return address }
+		if address := swiftui_tuple_init_symbol(symbol) { return address }
+		if address := swiftui_opacity_symbol(symbol) { return address }
+		if address := swiftui_modified_symbol(symbol) { return address }
+		if address := swiftui_localized_key_symbol(symbol) { return address }
+		if address := swiftui_alignment_symbol(symbol) { return address }
+		if address := swiftui_dismantle_symbol(symbol) { return address }
+		if address := swiftui_sizing_symbol(symbol) { return address }
+		if address := swiftui_view_list_symbol(symbol) { return address }
+		if address := swiftui_layout_options_symbol(symbol) { return address }
+		if address := swiftui_identified_tree_symbol(symbol) { return address }
+		if address := swiftui_layout_traits_symbol(symbol) { return address }
+		if address := swiftui_size_override_symbol(symbol) { return address }
+		if address := swiftui_bridged_inputs_symbol(symbol) { return address }
+		if address := swiftui_body_symbol(symbol) { return address }
+		if address := swiftui_view_factory_symbol(symbol) { return address }
+		if address := swiftui_view_defaults_symbol(symbol) { return address }
+		if address := swiftui_view_opacity_symbol(symbol) { return address }
+		if address := swiftui_view_disabled_symbol(symbol) { return address }
+		if address := swiftui_state_value_symbol(symbol) { return address }
+		if address := swiftui_state_set_symbol(symbol) { return address }
+		if address := swiftui_state_projected_symbol(symbol) { return address }
+		if address := swiftui_state_nominal_symbol(symbol) { return address }
+		if address := swiftui_button_symbol(symbol) { return address }
+		if address := swiftui_button_nominal_symbol(symbol) { return address }
+		if address := swiftui_coordinator_symbol(symbol) { return address }
+		if address := swiftui_environment_transform_symbol(symbol) { return address }
+		if address := swiftui_font_title_symbol(symbol) { return address }
+		if address := swiftui_text_bold_symbol(symbol) { return address }
+		if address := swiftui_text_font_symbol(symbol) { return address }
+		if address := swiftui_text_view_symbol(symbol) { return address }
+		if address := swiftui_text_localized_symbol(symbol) { return address }
+	}
 	if library == '/System/Library/Frameworks/StoreKit.framework/StoreKit' {
 		if address := storekit_constant_symbol(symbol) { return address }
 		if address := storefront_symbol(symbol) { return address }
@@ -34,6 +75,21 @@ fn framework_symbol(library string, symbol string) ?u64 {
 		if address := ns_url_error_symbol(symbol) { return address }
 		if address := ns_url_session_constant_symbol(symbol) { return address }
 		if address := ns_foundation_key_symbol(symbol) { return address }
+	}
+	if library in ['/System/Library/Frameworks/Foundation.framework/Foundation',
+		'/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation']! {
+		if address := ns_internal_exception_symbol(symbol) { return address }
+		if address := ns_exception_type_symbol(symbol) { return address }
+		if address := ns_empty_array_symbol(symbol) { return address }
+		if address := ns_invalid_argument_symbol(symbol) { return address }
+		if address := ns_locale_country_symbol(symbol) { return address }
+		if address := ns_locale_currency_symbol(symbol) { return address }
+		if address := ns_url_resource_key_symbol(symbol) { return address }
+	}
+	// The IPA imports this NSString pointer global through CoreFoundation.
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation'
+		&& symbol == '_NSCalendarIdentifierISO8601' {
+		return ns_foundation_key_symbol(symbol)
 	}
 	// Foundation.framework reexports these Swift overlay entries. The main
 	// executable uses this install name, while its bundled frameworks use the
@@ -146,6 +202,45 @@ fn framework_symbol(library string, symbol string) ?u64 {
 		if address := image_symbol(symbol) { return address }
 	}
 	if library == '/System/Library/Frameworks/UIKit.framework/UIKit' { if address := accessibility_symbol(symbol) { return address } }
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFLocaleCopyCurrent' {
+		return u64(unsafe { voidptr(cf_locale_copy_current) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFLocaleCopyPreferredLanguages' {
+		return u64(unsafe { voidptr(cf_locale_copy_preferred_languages) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFLocaleGetValue' {
+		return u64(unsafe { voidptr(cf_locale_get_value) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFPreferencesAppSynchronize' {
+		return u64(unsafe { voidptr(cf_preferences_app_synchronize) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFPreferencesCopyAppValue' {
+		return u64(unsafe { voidptr(cf_preferences_copy_app_value) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFPreferencesSetAppValue' {
+		return u64(unsafe { voidptr(cf_preferences_set_app_value) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFRunLoopGetMain' {
+		return u64(unsafe { voidptr(cf_run_loop_get_main) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFStringCompare' {
+		return u64(unsafe { voidptr(cf_string_compare) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFUUIDCreate' {
+		return u64(unsafe { voidptr(cf_uuid_create) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFUUIDCreateFromString' {
+		return u64(unsafe { voidptr(cf_uuid_create_from_string) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFUUIDCreateFromUUIDBytes' {
+		return u64(unsafe { voidptr(cf_uuid_create_from_uuid_bytes) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFUUIDCreateString' {
+		return u64(unsafe { voidptr(cf_uuid_create_string) })
+	}
+	if library == '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation' && symbol == '_CFUUIDGetUUIDBytes' {
+		return u64(unsafe { voidptr(cf_uuid_get_uuid_bytes) })
+	}
 	if address := core_foundation_symbol(symbol) { return address }
 	for prefix in ['_OBJC_CLASS_$_', '_OBJC_METACLASS_$_'] {
 		if symbol.starts_with(prefix) {
@@ -338,7 +433,6 @@ fn framework_constant(symbol string) ?u64 {
 		'_UIKeyboardWillHideNotification' { 'UIKeyboardWillHideNotification' }
 		'_UIKeyboardWillShowNotification' { 'UIKeyboardWillShowNotification' }
 		'_kCFBundleVersionKey' { 'CFBundleVersion' }
-		'_kCFLocaleCountryCode' { 'kCFLocaleCountryCodeKey' }
 		'_kCFLocaleLanguageCode' { 'kCFLocaleLanguageCodeKey' }
 		'_kCFPreferencesCurrentApplication' { 'kCFPreferencesCurrentApplication' }
 		'_kCFRunLoopCommonModes' { 'kCFRunLoopCommonModes' }

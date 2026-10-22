@@ -116,7 +116,8 @@ fn swift_buffer_refs(object u64, delta i64) !u64 {
 	if object == ios_runtime.swift_empty_array || object == ios_runtime.swift_empty_set
 		|| swift_dictionary_empty_locked(object)
 		|| swift_json_decoder_empty_locked(object) || swift_json_encoder_empty_locked(object)
-		|| swift_main_actor_is_singleton_locked(object) || swift_main_executor_is_singleton_locked(object) {
+		|| swift_main_actor_is_singleton_locked(object) || swift_main_executor_is_singleton_locked(object)
+		|| swift_static_object_registered_locked(object) {
 		C.ios_objc_initialize_unlock()
 		return swift_strong_limit // Immortal storage never reports unique.
 	}
@@ -211,6 +212,7 @@ fn swift_unknown_is_native(object u64) bool {
 	if swift_main_actor_is_singleton_locked(object) { return true }
 	if swift_main_executor_is_singleton_locked(object) { return true }
 	if swift_json_decoder_empty_locked(object) || swift_json_encoder_empty_locked(object) { return true }
+	if swift_static_object_registered_locked(object) { return true }
 	if object == ios_runtime.swift_empty_array || object == ios_runtime.swift_empty_set || object in ios_runtime.swift_buffers
 		|| object in ios_runtime.swift_strings || object in ios_runtime.swift_arrays
 		|| object in ios_runtime.swift_heap { return true }
@@ -236,7 +238,9 @@ fn swift_buffers_stop() {
 	if ios_runtime.swift_strings.len != 0 { panic('iOS: Swift Strings still owned at shutdown') }
 	unsafe { ios_runtime.swift_buffers.free() }
 	unsafe { ios_runtime.swift_strings.free() }
+	swiftui_localized_key_stop()
 	swift_array_storage_stop()
+	swift_error_allocation_stop()
 	swift_heap_stop()
 	swift_json_encoder_stop()
 	swift_json_decoder_stop()
@@ -250,10 +254,22 @@ fn swift_buffers_stop() {
 	swift_metadata_stop()
 	swift_hash_stop()
 	swift_fatal_stop()
+	swift_static_objects_stop()
 	swift_concurrency_stop()
 }
 
 fn swift_core_symbol(symbol string) ?u64 {
+	if address := swift_sequence_array_symbol(symbol) { return address }
+	if address := swift_keyed_container_metadata_symbol(symbol) { return address }
+	if address := swift_string_compare_symbol(symbol) { return address }
+	if address := swift_string_switch_symbol(symbol) { return address }
+	if address := swift_dictionary_storage_copy_symbol(symbol) { return address }
+	if address := swift_dictionary_storage_resize_symbol(symbol) { return address }
+	if address := swift_dictionary_storage_allocate_symbol(symbol) { return address }
+	if address := swift_dictionary_storage_class_symbol(symbol) { return address }
+	if symbol == '_$sSS5countSivg' {
+		return u64(unsafe { voidptr(swift_string_count) })
+	}
 	if symbol == '__swiftEmptyDictionarySingleton' { return swift_foundation_arena() + u64(C.getpagesize()) + 3328 }
 	if address := swift_raw_alloc_symbol(symbol) { return address }
 	if address := swift_once_symbol(symbol) { return address }
@@ -264,12 +280,24 @@ fn swift_core_symbol(symbol string) ?u64 {
 	if address := swift_interpolation_symbol(symbol) { return address }
 	if address := swift_fatal_symbol(symbol) { return address }
 	if address := swift_array_symbol(symbol) { return address }
+	if address := swift_optional_symbol(symbol) { return address }
+	if address := swift_object_any_symbol(symbol) { return address }
+	if address := swift_bool_metadata_symbol(symbol) { return address }
+	if address := swift_static_string_metadata_symbol(symbol) { return address }
+	if address := swift_never_nominal_symbol(symbol) { return address }
+	if address := swift_result_nominal_symbol(symbol) { return address }
+	if address := swift_print_unlocked_symbol(symbol) { return address }
+	if address := swift_print_console_symbol(symbol) { return address }
+	if address := swift_merge_error_metadata_symbol(symbol) { return address }
 	if address := swift_integer_symbol(symbol) { return address }
 	if address := swift_hash_symbol(symbol) { return address }
 	if address := swift_string_protocol_symbol(symbol) { return address }
 	return match symbol {
+		'_swift_isaMask' { swift_isa_mask_address() }
 		'_$sSTsE5first5where7ElementQzSgSbADKXE_tKF' { swift_sequence_arena() + 256 }
 		'_$sSTsE10compactMapySayqd__Gqd__Sg7ElementQzKXEKlF' { swift_sequence_arena() }
+		'_$sSTsE13_copyContents12initializing8IteratorQz_SitSry7ElementQzG_tF' { swift_sequence_arena() + 384 }
+		'_$sSTsE32withContiguousStorageIfAvailableyqd__Sgqd__SRy7ElementQzGKXEKlF' { swift_sequence_arena() + 448 }
 		'_$sSS9UTF16ViewV5index_8offsetBySS5IndexVAF_SitF' { u64(unsafe { voidptr(swift_utf16_offset) }) }
 		'_$sSS8UTF8ViewV17_foreignSubscript8positions5UInt8VSS5IndexV_tF' { u64(unsafe { voidptr(swift_foreign_subscript) }) }
 		'_$sSS8UTF8ViewV13_foreignIndex_8offsetBySS0D0VAF_SitF' { u64(unsafe { voidptr(swift_foreign_offset) }) }
@@ -280,14 +308,36 @@ fn swift_core_symbol(symbol string) ?u64 {
 		'_$sSS10describingSSx_tclufC' { u64(unsafe { voidptr(swift_string_describing) }) }
 		'_$sS2SycfC' { u64(unsafe { voidptr(swift_string_empty) }) }
 		'_$sBOWV' { swift_unknown_value_witnesses() }
-		// Darwin SwiftError owners use Cocoa ARC, including boxed Swift errors
-		// and toll-free NSError/CFError objects. These entries use ordinary C
-		// calls, rather than Swift's strong-word or bridge-object encoding.
-		'_swift_errorRetain' { u64(unsafe { voidptr(objc_retain) }) }
-		'_swift_errorRelease' { u64(unsafe { voidptr(objc_release) }) }
+		'_$sBbWV' { swift_bridge_value_witnesses() }
+		'_$sSDMa' { swift_dictionary_metadata_arena() }
+		// Error entries use ordinary C calls. Dispatch generic boxes to their
+		// native heap lifetime and toll-free NSError/CFError owners to Cocoa ARC.
+		'_swift_errorRetain' { u64(unsafe { voidptr(swift_error_retain) }) }
+		'_swift_errorRelease' { u64(unsafe { voidptr(swift_error_release) }) }
+		'_swift_allocError' { u64(unsafe { voidptr(swift_error_allocate) }) }
+		'_swift_allocateGenericValueMetadata' { u64(unsafe { voidptr(swift_generic_value_allocate) }) }
+		'_swift_arrayInitWithCopy' { u64(unsafe { voidptr(swift_array_init_copy) }) }
+		'_swift_arrayInitWithTakeBackToFront' { u64(unsafe { voidptr(swift_array_take_back) }) }
+		'_swift_arrayInitWithTakeFrontToBack' { u64(unsafe { voidptr(swift_array_take_front) }) }
+		'_swift_beginAccess' { u64(unsafe { voidptr(swift_access_begin) }) }
+		'_swift_endAccess' { u64(unsafe { voidptr(swift_access_end) }) }
+		'_swift_checkMetadataState' { u64(unsafe { voidptr(swift_metadata_state) }) }
+		'_swift_getEnumCaseMultiPayload' { u64(unsafe { voidptr(swift_enum_case_multi) }) }
+		'_swift_getEnumTagSinglePayloadGeneric' { u64(unsafe { voidptr(swift_enum_tag_single) }) }
+		'_swift_getGenericMetadata' { u64(unsafe { voidptr(swift_generic_metadata) }) }
+		'_swift_getInitializedObjCClass' { u64(unsafe { voidptr(swift_initialized_objc_class) }) }
+		'_swift_getObjCClassFromMetadata' { u64(unsafe { voidptr(swift_objc_class_from_metadata) }) }
+		'_swift_lookUpClassMethod' { u64(unsafe { voidptr(swift_class_method) }) }
+		'_swift_getOpaqueTypeConformance2' { u64(unsafe { voidptr(swift_opaque_conformance) }) }
+		'_swift_getSingletonMetadata' { u64(unsafe { voidptr(swift_singleton_metadata) }) }
+		'_swift_getTupleTypeMetadata' { u64(unsafe { voidptr(swift_tuple_metadata) }) }
 		'_swift_initStackObject' { u64(unsafe { voidptr(swift_stack_initialize) }) }
+		'_swift_initStaticObject' { u64(unsafe { voidptr(swift_static_initialize) }) }
+		'_swift_initStructMetadata' { u64(unsafe { voidptr(swift_struct_initialize) }) }
 		'_swift_allocObject' { u64(unsafe { voidptr(swift_heap_allocate) }) }
-		'_swift_deallocObject', '_swift_deallocClassInstance' { u64(unsafe { voidptr(swift_heap_deallocate) }) }
+		'_swift_deallocObject' { u64(unsafe { voidptr(swift_heap_deallocate) }) }
+		'_swift_deallocClassInstance' { u64(unsafe { voidptr(swift_heap_deallocate_class) }) }
+		'_swift_deallocPartialClassInstance' { u64(unsafe { voidptr(swift_partial_class) }) }
 		'_swift_deallocUninitializedObject' { u64(unsafe { voidptr(swift_heap_deallocate_uninitialized) }) }
 		'__swift_stdlib_reportUnimplementedInitializerInFile' { u64(unsafe { voidptr(swift_initializer_report_in_file) }) }
 		'__swift_stdlib_reportUnimplementedInitializer' { u64(unsafe { voidptr(swift_initializer_report) }) }
@@ -313,6 +363,7 @@ fn swift_core_symbol(symbol string) ?u64 {
 		'_swift_unknownObjectRetain' { u64(unsafe { voidptr(swift_unknown_retain) }) }
 		'_swift_unknownObjectRelease' { u64(unsafe { voidptr(swift_unknown_release) }) }
 		'_swift_isUniquelyReferenced_nonNull_native' { u64(unsafe { voidptr(swift_is_unique_native) }) }
+		'_swift_isEscapingClosureAtFileLocation' { u64(unsafe { voidptr(swift_escaping_closure) }) }
 		else { none }
 	}
 }

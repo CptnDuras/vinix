@@ -127,7 +127,7 @@ pub fn configuration_probe_digest(support string) !string {
 }
 
 pub fn dex_adapter_digest(support string) !string {
-	return native_producer_digest(support, ['tests/native-android-tools/main.v'], ['tests/native-android-tools/androidtools', 'build-support/android/androidhost', 'build-support/android/boothost', 'tools/sourcecommand', 'build-support/cachecli', 'build-support/cachekey', 'tests/linuxkpi/hosttest', 'build-support/tarcore', 'build-support/tarstream'])!
+	return native_producer_digest(support, ['tests/native-android-tools/main.v'], ['tests/native-android-tools/androidtools', 'build-support/android/androidhost', 'build-support/android/boothost', 'build-support/android/atlframework', 'tools/sourcecommand', 'build-support/cachecli', 'build-support/cachekey', 'tests/linuxkpi/hosttest', 'build-support/tarcore', 'build-support/tarstream'])!
 }
 
 fn producer_sources(root string, relative string, mut paths []string) ! {
@@ -145,6 +145,10 @@ fn producer_sources(root string, relative string, mut paths []string) ! {
 fn native_producer_digest(support string, inputs []string, directories []string) !string {
 	root := path_parent(path_parent(support))
 	mut paths := inputs.clone()
+	if 'build-support/android/atlframework' in directories {
+		for directory in ['build-support/android/nativews','build-support/android/wsloader'] { producer_sources(root,directory,mut paths)! }
+		paths << ['build-support/android/nativews/bindings.txt','build-support/android/native-entry.v','build-support/android/native-run.v']
+	}
 	for directory in directories { producer_sources(root, directory, mut paths)! }
 	paths.sort()
 	mut hash := sha256.new()

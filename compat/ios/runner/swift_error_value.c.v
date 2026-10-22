@@ -11,16 +11,16 @@ struct SwiftErrorValue {
 // before publication; assignments publish before releasing the old owner,
 // whose dealloc can reenter the runtime. Takes leave source uninitialized.
 fn swift_objc_value_copy(destination u64, source u64, _metadata u64) u64 {
-	owner := objc_retain(read64(source))
+	owner := swift_error_retain(read64(source))
 	unsafe { *(&u64(destination)) = owner }
 	return destination
 }
-fn swift_objc_value_destroy(value u64, _metadata u64) { objc_release(read64(value)) }
+fn swift_objc_value_destroy(value u64, _metadata u64) { swift_error_release(read64(value)) }
 fn swift_objc_value_assign_copy(destination u64, source u64, _metadata u64) u64 {
-	owner := objc_retain(read64(source))
+	owner := swift_error_retain(read64(source))
 	previous := read64(destination)
 	unsafe { *(&u64(destination)) = owner }
-	objc_release(previous)
+	swift_error_release(previous)
 	return destination
 }
 fn swift_objc_value_take(destination u64, source u64, _metadata u64) u64 {
@@ -30,7 +30,7 @@ fn swift_objc_value_take(destination u64, source u64, _metadata u64) u64 {
 fn swift_objc_value_assign_take(destination u64, source u64, _metadata u64) u64 {
 	previous := read64(destination)
 	unsafe { *(&u64(destination)) = read64(source) }
-	objc_release(previous)
+	swift_error_release(previous)
 	return destination
 }
 
@@ -52,8 +52,8 @@ fn swift_cf_error_info(owner u64) u64 {
 
 // Shared sealed value witnesses and a concrete, working CFError: Error table.
 // It includes all four requirements, with indirect self in x20. Conformance
-// discovery, arbitrary NSError subclasses and Swift error boxes are separate
-// runtime features; this table describes the existing VinixCFError class only.
+// discovery and arbitrary NSError subclasses remain separate runtime features;
+// generic boxes carry their supplied Error table instead of this CFError table.
 fn swift_error_metadata_arena() u64 {
 	C.ios_objc_initialize_lock()
 	defer { C.ios_objc_initialize_unlock() }
@@ -114,7 +114,12 @@ fn swift_error_metadata_arena() u64 {
 		*(&u64(data + 408)) = protocol
 	}
 	swift_any_emit(code,data)
-	C.__builtin___clear_cache(allocation, unsafe { voidptr(code + 152) })
+	swift_error_code_emit(code + 160)
+	swift_error_domain_emit(code + 192)
+	swift_error_user_info_emit(code + 224)
+	swift_error_self_emit(code, data, protocol)
+	swift_result_nominal_emit(code, data, protocol)
+	C.__builtin___clear_cache(allocation, unsafe { voidptr(code + 656) })
 	if C.mprotect(allocation, usize(page), C.PROT_READ | C.PROT_EXEC) != 0
 		|| C.mprotect(unsafe { voidptr(data) }, usize(page), C.PROT_READ) != 0 {
 		C.munmap(allocation, usize(page * 2))
@@ -152,8 +157,10 @@ fn swift_objc_metadata(cls u64) u64 {
 }
 
 fn swift_error_value_checked(owner u64, scratch &u64, output &SwiftErrorValue) ! {
-	if owner == 0 || scratch == unsafe { nil } || output == unsafe { nil }
-		|| u64(scratch) & 7 != 0 || u64(output) & 7 != 0 { return error('iOS: invalid Swift error extraction buffers') }
+	if owner == 0 || output == unsafe { nil } || u64(output) & 7 != 0
+		|| u64(output) > ~u64(0)-24 { return error('iOS: invalid Swift error extraction buffers') }
+	if swift_error_allocation_project_checked(owner,output)! { return }
+	if scratch == unsafe { nil } || u64(scratch) & 7 != 0 { return error('iOS: invalid Swift error extraction scratch') }
 	C.ios_objc_initialize_lock()
 	header := ios_runtime.objects[owner] or {
 		C.ios_objc_initialize_unlock()
@@ -173,6 +180,11 @@ fn swift_error_value(owner u64, scratch &u64, output &SwiftErrorValue) {
 
 fn swift_error_value_symbol(symbol string) ?u64 {
 	return match symbol {
+		'_$ss5ErrorWS' { swift_error_self_table_checked() or { return none } }
+		'_$ss5ErrorPsE9_userInfoyXlSgvg' { swift_error_user_info_entry() or { return none } }
+		'_$ss5ErrorPsE7_domainSSvg' { swift_error_domain_entry() or { return none } }
+		'_$ss5ErrorPsE5_codeSivg' { swift_error_code_entry() or { return none } }
+		'_$ss5ErrorPsE19_getEmbeddedNSErroryXlSgyF' { u64(unsafe { voidptr(swift_error_embedded) }) }
 		'__swift_stdlib_bridgeErrorToNSError' { u64(unsafe { voidptr(swift_error_bridge) }) }
 		'_$sypN' { swift_any_full_metadata() }
 		'_swift_getErrorValue' { u64(unsafe { voidptr(swift_error_value) }) }

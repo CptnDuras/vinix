@@ -57,6 +57,32 @@ pub fn write_build_manifest(kind string, arguments []string) ! {
 	output := arguments[0]; commit := arguments[1]; url := arguments[2]; archive := arguments[3]
 	patch := if kind == 'atl' { arguments[9] } else { arguments[4] }
 	cache := if kind == 'atl' { arguments[8] } else { arguments[5] }
+	mut framework := ah.Value(json2.Null{})
+	if kind == 'atl' {
+		work := os.dir(output) + '/framework-extension'
+		jar := output + '/usr/lib/java/dex/android_translation_layer/api-impl.jar'
+		framework = extend_framework(jar, jar, work, work + '/tools', os.getenv('VINIX_ATL_JAVA_D8'))!
+		build_framework_library(output + '/usr/lib/art/libvinix-android-framework.so', 'gcc', work + '/generated', 'arm64')!
+		build_native_ws(work + '/smali',arguments[11],work + '/native-ws','gcc','arm64')!
+		os.mkdir_all(output + '/usr/lib/art/native-ws')!
+		os.mkdir_all(output + '/usr/bin')!
+		os.cp(work + '/native-ws/libvinix-android-native.so',output + '/usr/lib/art/libvinix-android-native.so')!
+		os.cp(work + '/native-ws/libdl_bio.so.0',output + '/usr/lib/art/native-ws/libdl_bio.so.0')!
+		os.cp(work + '/native-ws/vinix-android-native',output + '/usr/bin/vinix-android-native')!
+		os.cp(work + '/native-ws/run-android',output + '/usr/bin/run-android-native')!
+		os.mkdir_all(output + '/usr/share/licenses/bionic-ws')!
+		os.cp(work + '/native-ws/bionic-ws-NOTICE', output + '/usr/share/licenses/bionic-ws/NOTICE')!
+		os.cp(work + '/native-ws/bionic-ws-manifest.json', output + '/usr/share/licenses/bionic-ws/build.json')!
+		os.mkdir_all(output + '/usr/share/vinix-android-ws/bionic_translation/cfg.d')!
+		os.cp(work + '/native-ws/bionic-ws.cfg', output + '/usr/share/vinix-android-ws/bionic_translation/cfg.d/native.cfg')!
+		for name in ['libglapi.so.0', 'libvinix-ws-GLESv1_CM.so', 'libvinix-ws-GLESv2.so'] {
+			os.cp(work + '/native-ws/' + name, output + '/usr/lib/art/native-ws/' + name)!
+		}
+		os.mkdir_all(output + '/usr/share/licenses/mesa-ws')!
+		for name in ['mesa-ws-NOTICE', 'mesa-ws-manifest.json', 'mesa-ws-sources.tar.gz'] {
+			os.cp(work + '/native-ws/' + name, output + '/usr/share/licenses/mesa-ws/' + name)!
+		}
+	}
 	mut paths := []string{}; descendants(output + '/usr', mut paths)!; paths.sort()
 	mut files := []ah.Value{}
 	for path in paths {
@@ -104,6 +130,7 @@ pub fn write_build_manifest(kind string, arguments []string) ! {
 	else if kind == 'bionic' { manifest['build_flags'] = ah.Value(['-DBIONIC_PAGE_SIZE=16384', '-Wl,-z,max-page-size=65536'].map(ah.Value(it))); manifest['source_date_epoch'] = 1773705600 }
 	else {
 		art := arguments[11]
+		manifest['framework_extension'] = framework
 		for key, value in {'androidfw_patch_sha256': ah.Value(ah.digest(arguments[10])!), 'androidfw_configuration_api': ah.Value(1), 'androidfw_header_sha256': ah.Value(ah.digest(art + '/usr/include/androidfw/androidfw_c_api.h')!), 'androidfw_library_sha256': ah.Value(ah.digest(art + '/usr/lib/art/libandroidfw.so')!), 'configuration_probe_sha256': ah.Value(arguments[12]), 'build_flags': ah.Value(['--buildtype=release', '-Wl,-z,max-page-size=65536'].map(ah.Value(it))), 'builder_sha256': ah.Value(ah.digest(arguments[7])!), 'dex_adapter_sha256': ah.Value(ah.dex_adapter_digest(root() + '/build-support/android')!), 'dex_compiler_sha256': ah.Value(ah.digest(arguments[4])!), 'java_core_classes_sha256': ah.Value(ah.digest(arguments[5])!), 'dex_compiler_arguments': ah.Value(dex_arguments.map(ah.Value(it))), 'dex_compiler': ah.Value(boothost.unicode_strip(probe_command([os.getenv('VINIX_ATL_JAVA_D8'), '-cp', arguments[4], 'com.android.tools.r8.D8', '--version'], true, '')!)), 'source_date_epoch': ah.Value(1790718764)} { manifest[key] = value }
 	}
 	write_receipt(output + '/' + kind + '-runtime-manifest.json', ah.Value(manifest))!

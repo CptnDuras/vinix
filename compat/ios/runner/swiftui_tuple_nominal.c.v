@@ -1,0 +1,140 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+module main
+
+struct SwiftUITupleNominalFailure {}
+fn (_ &SwiftUITupleNominalFailure) msg() string { return 'iOS: SwiftUI TupleView descriptor requires active sealed storage' }
+fn (_ &SwiftUITupleNominalFailure) code() int { return 1 }
+__global swiftui_tuple_nominal_failure_value = SwiftUITupleNominalFailure{}
+fn swiftui_tuple_nominal_failure() IError { return unsafe { &swiftui_tuple_nominal_failure_value } }
+
+// Supply nominal identity and the unconstrained T parameter. Specialization
+// needs T layout and ownership. Keep the generic bit so symbolic lookup
+// rejects before using a nongeneric accessor ABI.
+fn swiftui_tuple_nominal_unavailable(request u64, value u64) SwiftAssociatedMetadata {
+	panic('iOS: SwiftUI TupleView generic instantiation is not implemented')
+}
+
+fn swiftui_tuple_view_never_unavailable(request u64) SwiftAssociatedMetadata {
+	panic('iOS: SwiftUI TupleView Body Never metadata is not implemented')
+}
+fn swiftui_tuple_view_graph_unavailable() {
+	panic('iOS: SwiftUI TupleView View graph operations are not implemented')
+}
+fn swiftui_tuple_view_body_unavailable(associated u64, metadata u64, table u64) u64 {
+	panic('iOS: SwiftUI TupleView Body Never View conformance is not implemented')
+}
+fn swiftui_tuple_view_relative_bytes(field u64, destination u64) {
+	delta := i64(destination) - i64(field)
+	assert delta >= -2147483648 && delta <= 2147483647
+	bits := u32(i32(delta))
+	for i in u64(0) .. 4 { unsafe { *(&u8(field + i)) = u8(bits >> (i * 8)) } }
+}
+fn swiftui_tuple_nominal_arena_checked() !u64 {
+	$if !arm64 { return swiftui_tuple_nominal_failure() }
+	if ios_runtime == unsafe { nil } { return swiftui_tuple_nominal_failure() }
+	C.ios_objc_initialize_lock()
+	defer { C.ios_objc_initialize_unlock() }
+	if ios_runtime.swiftui_tuple_nominal_retired { return swiftui_tuple_nominal_failure() }
+	if ios_runtime.swiftui_tuple_nominal_arena != 0 { return ios_runtime.swiftui_tuple_nominal_arena }
+	if ios_runtime.swift_concurrency_retired { return swiftui_tuple_nominal_failure() }
+	page := u64(C.getpagesize())
+	arena := C.mmap(unsafe { nil }, usize(page * 2), C.PROT_READ | C.PROT_WRITE, C.MAP_PRIVATE | C.MAP_ANONYMOUS, -1, 0)
+	if arena == voidptr(-1) { return swiftui_tuple_nominal_failure() }
+	base := u64(arena); descriptor := base + page; module_descriptor := descriptor + 64
+	write32(base, 0x58000050); write32(base + 4, 0xd61f0200)
+	unsafe { *(&u64(base + 8)) = u64(voidptr(swiftui_tuple_nominal_unavailable)) }
+	write32(descriptor, 0xd1) // Unique, generic struct.
+	swift_protocol_relative(descriptor + 4, module_descriptor)
+	swift_protocol_relative(descriptor + 8, descriptor + 96)
+	swift_protocol_relative(descriptor + 12, base)
+	write32(descriptor + 20, 1); write32(descriptor + 24, 3)
+	// No reflection, instantiation cache, pattern or complete metadata.
+	write32(descriptor + 36, 1) // One type parameter, zero requirements.
+	write32(descriptor + 40, 1) // One key argument, no extra flags.
+	write32(descriptor + 44, 0x80) // Ordinary key type parameter, padded.
+	swift_protocol_relative(module_descriptor + 8, descriptor + 80)
+	C.memcpy(voidptr(descriptor + 80), c'SwiftUI', 8)
+	C.memcpy(voidptr(descriptor + 96), c'TupleView', 10)
+	view := descriptor + 128
+	// The conformance names SwiftUI.View, including its Body: View signature.
+	// The View declaration supplies no callable default implementations.
+	write32(view, 0x30043); swift_protocol_relative(view + 4, module_descriptor)
+	swift_protocol_relative(view + 8, descriptor + 224)
+	write32(view + 12, 1); write32(view + 16, 6)
+	swift_protocol_relative(view + 20, descriptor + 240)
+	write32(view + 24, 0x80)
+	swift_protocol_relative(view + 28, descriptor + 256)
+	swift_protocol_relative(view + 32, view)
+	C.memcpy(voidptr(descriptor + 224), c'View', 5)
+	C.memcpy(voidptr(descriptor + 240), c'Body', 5)
+	C.memcpy(voidptr(descriptor + 256), c'4Body', 5)
+	unsafe { *(&u8(descriptor + 261)) = 1 }
+	delta := u32(i32(i64(view) - i64(descriptor + 262)))
+	for i in u64(0) .. 4 { unsafe { *(&u8(descriptor + 262 + i)) = u8(delta >> (i * 8)) } }
+	C.memcpy(voidptr(descriptor + 266), c'Qz', 3)
+	for i, flags in [u32(0xcade0008), 0x4b5f0007, 0xaeaf0001, 0x6ddd0001, 0x4cbb0001, 0xd1fd0013]! {
+		write32(view + 36 + u64(i * 8), flags)
+	}
+	// TupleView<T> has an unconditional static seven-word View table.
+	// T remains unconstrained in the nominal signature above.
+	conformance := descriptor + 320; table := descriptor + 352
+	swift_protocol_relative(conformance, view)
+	swift_protocol_relative(conformance + 4, descriptor)
+	swift_protocol_relative(conformance + 8, table)
+	// Flags stay zero: no conditional requirements or generic witness control.
+	unsafe {
+		*(&u64(table)) = conformance
+		*(&u64(table + 8)) = (descriptor + 416) | 1
+		*(&u64(table + 16)) = (descriptor + 432) | 1
+		*(&u8(descriptor + 416)) = 0xff; *(&u8(descriptor + 417)) = 7
+		*(&u8(descriptor + 432)) = 2
+		*(&u64(descriptor + 480)) = descriptor + 448
+	}
+	swiftui_tuple_view_relative_bytes(descriptor + 418, base + 48)
+	swiftui_tuple_view_relative_bytes(descriptor + 433, descriptor + 480)
+	// Body == Never is a symbolic declaration with a diagnostic accessor;
+	// complete Never metadata and its View conformance are not supplied.
+	write32(descriptor + 448, 0x52)
+	swift_protocol_relative(descriptor + 452, descriptor + 488)
+	swift_protocol_relative(descriptor + 456, descriptor + 512)
+	swift_protocol_relative(descriptor + 460, base + 16)
+	swift_protocol_relative(descriptor + 496, descriptor + 504)
+	C.memcpy(voidptr(descriptor + 504), c'Swift', 6)
+	C.memcpy(voidptr(descriptor + 512), c'Never', 6)
+	for i, target in [u64(unsafe { voidptr(swiftui_tuple_view_never_unavailable) }),
+		u64(unsafe { voidptr(swiftui_tuple_view_graph_unavailable) }),
+		u64(unsafe { voidptr(swiftui_tuple_view_body_unavailable) })]! {
+		entry := base + 16 + u64(i * 16)
+		write32(entry, 0x58000050); write32(entry + 4, 0xd61f0200)
+		unsafe { *(&u64(entry + 8)) = target }
+	}
+	for i in u64(3) .. 7 { unsafe { *(&u64(table + i * 8)) = base + 32 } }
+	C.__builtin___clear_cache(arena, voidptr(base + 64))
+	if C.mprotect(arena, usize(page), C.PROT_READ | C.PROT_EXEC) != 0
+		|| C.mprotect(voidptr(descriptor), usize(page), C.PROT_READ) != 0 {
+		if C.munmap(arena, usize(page * 2)) != 0 { panic('iOS: cannot retire unsealed SwiftUI TupleView descriptor') }
+		return swiftui_tuple_nominal_failure()
+	}
+	ios_runtime.swiftui_tuple_nominal_arena = base
+	return base
+}
+
+// Called under the runtime lock after Swift owners and metadata users drain.
+fn swiftui_tuple_nominal_stop() {
+	ios_runtime.swiftui_tuple_nominal_retired = true
+	if ios_runtime.swiftui_tuple_nominal_arena == 0 { return }
+	if C.munmap(voidptr(ios_runtime.swiftui_tuple_nominal_arena), usize(C.getpagesize()) * 2) != 0 {
+		panic('iOS: cannot retire SwiftUI TupleView descriptor')
+	}
+	ios_runtime.swiftui_tuple_nominal_arena = 0
+}
+
+fn swiftui_tuple_nominal_symbol(symbol string) ?u64 {
+	offset := match symbol {
+		'_$s7SwiftUI9TupleViewVMn' { u64(0) }
+		'_$s7SwiftUI9TupleViewVyxGAA0D0AAMc' { u64(320) }
+		else { return none }
+	}
+	base := swiftui_tuple_nominal_arena_checked() or { return none }
+	return base + u64(C.getpagesize()) + offset
+}

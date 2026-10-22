@@ -67,6 +67,10 @@ fn cf_equal_depth(left u64, right u64, depth int) bool {
 	info := ios_runtime.classes[read64(left)] or { return false }
 	name := info.name
 	return match name {
+		'VinixCFUUID' {
+			a := obj_header(left); b := obj_header(right)
+			unsafe { C.memcmp(&a.uuid_bytes[0], &b.uuid_bytes[0], 16) == 0 }
+		}
 		'VinixSecPolicy' { cf_equal_depth(obj_header(left).fields[0], obj_header(right).fields[0], depth + 1) }
 		'VinixSecCertificate', 'VinixSecKey' {
 			a := obj_header(left)
@@ -108,6 +112,7 @@ fn collection_remove(mut header ObjHeader, index int) {
 }
 
 fn foundation_dispatch(object u64, selector string, mut frame RegisterFrame) bool {
+	if ns_empty_array_dispatch(object, selector, mut frame) { return true }
 	if selector == 'isKindOfClass:' {
 		frame.x[0] = u64(objc_is_kind(object, frame.x[2]))
 		return true

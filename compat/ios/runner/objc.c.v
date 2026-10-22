@@ -201,26 +201,100 @@ mut:
 	swift_arrays map[u64]SwiftArrayStorage // Typed tails and Element destruction witnesses, under the same lock.
 	swift_heap map[u64]SwiftHeapStorage // Real app heap metadata and deallocation layout, under the same lock.
 	swift_heap_sequence u64 // Distinguishes reentrant allocations that reuse a freed address.
+	swift_static_objects [1024]u64 // Borrowed immortal static headers, protected by the runtime lock.
+	swift_static_object_count int // Fixed capacity; cleared after users drain, without touching storage.
 	swift_empty_array u64 // Canonical sealed immortal empty storage, retired at quiescent shutdown.
 	swift_arc_code u64 // Sealed ARM64 preserve-most entry points, released at quiescent teardown.
 	swift_cstring_arena u64 // Sealed Swift closure/context/result adapter, retired after callbacks drain.
 	swift_sequence_arena u64 // Sealed Sequence witness/throwing transform adapters, retired after callbacks drain.
 	swift_metadata_arena u64 // Adjacent sealed String metadata/accessor pages, under the runtime lock.
+	swift_keyed_container_arena u64 // Sealed keyed container accessor, descriptor and native-reference VWT.
+	swift_keyed_container_metadata map[u64]SwiftKeyedContainerType // Owned RO page -> borrowed K/CodingKey identities.
+	swift_keyed_container_retired bool
+	swift_string_protocol_arena u64 // Sealed declaration graph; no StringProtocol witness table is published.
+	swift_string_protocol_descriptor u64 // Kept through retirement for stale witness-lookup rejection.
 	swift_foreign_metadata [64]SwiftForeignMetadataEntry // Borrowed complete imported scalar-enum identities.
 	swift_foreign_metadata_count u64 // Bounded canonical cache, cleared after workers drain.
 	swift_interpolation_arena u64 // Frozen interpolation metadata and TextOutputStream witnesses.
 	swift_array_arena u64 // Array accessor/descriptor/witness pages and zero-filled generic cache.
 	swift_array_metadata map[u64]u64 // Element metadata -> sealed Array metadata, under the runtime lock.
+	swift_optional_arena u64 // Optional accessor/descriptor and writable generic cache.
+	swift_optional_metadata map[u64]u64 // Wrapped metadata -> sealed complete Optional metadata/VWT.
+	swift_optional_retired bool
+	swift_optional_encoding_arena u64 // Encodable declaration, adapters and writable generic cache.
+	swift_optional_encoding_descriptor u64 // Kept through retirement to reject stale conformance lookups.
+	swift_optional_encoding map[u64]u64 // Optional metadata -> sealed table borrowing Wrapped:Encodable.
+	swift_optional_decoding_arena u64 // Decodable declaration, adapters and writable generic cache.
+	swift_optional_decoding_descriptor u64 // Retained identity for rejecting stale conformance lookups.
+	swift_optional_decoding map[u64]u64 // Optional metadata -> sealed table borrowing Wrapped:Decodable.
+	swift_object_any_arena u64 // RX bridge entry and RO AnyObject existential metadata.
+	swift_object_any_retired bool
+	swift_array_encoding_arena u64 // Encodable descriptor, dispatch adapters and generic cache pages.
+	swift_array_encoding_descriptor u64 // Remembered through retirement before stale descriptor reads.
+	swift_array_encoding map[u64]u64 // Array metadata -> sealed table with a private Element:Encodable word.
+	swift_array_decoding_arena u64 // Separate Decodable descriptor, generic cache and call adapters.
+	swift_array_decoding_descriptor u64 // Remembered for stale lookup rejection after quiescent retirement.
+	swift_array_decoding map[u64]u64 // Array metadata -> sealed table borrowing Element:Decodable.
+	swift_dictionary_metadata_arena u64 // Sealed Dictionary accessor/descriptor and writable generic cache.
+	swift_dictionary_metadata map[u64]SwiftDictionaryType // Sealed page -> exact Key/Value/Hashable identities.
+	swift_dictionary_metadata_retired bool
+	swift_dictionary_encoding map[u64]u64 // Dictionary metadata -> sealed Encodable table (two private words).
+	swift_dictionary_encoding_descriptor u64 // Remembered through retirement for stale lookup rejection.
+	swift_dictionary_decoding map[u64]u64 // Separate Decodable tables; borrows metadata and conditional witnesses.
+	swift_dictionary_decoding_descriptor u64 // Remembered through retirement before reading stale descriptors.
 	swift_array_sequence_arena u64 // Array Sequence/iterator descriptors, adapters and generic pattern.
 	swift_array_sequence_metadata map[u64]u64 // Element -> sealed iterator metadata and complete Sequence tables.
 	swift_collection_arena u64
 	swift_collection_metadata map[u64]u64
+	swift_indexing_iterator_conformance_descriptor u64 // Remember for stale lookup rejection after retirement.
 	swift_set_arena u64
 	swift_set_metadata map[u64]SwiftSetType // Sealed specialization page -> exact Element/Hashable pair.
 	swift_empty_set u64 // Immutable native empty singleton; retired with Set records.
+	swift_bool_metadata_arena u64 // Sealed Swift.Bool nominal metadata, accessor and byte value witnesses.
+	swift_bool_metadata_retired bool // Reject recreation after quiescent metadata retirement.
+	swift_static_string_metadata_arena u64 // Frozen three-field POD metadata, witnesses and accessor.
+	swift_static_string_metadata_retired bool
+	swift_print_unlocked_retired bool // Printing callbacks drain before the shared interpolation adapter retires.
+	swift_merge_error_metadata_arena u64 // Sealed _MergeError enum metadata, accessor and zero-size witnesses.
+	swift_merge_error_metadata_retired bool
+	swift_merge_error_conformance_descriptor u64 // Remember through retirement before any stale descriptor read.
 	swift_integer_arena u64 // Int metadata, value witnesses and Equatable/Hashable conformances.
+	swift_integer_description_arena u64 // Sealed Int description table/adapter using String's canonical protocol.
+	swift_integer_description_retired bool // Reject description exports after quiescent retirement.
 	swift_dispatch_flags_arena u64 // Sealed DispatchWorkItemFlags metadata/accessor pages.
 	swift_dispatch_flags_retired bool // Reject resolution after quiescent metadata teardown.
+	swiftui_vstack_arena u64 // Sealed nongeneric SwiftUI _VStackLayout descriptor/metadata and accessor.
+	swiftui_vstack_retired bool
+	swiftui_vstack_nominal_arena u64 // Sealed constrained VStack descriptor; no specialization.
+	swiftui_vstack_nominal_retired bool
+	swiftui_tree_arena u64 // Sealed generic Tree identity/signature; instantiation is unsupported.
+	swiftui_tree_retired bool
+	swiftui_zstack_arena u64 // Sealed nongeneric SwiftUI ZStack descriptor/metadata and accessor.
+	swiftui_zstack_retired bool
+	swiftui_zstack_nominal_arena u64 // Sealed constrained ZStack descriptor; no specialization.
+	swiftui_zstack_nominal_retired bool
+	swiftui_tuple_nominal_arena u64 // Sealed unconstrained TupleView descriptor; no specialization.
+	swiftui_tuple_nominal_retired bool
+	swiftui_tuple_init_arena u64 // Sealed consuming TupleView value initializer adapter.
+	swiftui_tuple_init_retired bool
+	swiftui_opacity_arena u64 // Sealed concrete ViewModifier table, opacity/Never metadata and diagnostics.
+	swiftui_opacity_retired bool
+	swiftui_state_value_arena u64 // Sealed State.wrappedValue adapter; values and locations stay borrowed.
+	swiftui_state_value_retired bool
+	swiftui_state_set_arena u64 // Sealed nonmutating State setter; nil locations consume only the incoming Value.
+	swiftui_state_set_retired bool
+	swiftui_state_nominal_arena u64 // Sealed generic State descriptor and diagnostic accessor, no specialization.
+	swiftui_state_nominal_retired bool
+	swiftui_button_nominal_arena u64 // Sealed constrained Button descriptor; no specialization.
+	swiftui_button_nominal_retired bool
+	swiftui_modified_arena u64 // Sealed generic ModifiedContent descriptor and diagnostic accessor.
+	swiftui_modified_retired bool
+	swiftui_environment_transform_arena u64 // Sealed generic environment modifier identity and diagnostic accessor.
+	swiftui_environment_transform_retired bool
+	swiftui_text_view_arena u64 // Sealed Text View conformance identity and diagnostic witnesses.
+	swiftui_text_view_retired bool
+	swiftui_localized_key_arena u64 // Sealed four-register literal-key initializer, borrowing empty Array storage.
+	swiftui_localized_key_retired bool
 	swift_objc_bool_arena u64 // Sealed ObjectiveC.ObjCBool metadata/accessor pages.
 	swift_objc_bool_retired bool // Reject resolution after quiescent metadata teardown.
 	swift_nsobject_hashable_arena u64 // Sealed NSObject conformance patterns/adapters and separate RW generic caches.
@@ -240,8 +314,20 @@ mut:
 	swift_cocoa_error_retired_arena u64 // Recognize retired descriptors before any unmapped read.
 	swift_cocoa_error_retired bool
 	swift_void_arena u64 // Sealed empty-tuple full metadata and zero-size value witnesses.
+	swift_tuple_metadata_pages [64]u64 // Canonical, sealed inline tuple records, under the registry lock.
+	swift_tuple_metadata_count u64
+	swift_tuple_metadata_retired bool
 	swift_unknown_value_arena u64 // Sealed Builtin.UnknownObject value witnesses.
 	swift_error_arena u64 // Sealed ObjC value witnesses and the concrete CFError: Error conformance.
+	swift_error_allocation_arena u64 // Private heap destructor and immutable error box metadata.
+	swift_error_allocation_retired bool
+	swift_errors map[u64]SwiftErrorStorage // Owned generic Error payloads; metadata/witnesses are borrowed.
+	swift_generic_value_allocations map[u64]u64 // Fresh mutable metadata mappings, retained until quiescent teardown.
+	swift_generic_value_retired bool
+	swift_generic_metadata_arena u64 // Bounded cache; returned metadata remains owned by its instantiator.
+	swift_generic_metadata_count u64
+	swift_generic_metadata_users u64
+	swift_generic_metadata_retired bool
 	swift_objc_metadata map[u64]u64 // Class -> canonical sealed Swift wrapper, under the runtime lock.
 	swift_concurrency_code u64 // Sealed actor witness dispatcher and indirect priority getter.
 	swift_concurrency_retired bool // Reject new resolution after quiescent teardown.
@@ -260,6 +346,9 @@ mut:
 	swift_task_arena u64 // Sealed async adapters and read-only Task heap metadata.
 	swift_task_key u64
 	swift_task_key_live bool
+	swift_access_key u64 // Per-thread head of caller-owned synchronous access records.
+	swift_access_key_live bool
+	swift_access_count u64 // Protected by the runtime lock; must drain before TLS retirement.
 	swift_task_sync u64 // Mutex/condition for queued and executing task callbacks.
 	swift_task_jobs u64 // Protected by the task synchronization mutex.
 	swift_task_main_jobs u64 // Queued main-executor callbacks, under the same mutex.
@@ -297,7 +386,11 @@ mut:
 	corevideo_constants_arena u64 // Sealed CoreVideo CFString cells and records.
 	coremedia_constants_arena u64 // Sealed format-description CFString cells and records.
 	avfoundation_constants_arena u64 // Sealed AVFoundation NSString cells and records.
-	foundation_keys_arena u64 // Sealed ubiquity, underlying-error and web-activity NSString cells.
+	foundation_keys_arena u64 // Sealed Foundation key and calendar-identifier NSString cells.
+	url_resource_keys_arena u64 // Shared NSURL/CFURL resource-key NSString cells and CFSTR records.
+	ns_internal_exception_arena u64 // Sealed exception-name NSString cells and CFSTR records.
+	ns_exception_type_arena u64 // Sealed Objective-C EH records and vtable; not NSObject storage.
+	ns_locale_country_arena u64 // Sealed NS/CF country, currency-code and currency-symbol key cells/CFSTRs.
 	devicecheck_arena u64 // Sealed DeviceCheck error-domain cell, CFSTR record and bytes.
 	corehaptics_constants_arena u64 // Sealed CoreHaptics NSString cells, records and bytes.
 	storekit_constants_arena u64 // Sealed StoreKit conversion NSString cells, records and bytes.
@@ -315,6 +408,8 @@ mut:
 	first_responder u64
 	native_touch u64
 	block_refs   map[u64]int
+	block_imps map[u64]ObjBlockImp // Copied Blocks and sealed executable adapters.
+	block_imps_retired bool
 	block_isa    [3]u64
 	transform    [6]f64
 	bundle       string
@@ -329,6 +424,8 @@ mut:
 	defaults u64
 	locale u64
 	empty_dictionary u64
+	empty_array u64 // Cache-owned immutable singleton, immortal to callers.
+	empty_array_cell u64 // Read-only pointer cell, retired after pool/Swift users.
 	webkit_default_store u64
 	webkit_worlds [128]u64 // Owned interned page/client/named worlds, retired at shutdown.
 	webkit_world_count int = 2
@@ -353,6 +450,7 @@ fn objc_start() {
 	}
 	if C.ios_key_create(unsafe { &ios_runtime.graphics_key }, unsafe { voidptr(ui_context_cleanup) }) != 0 { panic('iOS: cannot create graphics TLS') }
 	if C.ios_key_create(unsafe { &ios_runtime.thread_key }, unsafe { voidptr(ns_thread_cleanup) }) != 0 { panic('iOS: cannot create Foundation thread TLS') }
+	swift_access_start()
 	ios_runtime.timers.flags |= .noslices
 	ios_runtime.load_classes.flags |= .noslices
 	ios_runtime.load_categories.flags |= .noslices
@@ -364,7 +462,7 @@ fn objc_start() {
 	ios_runtime.transform = [f64(1), 0, 0, 1, 0, 0]!
 	for name in ['NSObject', 'VinixCVPixelBuffer', 'VinixIOSurface', 'VinixCVMetalTextureCache', 'VinixCVMetalTexture', 'MTLTextureDescriptor', 'VinixMetalTextureDescriptor', 'Protocol', 'OS_object', 'OS_dispatch_object', 'OS_dispatch_group', 'OS_dispatch_source', 'OS_dispatch_semaphore', 'OS_dispatch_queue', 'OS_dispatch_queue_serial_executor', 'OS_dispatch_queue_serial', 'OS_dispatch_queue_main', 'OS_dispatch_queue_global', 'NSAutoreleasePool', 'NSFileManager', 'NSProcessInfo', 'NSDate', 'NSStream', 'NSInputStream', 'NSUUID', '_NSUUIDBridge', '__NSConcreteUUID', 'NSString', 'NSValue', 'NSConcreteValue', 'NSNumber', 'NSIndexPath', 'NSArray', 'NSMutableArray',
 		'VinixCMFormatDescription', 'VinixCMBlockBuffer', 'VinixCMSampleBuffer', 'VinixVTDecompressionSession', 'WKWebViewConfiguration', 'WKPreferences', 'WKUserContentController', 'WKProcessPool', 'WKWebsiteDataStore', 'WKWebpagePreferences', 'WKUserScript', 'WKContentWorld', 'WKNSArray',
-		'NSDictionary', 'NSMutableDictionary', 'NSConstantDictionary', 'NSJSONSerialization', 'NSNull', 'NSError', 'NSCondition', 'NSThread', 'ASWebAuthenticationSession', 'GCKeyboard', 'NSHTTPCookie', 'NSHTTPCookieInternal', 'NSLayoutConstraint', 'NSLayoutAnchor',
+		'NSDictionary', 'NSMutableDictionary', 'NSConstantDictionary', 'NSJSONSerialization', 'NSNull', 'NSError', 'NSException', 'NSCondition', 'NSThread', 'ASWebAuthenticationSession', 'GCKeyboard', 'NSHTTPCookie', 'NSHTTPCookieInternal', 'NSLayoutConstraint', 'NSLayoutAnchor',
 		'NSLayoutXAxisAnchor', 'NSLayoutYAxisAnchor', 'NSLayoutDimension', 'NSTimer', 'UIColor', 'UIFont', 'CALayer', 'UIResponder',
 		'UIApplication', 'UIView', 'UIImageView', 'UILabel', 'UIControl', 'UIButton', 'UIWindow', 'UIViewController',
 		'UIScreen', 'UIGestureRecognizer', 'UISwipeGestureRecognizer', 'UIAlertView', 'UIAlertController', 'UIAlertAction',
@@ -378,7 +476,7 @@ fn objc_start() {
         'CAMetalLayer', 'GLKView', 'EAGLContext', 'CMMotionManager', 'CLLocationManager',
         'AVAudioSession', 'AVCaptureDevice', 'AVCaptureDeviceInput', 'AVCaptureSession',
         'AVCaptureVideoDataOutput', 'AVCaptureVideoPreviewLayer', 'PHPhotoLibrary',
-		'VinixCTDescriptor', 'VinixCTFont', 'VinixCTLine', 'VinixCGFont', 'VinixReachability', 'VinixNWPath', 'VinixNWInterface', 'VinixNWPathMonitor', 'VinixCGContext', 'VinixCGColorSpace', 'VinixCGColor', 'VinixCGImage', 'VinixCGDataProvider', 'VinixSecCertificate', 'VinixSecKey', 'VinixSecPolicy', 'VinixSecTrust', 'VinixCFDate', 'VinixCFError'] {
+		'VinixCTDescriptor', 'VinixCTFont', 'VinixCTLine', 'VinixCGFont', 'VinixReachability', 'VinixNWPath', 'VinixNWInterface', 'VinixNWPathMonitor', 'VinixCGContext', 'VinixCGColorSpace', 'VinixCGColor', 'VinixCGImage', 'VinixCGDataProvider', 'VinixSecCertificate', 'VinixSecKey', 'VinixSecPolicy', 'VinixSecTrust', 'VinixCFDate', 'VinixCFError', 'VinixCFUUID'] {
 		parent := match name {
 			'NSObject' { u64(0) }
 			'OS_dispatch_object' { ios_runtime.names['OS_object'] }
@@ -448,6 +546,7 @@ fn objc_start() {
 			'NSAutoreleasePool' { u32(40) }
 			'NSUUID', '_NSUUIDBridge' { u32(8) }
 			'__NSConcreteUUID' { u32(24) }
+			'VinixCFUUID' { u32(8) }
 			'NSHTTPCookie' { u32(sizeof(AbiHTTPCookie)) }
 			'NSURLRequest', 'NSMutableURLRequest' { u32(24) }
 			'NSURLResponse' { u32(24) }
@@ -682,6 +781,7 @@ fn objc_stop() {
 	objc_release(ios_runtime.run_loop)
 	webkit_stop()
 	ns_threads_stop()
+	objc_block_imps_stop()
 	objc_associations_stop()
 	// Keep the immortal empty dictionary available through all collection and
 	// autorelease teardown. Release its cache reference after those users stop.
@@ -712,9 +812,14 @@ fn objc_stop() {
 	// Swift closure/context destruction can still read Foundation globals.
 	// Drain those owners before retiring Foundation global cells and strings.
 	swift_buffers_stop()
+	ns_empty_array_stop()
 	ns_url_error_stop()
 	ns_url_session_constants_stop()
 	ns_foundation_keys_stop()
+	ns_url_resource_keys_stop()
+	ns_internal_exception_stop()
+	ns_exception_type_stop()
+	ns_locale_country_stop()
 	devicecheck_stop()
 	corehaptics_constants_stop()
 	storekit_constants_stop()
@@ -737,6 +842,7 @@ fn objc_stop() {
 	// V's []string.free() also frees the owned strings.
 	unsafe { ios_runtime.selectors.free(); ios_runtime.selector_names.free() }
 	ns_uncaught_handler_stop()
+	swift_access_stop()
 }
 
 @[export: 'ios_format_double']
@@ -748,6 +854,11 @@ fn format_double(destination &char, size usize, format &char, value f64) int {
 }
 
 fn runtime_symbol(library string, symbol string) !u64 {
+	$if ios_sqlite ? {
+		if library == '/usr/lib/libsqlite3.dylib' {
+			if address := sqlite_symbol(symbol) { return address }
+		}
+	}
 	if library == '/usr/lib/libresolv.9.dylib' {
 		if address := resolver_query_symbol(symbol) { return address }
 	}

@@ -40,6 +40,14 @@ fn video_enabled(root string) bool {
 	return os.is_file(video_sdk(root) + '/build.status.txt')
 }
 
+fn sqlite_sdk(root string) string {
+	return os.getenv_opt('VINIX_IOS_SQLITE_SDK') or { root + '/build/ios/sqlite' }
+}
+
+fn sqlite_enabled(root string) bool {
+	return os.is_file(sqlite_sdk(root) + '/build.status.txt')
+}
+
 fn compile_c(root string, generated string, output string, gles bool) {
 	sysroot := root + '/build-aarch64-userland/staging'
 	gcc := sysroot + '/usr/lib/gcc/aarch64-alpine-linux-musl/14.2.0'
@@ -47,6 +55,7 @@ fn compile_c(root string, generated string, output string, gles bool) {
 	mut args := [llvm, '--target=aarch64-linux-musl', '-nostdinc', '-nostdlib', '-isystem',
 		root + '/build-support/aarch64-cc-shim', '-isystem', gcc + '/include', '-isystem',
 		sysroot + '/usr/include', '-O2', '-D_GNU_SOURCE', '-fno-stack-protector', '-w']
+	if sqlite_enabled(root) { args << ['-I' + sqlite_sdk(root) + '/source'] }
 	if video_enabled(root) {
 		args << ['-I' + video_sdk(root) + '/arm64', '-I' + video_sdk(root) + '/source']
 	}
@@ -78,6 +87,7 @@ fn compile_c(root string, generated string, output string, gles bool) {
 	if video_enabled(root) {
 		for name in ['avcodec', 'swscale', 'avutil']! { args << video_sdk(root) + '/arm64/lib' + name + '/lib' + name + '.a' }
 	}
+	if sqlite_enabled(root) { args << sqlite_sdk(root) + '/arm64/libsqlite3.a' }
 	args << ['-lgcc_eh', '-lc', '-lgcc', '-lm', gcc + '/crtend.o', sysroot + '/usr/lib/crtn.o',
 		'-fuse-ld=lld', '-B/opt/homebrew/opt/llvm/bin', '-o', output]
 	checked(args)
@@ -155,6 +165,194 @@ fn native_fixture_source(item string) string {
 		'malloc-zone-checks' { 'malloc_zone_test.v' }
 		'mkstemp-checks' { 'mkstemp_test.v' }
 		'nextafter-checks' { 'nextafter_test.v' }
+		'unfair-lock-checks' { 'unfair_lock_test.v' }
+		'pause-checks' { 'pause_test.v' }
+		'proc-rusage-checks' { 'proc_rusage_test.v' }
+		'raise-checks' { 'raise_test.v' }
+		'setrlimit-checks' { 'setrlimit_test.v' }
+		'sigaltstack-checks' { 'sigaltstack_test.v' }
+		'swscanf-checks' { 'swscanf_test.v' }
+		'task-exception-ports-checks' { 'task_exception_ports_test.v' }
+		'task-info-checks' { 'task_info_test.v' }
+		'task-swap-exception-ports-checks' { 'task_swap_exception_ports_test.v' }
+		'task-threads-checks' { 'task_threads_test.v' }
+		'thread-exception-ports-checks' { 'thread_exception_ports_test.v' }
+		'thread-state-checks' { 'thread_state_test.v' }
+		'thread-resume-checks' { 'thread_resume_test.v' }
+		'thread-suspend-checks' { 'thread_suspend_test.v' }
+		'thread-swap-exception-ports-checks' { 'thread_swap_exception_ports_test.v' }
+		'uname-checks' { 'uname_test.v' }
+		'vm-read-overwrite-checks' { 'vm_read_overwrite_test.v' }
+		'vm-region-64-checks' { 'vm_region_64_test.v' }
+		'cf-locale-current-checks' { 'cf_locale_current_test.v' }
+		'cf-preferred-languages-checks' { 'cf_preferred_languages_test.v' }
+		'cf-locale-value-checks' { 'cf_locale_value_test.v' }
+		'cf-preferences-sync-checks' { 'cf_preferences_sync_test.v' }
+		'cf-preferences-value-checks' { 'cf_preferences_value_test.v' }
+		'cf-preferences-set-checks' { 'cf_preferences_set_test.v' }
+		'cf-run-loop-main-checks' { 'cf_run_loop_main_test.v' }
+		'cf-string-compare-checks' { 'cf_string_compare_test.v' }
+		'cf-uuid-create-checks' { 'cf_uuid_create_test.v' }
+		'cf-uuid-string-checks' { 'cf_uuid_string_test.v' }
+		'cf-uuid-bytes-checks' { 'cf_uuid_bytes_test.v' }
+		'cf-uuid-text-checks' { 'cf_uuid_text_test.v' }
+		'cf-uuid-read-checks' { 'cf_uuid_read_test.v' }
+		'ns-calendar-iso8601-checks' { 'ns_calendar_iso8601_test.v' }
+		'ns-internal-exception-checks' { 'ns_internal_exception_test.v' }
+		'ns-invalid-argument-checks' { 'ns_invalid_argument_test.v' }
+		'ns-locale-country-checks' { 'ns_locale_country_test.v' }
+		'ns-locale-currency-checks' { 'ns_locale_currency_test.v' }
+		'ns-locale-currency-symbol-checks' { 'ns_locale_currency_symbol_test.v' }
+		'ns-url-creation-date-checks' { 'ns_url_creation_date_test.v' }
+		'ns-url-file-size-checks' { 'ns_url_file_size_test.v' }
+		'ns-url-backup-exclusion-checks' { 'ns_url_backup_exclusion_test.v' }
+		'ns-url-regular-file-checks' { 'ns_url_regular_file_test.v' }
+		'ns-url-important-capacity-checks' { 'ns_url_important_capacity_test.v' }
+		'ns-url-available-capacity-checks' { 'ns_url_available_capacity_test.v' }
+		'ns-url-total-capacity-checks' { 'ns_url_total_capacity_test.v' }
+		'ns-exception-type-checks' { 'ns_exception_type_test.v' }
+		'ns-empty-array-checks' { 'ns_empty_array_test.v' }
+		'swiftui-vstack-checks' { 'swiftui_vstack_test.v' }
+		'swiftui-tree-checks' { 'swiftui_tree_test.v' }
+		'swiftui-zstack-checks' { 'swiftui_zstack_test.v' }
+		'swiftui-opacity-checks' { 'swiftui_opacity_test.v' }
+		'swiftui-modified-checks' { 'swiftui_modified_test.v' }
+		'swiftui-modified-view-checks' { 'swiftui_modified_view_test.v' }
+		'swiftui-localized-key-checks' { 'swiftui_localized_key_test.v' }
+		'swiftui-alignment-checks' { 'swiftui_alignment_test.v' }
+		'swiftui-dismantle-checks' { 'swiftui_dismantle_test.v' }
+		'swiftui-sizing-checks' { 'swiftui_sizing_test.v' }
+		'swiftui-view-list-checks' { 'swiftui_view_list_test.v' }
+		'swiftui-layout-options-checks' { 'swiftui_layout_options_test.v' }
+		'swiftui-identified-tree-checks' { 'swiftui_identified_tree_test.v' }
+		'swiftui-layout-traits-checks' { 'swiftui_layout_traits_test.v' }
+		'swiftui-size-override-checks' { 'swiftui_size_override_test.v' }
+		'swiftui-bridged-inputs-checks' { 'swiftui_bridged_inputs_test.v' }
+		'swiftui-body-checks' { 'swiftui_body_test.v' }
+		'swiftui-view-factory-checks' { 'swiftui_view_factory_test.v' }
+		'swiftui-coordinator-checks' { 'swiftui_coordinator_test.v' }
+		'swiftui-environment-transform-checks' { 'swiftui_environment_transform_test.v' }
+		'swiftui-environment-conformance-checks' { 'swiftui_environment_conformance_test.v' }
+		'swiftui-font-title-checks' { 'swiftui_font_title_test.v' }
+		'swiftui-text-bold-checks' { 'swiftui_text_bold_test.v' }
+		'swiftui-text-font-checks' { 'swiftui_text_font_test.v' }
+		'swiftui-text-view-checks' { 'swiftui_text_view_test.v' }
+		'swiftui-text-nominal-checks' { 'swiftui_text_nominal_test.v' }
+		'swiftui-text-metadata-checks' { 'swiftui_text_metadata_test.v' }
+		'swiftui-text-localized-checks' { 'swiftui_text_localized_test.v' }
+		'swiftui-view-defaults-checks' { 'swiftui_view_defaults_test.v' }
+		'swiftui-view-opacity-checks' { 'swiftui_view_opacity_test.v' }
+		'swiftui-view-disabled-checks' { 'swiftui_view_disabled_test.v' }
+		'swiftui-state-value-checks' { 'swiftui_state_value_test.v' }
+		'swiftui-state-set-checks' { 'swiftui_state_set_test.v' }
+		'swiftui-state-projected-checks' { 'swiftui_state_projected_test.v' }
+		'swiftui-state-nominal-checks' { 'swiftui_state_nominal_test.v' }
+		'swiftui-button-checks' { 'swiftui_button_test.v' }
+		'swiftui-button-nominal-checks' { 'swiftui_button_nominal_test.v' }
+		'swiftui-button-view-checks' { 'swiftui_button_view_test.v' }
+		'swiftui-vstack-init-checks' { 'swiftui_vstack_init_test.v' }
+		'swiftui-vstack-nominal-checks' { 'swiftui_vstack_nominal_test.v' }
+		'swiftui-vstack-view-checks' { 'swiftui_vstack_view_test.v' }
+		'swiftui-zstack-init-checks' { 'swiftui_zstack_init_test.v' }
+		'swiftui-zstack-nominal-checks' { 'swiftui_zstack_nominal_test.v' }
+		'swiftui-zstack-view-checks' { 'swiftui_zstack_view_test.v' }
+		'swiftui-tuple-nominal-checks' { 'swiftui_tuple_nominal_test.v' }
+		'swiftui-tuple-init-checks' { 'swiftui_tuple_init_test.v' }
+		'swiftui-tuple-view-checks' { 'swiftui_tuple_view_test.v' }
+		'swiftui-never-view-checks' { 'swiftui_never_view_test.v' }
+		'objc-personality-checks' { 'objc_personality_test.v' }
+		'objc-block-imp-checks' { 'objc_block_imp_test.v' }
+		'objc-catch-checks' { 'objc_catch_test.v' }
+		'objc-cpp-copy-checks' { 'objc_cpp_copy_test.v' }
+		'objc-struct-copy-checks' { 'objc_struct_copy_test.v' }
+		'objc-rethrow-checks' { 'objc_rethrow_test.v' }
+		'objc-throw-checks' { 'objc_throw_test.v' }
+		'objc-terminate-checks' { 'objc_terminate_test.v' }
+		'protocol-method-checks' { 'objc_protocol_method_test.v' }
+		'sqlite-checks' { 'sqlite_test.v' }
+		'bridge-value-checks' { 'swift_bridge_value_test.v' }
+		'dictionary-metadata-checks' { 'swift_dictionary_metadata_test.v' }
+		'dictionary-encoding-checks' { 'swift_dictionary_encoding_test.v' }
+		'dictionary-decoding-checks' { 'swift_dictionary_decoding_test.v' }
+		'string-hash-checks' { 'swift_string_hash_test.v' }
+		'string-count-checks' { 'swift_string_count_test.v' }
+		'string-hashable-checks' { 'swift_string_hashable_test.v' }
+		'string-protocol-checks' { 'swift_string_protocol_conformance_test.v' }
+		'sequence-contents-checks' { 'swift_sequence_contents_test.v' }
+		'sequence-storage-checks' { 'swift_sequence_storage_test.v' }
+		'raw-integer-encoding-checks' { 'swift_raw_integer_encoding_test.v' }
+		'raw-integer-decoding-checks' { 'swift_raw_integer_decoding_test.v' }
+		'array-encoding-checks' { 'swift_array_encoding_test.v' }
+		'array-decoding-checks' { 'swift_array_decoding_test.v' }
+		'bool-metadata-checks' { 'swift_bool_metadata_test.v' }
+		'integer-description-checks' { 'swift_integer_description_test.v' }
+		'optional-metadata-checks' { 'swift_optional_metadata_test.v' }
+		'object-any-checks' { 'swift_object_any_test.v' }
+		'hash-previous-hole-checks' { 'swift_hash_table_test.v' }
+		'merge-error-metadata-checks' { 'swift_merge_error_metadata_test.v' }
+		'merge-error-conformance-checks' { 'swift_merge_error_conformance_test.v' }
+		'string-grow-checks' { 'swift_string_grow_test.v' }
+		'static-string-metadata-checks' { 'swift_static_string_metadata_test.v' }
+		'print-unlocked-checks' { 'swift_print_unlocked_test.v' }
+		'indexing-iterator-metadata-checks' { 'swift_indexing_iterator_metadata_test.v' }
+		'dictionary-storage-copy-checks' { 'swift_dictionary_storage_copy_test.v' }
+		'dictionary-storage-resize-checks' { 'swift_dictionary_storage_resize_test.v' }
+		'dictionary-storage-allocate-checks' { 'swift_dictionary_storage_allocate_test.v' }
+		'dictionary-storage-class-checks' { 'swift_dictionary_storage_class_test.v' }
+		'string-switch-checks' { 'swift_string_switch_test.v' }
+		'keyed-string-decoding-checks' { 'swift_keyed_string_decoding_test.v' }
+		'keyed-integer-decoding-checks' { 'swift_keyed_integer_decoding_test.v' }
+		'keyed-generic-decoding-checks' { 'swift_keyed_generic_decoding_test.v' }
+		'keyed-container-metadata-checks' { 'swift_keyed_container_metadata_test.v' }
+		'keyed-container-nominal-checks' { 'swift_keyed_container_nominal_test.v' }
+		'keyed-string-encoding-checks' { 'swift_keyed_string_encoding_test.v' }
+		'keyed-integer-encoding-checks' { 'swift_keyed_integer_encoding_test.v' }
+		'keyed-generic-encoding-checks' { 'swift_keyed_generic_encoding_test.v' }
+		'keyed-encoding-metadata-checks' { 'swift_keyed_encoding_metadata_test.v' }
+		'keyed-encoding-nominal-checks' { 'swift_keyed_encoding_nominal_test.v' }
+		'minimum-merge-run-checks' { 'swift_minimum_merge_run_test.v' }
+		'generic-interpolation-checks' { 'swift_generic_interpolation_test.v' }
+		'string-compare-checks' { 'swift_string_compare_test.v' }
+		'sequence-array-checks' { 'swift_sequence_array_test.v' }
+		'dictionary-hashable-checks' { 'swift_dictionary_hashable_test.v' }
+		'error-embedded-checks' { 'swift_error_embedded_test.v' }
+		'error-code-checks' { 'swift_error_code_test.v' }
+		'error-domain-checks' { 'swift_error_domain_test.v' }
+		'error-user-info-checks' { 'swift_error_user_info_test.v' }
+		'error-self-checks' { 'swift_error_self_test.v' }
+		'never-nominal-checks' { 'swift_never_nominal_test.v' }
+		'print-console-checks' { 'swift_print_console_test.v' }
+		'result-nominal-checks' { 'swift_result_nominal_test.v' }
+		'uint64-metadata-checks' { 'swift_uint64_metadata_test.v' }
+		'decoder-keyed-dispatch-checks' { 'swift_decoder_keyed_dispatch_test.v' }
+		'encoder-keyed-dispatch-checks' { 'swift_encoder_keyed_dispatch_test.v' }
+		'coding-key-description-checks' { 'swift_coding_key_description_test.v' }
+		'coding-key-debug-description-checks' { 'swift_coding_key_debug_description_test.v' }
+		'optional-encoding-checks' { 'swift_optional_encoding_test.v' }
+		'optional-decoding-checks' { 'swift_optional_decoding_test.v' }
+		'error-allocation-checks' { 'swift_error_allocation_test.v' }
+		'generic-value-metadata-checks' { 'swift_generic_value_metadata_test.v' }
+		'array-init-copy-checks' { 'swift_array_init_copy_test.v' }
+		'array-take-back-checks' { 'swift_array_take_back_test.v' }
+		'array-take-front-checks' { 'swift_array_take_front_test.v' }
+		'swift-access-checks' { 'swift_access_test.v' }
+		'metadata-state-checks' { 'swift_metadata_state_test.v' }
+		'partial-class-checks' { 'swift_partial_class_test.v' }
+		'enum-case-multi-checks' { 'swift_enum_case_multi_test.v' }
+		'enum-tag-single-checks' { 'swift_enum_tag_single_test.v' }
+		'generic-metadata-checks' { 'swift_generic_metadata_test.v' }
+		'initialized-objc-class-checks' { 'swift_initialized_objc_class_test.v' }
+		'objc-class-from-metadata-checks' { 'swift_objc_class_from_metadata_test.v' }
+		'opaque-conformance-checks' { 'swift_opaque_conformance_test.v' }
+		'singleton-metadata-checks' { 'swift_singleton_metadata_test.v' }
+		'tuple-metadata-checks' { 'swift_tuple_metadata_test.v' }
+		'context2-checks' { 'swift_context2_test.v' }
+		'mangled-state2-checks' { 'swift_mangled_state2_test.v' }
+		'static-object-checks' { 'swift_static_object_test.v' }
+		'struct-metadata-checks' { 'swift_struct_metadata_test.v' }
+		'escaping-closure-checks' { 'swift_escaping_closure_test.v' }
+		'isa-mask-checks' { 'swift_isa_mask_test.v' }
+		'class-method-checks' { 'swift_class_method_test.v' }
 		'nslogv-checks' { 'ns_logv_test.v' }
 		'protocol-lookup-checks' { 'objc_protocols_test.v' }
 		'uncaught-handler-checks' { 'ns_uncaught_handler_test.v' }
@@ -307,7 +505,7 @@ fn build(root string, out string, only string) {
 	if only == 'video-decode-checks' || only == '' {
 		assert video_enabled(root), 'build-video SDK required: set VINIX_IOS_VIDEO_SDK (see docs/ios.md)'
 	}
-	for item in ['run-ios', 'run-ios-gles', 'objc-constant-dictionary-checks', 'layout-constraint-checks', 'json-serialization-checks', 'condition-checks', 'cookie-checks', 'webkit-configuration-checks', 'user-script-checks', 'webview-checks', 'request-checks', 'value-checks', 'response-checks', 'alert-checks', 'set-checks', 'thread-checks', 'auth-session-checks', 'image-view-checks', 'keyboard-checks', 'nsuuid-checks', 'filemanager-checks', 'home-directory-checks', 'temp-directory-checks', 'url-error-checks', 'session-constants-checks', 'foundation-keys-checks', 'audio-services-checks', 'avfoundation-constants-checks', 'corevideo-checks', 'pixel-allocation-checks', 'metal-cache-checks', 'media-format-checks', 'block-buffer-checks', 'sample-buffer-checks', 'cm-time-checks', 'h264-format-checks', 'hevc-format-checks', 'cg-font-checks', 'reachability-checks', 'devicecheck-checks', 'network-path-checks', 'corehaptics-constants-checks', 'media-time-checks', 'video-decode-checks', 'storefront-checks', 'storefront-current-checks', 'storefront-metadata-checks', 'refund-checks', 'storekit-constants-checks', 'zlib-checksum-checks', 'zlib-compress-checks', 'zlib-bound-checks', 'resolver-query-checks', 'pbkdf-checks', 'ndr-record-checks', 'immediate-exit-checks', 'crt-environ-checks', 'executable-path-checks', 'dispatch-timer-type-checks', 'dyld-images-checks', 'dyld-callbacks-checks', 'tlv-atexit-checks', 'inverse-hyperbolic-checks', 'arc4random-checks', 'asl-checks', 'backtrace-checks', 'dispatch-data-checks', 'dispatch-specific-checks', 'dispatch-group-checks', 'dispatch-source-checks', 'dispatch-semaphore-checks', 'division-checks', 'mach-exception-checks', 'flock-checks', 'progname-checks', 'host-page-size-checks', 'host-statistics-checks', 'logb-checks', 'memory-entry-checks', 'mach-message-checks', 'mach-port-set-checks', 'mach-notification-checks', 'madvise-checks', 'malloc-zone-checks', 'mkstemp-checks', 'nextafter-checks', 'nslogv-checks', 'protocol-lookup-checks', 'uncaught-handler-checks', 'protocol-name-checks', 'autopool-checks', 'processinfo-checks', 'date-checks', 'inputstream-checks', 'connection-checks', 'type-encoding-checks', 'dispatch-queue-class-checks', 'oslog-checks', 'secure-memory-checks', 'select-checks', 'semaphore-checks', 'signal-checks',
+	for item in ['run-ios', 'run-ios-gles', 'objc-constant-dictionary-checks', 'layout-constraint-checks', 'json-serialization-checks', 'condition-checks', 'cookie-checks', 'webkit-configuration-checks', 'user-script-checks', 'webview-checks', 'request-checks', 'value-checks', 'response-checks', 'alert-checks', 'set-checks', 'thread-checks', 'auth-session-checks', 'image-view-checks', 'keyboard-checks', 'nsuuid-checks', 'filemanager-checks', 'home-directory-checks', 'temp-directory-checks', 'url-error-checks', 'session-constants-checks', 'foundation-keys-checks', 'audio-services-checks', 'avfoundation-constants-checks', 'corevideo-checks', 'pixel-allocation-checks', 'metal-cache-checks', 'media-format-checks', 'block-buffer-checks', 'sample-buffer-checks', 'cm-time-checks', 'h264-format-checks', 'hevc-format-checks', 'cg-font-checks', 'reachability-checks', 'devicecheck-checks', 'network-path-checks', 'corehaptics-constants-checks', 'media-time-checks', 'video-decode-checks', 'storefront-checks', 'storefront-current-checks', 'storefront-metadata-checks', 'refund-checks', 'storekit-constants-checks', 'zlib-checksum-checks', 'zlib-compress-checks', 'zlib-bound-checks', 'resolver-query-checks', 'pbkdf-checks', 'ndr-record-checks', 'immediate-exit-checks', 'crt-environ-checks', 'executable-path-checks', 'dispatch-timer-type-checks', 'dyld-images-checks', 'dyld-callbacks-checks', 'tlv-atexit-checks', 'inverse-hyperbolic-checks', 'arc4random-checks', 'asl-checks', 'backtrace-checks', 'dispatch-data-checks', 'dispatch-specific-checks', 'dispatch-group-checks', 'dispatch-source-checks', 'dispatch-semaphore-checks', 'division-checks', 'mach-exception-checks', 'flock-checks', 'progname-checks', 'host-page-size-checks', 'host-statistics-checks', 'logb-checks', 'memory-entry-checks', 'mach-message-checks', 'mach-port-set-checks', 'mach-notification-checks', 'madvise-checks', 'malloc-zone-checks', 'mkstemp-checks', 'nextafter-checks', 'unfair-lock-checks', 'pause-checks', 'proc-rusage-checks', 'raise-checks', 'setrlimit-checks', 'sigaltstack-checks', 'swscanf-checks', 'task-exception-ports-checks', 'task-info-checks', 'task-swap-exception-ports-checks', 'task-threads-checks', 'thread-exception-ports-checks', 'thread-state-checks', 'thread-resume-checks', 'thread-suspend-checks', 'thread-swap-exception-ports-checks', 'uname-checks', 'vm-read-overwrite-checks', 'vm-region-64-checks', 'cf-locale-current-checks', 'cf-preferred-languages-checks', 'cf-locale-value-checks', 'cf-preferences-sync-checks', 'cf-preferences-value-checks', 'cf-preferences-set-checks', 'cf-run-loop-main-checks', 'cf-string-compare-checks', 'cf-uuid-create-checks', 'cf-uuid-string-checks', 'cf-uuid-bytes-checks', 'cf-uuid-text-checks', 'cf-uuid-read-checks', 'ns-calendar-iso8601-checks', 'ns-internal-exception-checks', 'ns-invalid-argument-checks', 'ns-locale-country-checks', 'ns-locale-currency-checks', 'ns-locale-currency-symbol-checks', 'ns-url-creation-date-checks', 'ns-url-file-size-checks', 'ns-url-backup-exclusion-checks', 'ns-url-regular-file-checks', 'ns-url-important-capacity-checks', 'ns-url-available-capacity-checks', 'ns-url-total-capacity-checks', 'ns-exception-type-checks', 'ns-empty-array-checks', 'swiftui-vstack-checks', 'swiftui-tree-checks', 'swiftui-zstack-checks', 'swiftui-opacity-checks', 'swiftui-modified-checks', 'swiftui-modified-view-checks', 'swiftui-localized-key-checks', 'swiftui-alignment-checks', 'swiftui-dismantle-checks', 'swiftui-sizing-checks', 'swiftui-view-list-checks', 'swiftui-layout-options-checks', 'swiftui-identified-tree-checks', 'swiftui-layout-traits-checks', 'swiftui-size-override-checks', 'swiftui-bridged-inputs-checks', 'swiftui-body-checks', 'swiftui-view-factory-checks', 'swiftui-coordinator-checks', 'swiftui-environment-transform-checks', 'swiftui-environment-conformance-checks', 'swiftui-font-title-checks', 'swiftui-text-bold-checks', 'swiftui-text-font-checks', 'swiftui-text-view-checks', 'swiftui-text-nominal-checks', 'swiftui-text-metadata-checks', 'swiftui-text-localized-checks', 'swiftui-view-defaults-checks', 'swiftui-view-opacity-checks', 'swiftui-view-disabled-checks', 'swiftui-state-value-checks', 'swiftui-state-set-checks', 'swiftui-state-projected-checks', 'swiftui-state-nominal-checks', 'swiftui-button-checks', 'swiftui-button-nominal-checks', 'swiftui-button-view-checks', 'swiftui-vstack-init-checks', 'swiftui-vstack-nominal-checks', 'swiftui-vstack-view-checks', 'swiftui-zstack-init-checks', 'swiftui-zstack-nominal-checks', 'swiftui-zstack-view-checks', 'swiftui-tuple-nominal-checks', 'swiftui-tuple-init-checks', 'swiftui-tuple-view-checks', 'swiftui-never-view-checks', 'objc-personality-checks', 'objc-block-imp-checks', 'objc-catch-checks', 'objc-cpp-copy-checks', 'objc-struct-copy-checks', 'objc-rethrow-checks', 'objc-throw-checks', 'objc-terminate-checks', 'protocol-method-checks', 'sqlite-checks', 'bridge-value-checks', 'dictionary-metadata-checks', 'dictionary-encoding-checks', 'dictionary-decoding-checks', 'string-hash-checks', 'string-count-checks', 'string-hashable-checks', 'string-protocol-checks', 'sequence-contents-checks', 'sequence-storage-checks', 'raw-integer-encoding-checks', 'raw-integer-decoding-checks', 'array-encoding-checks', 'array-decoding-checks', 'bool-metadata-checks', 'integer-description-checks', 'optional-metadata-checks', 'object-any-checks', 'hash-previous-hole-checks', 'merge-error-metadata-checks', 'merge-error-conformance-checks', 'string-grow-checks', 'static-string-metadata-checks', 'print-unlocked-checks', 'indexing-iterator-metadata-checks', 'dictionary-storage-copy-checks', 'dictionary-storage-resize-checks', 'dictionary-storage-allocate-checks', 'dictionary-storage-class-checks', 'string-switch-checks', 'keyed-string-decoding-checks', 'keyed-integer-decoding-checks', 'keyed-generic-decoding-checks', 'keyed-container-metadata-checks', 'keyed-container-nominal-checks', 'keyed-string-encoding-checks', 'keyed-integer-encoding-checks', 'keyed-generic-encoding-checks', 'keyed-encoding-metadata-checks', 'keyed-encoding-nominal-checks', 'minimum-merge-run-checks', 'generic-interpolation-checks', 'string-compare-checks', 'sequence-array-checks', 'dictionary-hashable-checks', 'error-embedded-checks', 'error-code-checks', 'error-domain-checks', 'error-user-info-checks', 'error-self-checks', 'never-nominal-checks', 'print-console-checks', 'result-nominal-checks', 'uint64-metadata-checks', 'decoder-keyed-dispatch-checks', 'encoder-keyed-dispatch-checks', 'coding-key-description-checks', 'coding-key-debug-description-checks', 'optional-encoding-checks', 'optional-decoding-checks', 'error-allocation-checks', 'generic-value-metadata-checks', 'array-init-copy-checks', 'array-take-back-checks', 'array-take-front-checks', 'swift-access-checks', 'metadata-state-checks', 'partial-class-checks', 'enum-case-multi-checks', 'enum-tag-single-checks', 'generic-metadata-checks', 'initialized-objc-class-checks', 'objc-class-from-metadata-checks', 'opaque-conformance-checks', 'singleton-metadata-checks', 'tuple-metadata-checks', 'context2-checks', 'mangled-state2-checks', 'static-object-checks', 'struct-metadata-checks', 'escaping-closure-checks', 'isa-mask-checks', 'class-method-checks', 'nslogv-checks', 'protocol-lookup-checks', 'uncaught-handler-checks', 'protocol-name-checks', 'autopool-checks', 'processinfo-checks', 'date-checks', 'inputstream-checks', 'connection-checks', 'type-encoding-checks', 'dispatch-queue-class-checks', 'oslog-checks', 'secure-memory-checks', 'select-checks', 'semaphore-checks', 'signal-checks',
 		'error-checks', 'sysctl-checks', 'terminal-checks', 'thread-policy-checks', 'file-time-checks', 'uuid-checks', 'audio-session-checks', 'cf-dictionary-checks', 'objc-storage-checks', 'objc-associated-checks', 'objc-property-checks', 'objc-sync-checks', 'swift-unknown-value-checks', 'swift-string-checks', 'swift-empty-string-checks', 'swift-describing-checks', 'swift-cstring-checks', 'swift-foreign-count-checks', 'swift-foreign-index-checks', 'swift-foreign-offset-checks', 'swift-foreign-subscript-checks', 'swift-utf16-offset-checks', 'swift-sequence-checks', 'swift-array-sequence-checks', 'swift-collection-checks', 'swift-set-checks', 'swift-metadata-checks', 'swift-protocol-checks', 'swift-hash-checks', 'swift-hasher-checks', 'swift-raw-representable-checks', 'swift-array-checks', 'swift-integer-checks', 'swift-integer-hash-checks', 'swift-fatal-checks', 'swift-interpolation-checks', 'swift-array-storage-checks', 'swift-vararg-checks', 'swift-void-checks', 'swift-version-checks', 'swift-initializer-checks', 'swift-empty-array-checks', 'swift-any-checks', 'swift-byte-metadata-checks', 'swift-raw-equality-checks', 'swift-array-class-checks', 'swift-shared-utf8-checks', 'swift-string-guts-checks', 'swift-foreign-copy-checks', 'swift-set-algebra-checks', 'swift-raw-copy-checks', 'swift-pointer-alloc-checks', 'swift-pointer-deinit-checks', 'swift-raw-alloc-checks', 'swift-dispatch-async-checks', 'swift-dispatch-main-checks', 'swift-dispatch-scheduler-checks', 'swift-dispatch-qos-checks', 'swift-dispatch-algebra-checks', 'swift-dispatch-flags-checks', 'swift-stack-checks', 'swift-heap-checks', 'swift-string-replace-checks', 'swift-array-unbridge-checks', 'swift-dictionary-bridge-checks','swift-calendar-case-checks', 'swift-locale-checks', 'swift-date-checks', 'swift-data-write-checks', 'swift-data-unbridge-checks', 'swift-data-base64-checks', 'swift-data-bridge-checks', 'swift-data-checks', 'swift-url-metadata-checks', 'swift-url-path-checks', 'swift-url-bridge-checks', 'swift-error-bridge-checks', 'swift-error-checks', 'swift-error-value-checks', 'swift-dynamic-cast-checks', 'swift-objc-cast-checks', 'swift-foreign-metadata-checks', 'swift-object-type-checks', 'swift-mangled-state-checks', 'swift-mangled-checks', 'swift-witness-checks', 'swift-once-checks', 'swift-set-bridge-checks', 'swift-logger-checks', 'swift-main-actor-witness-checks', 'swift-main-actor-checks', 'swift-nsobject-hashable-checks', 'swift-objc-bool-metadata-checks', 'swift-objc-bool-checks', 'swift-actor-executor-checks', 'swift-task-priority-checks', 'swift-task-alloc-checks', 'swift-task-create-checks', 'swift-task-switch-checks', 'swift-json-encoder-initializer-checks', 'swift-json-encoder-dispatch-checks', 'swift-json-encoder-date-dispatch-checks', 'swift-json-date-strategy-checks', 'swift-json-encoder-date-case-checks', 'swift-json-decoder-initializer-checks', 'swift-json-decoder-dispatch-checks', 'swift-cocoa-error-protocol-checks', 'swift-cocoa-error-code-checks', 'swift-nslog-checks', 'swift-string-unbridge-checks', 'swift-cocoa-match-checks', 'swift-localized-error-checks', 'swift-error-description-checks', 'module-lookup-checks', 'native-init'] {
 		if only != '' && item != only { continue }
 		generated := out + '/' + item + '.c'
@@ -320,6 +518,7 @@ fn build(root string, out string, only string) {
 				'@vlib|' + root + '/compat/ios|@vmodules', '-o', generated]
 			if item.ends_with('-checks') { args = args.filter(it != '-prod') }
 			if video_enabled(root) { args << ['-d', 'ios_video'] }
+			if sqlite_enabled(root) { args << ['-d', 'ios_sqlite'] }
 			if item in ['run-ios-gles', 'zlib-bound-checks']! { args << ['-d', 'ios_gles', '-d', 'ios_text'] }
 			args << root + if item.ends_with('-checks') {
 				'/compat/ios/runner/' + native_fixture_source(item)
@@ -327,6 +526,15 @@ fn build(root string, out string, only string) {
 				'/compat/ios/runner'
 			}
 			checked(args)
+		}
+		if item == 'string-count-checks' {
+			checked(['v', '-nocache', '-gc', 'none', '-cc', 'clang', 'run', root + '/tests/ios/unicode-grapheme.v', 'check'])
+		}
+		if item in ['string-hash-checks', 'string-hashable-checks']! {
+			checked(['v', '-nocache', '-gc', 'none', '-cc', 'clang', 'run', root + '/tests/ios/unicode-nfc.v', 'check'])
+		}
+		if item == 'string-protocol-checks' {
+			checked(['v', '-nocache', '-gc', 'none', '-cc', 'clang', 'run', root + '/tests/ios/string-protocol-schema.v', 'check'])
 		}
 		compile_c(root, generated, out + '/' + item, item in ['run-ios-gles', 'zlib-bound-checks']!)
 		if item == 'module-lookup-checks' {
@@ -515,6 +723,196 @@ fn regression_root(root string, out string, fs string) {
 	copy_file(out + '/malloc-zone-checks', fs + '/opt/ios/malloc-zone-checks')
 	copy_file(out + '/mkstemp-checks', fs + '/opt/ios/mkstemp-checks')
 	copy_file(out + '/nextafter-checks', fs + '/opt/ios/nextafter-checks')
+	copy_file(out + '/unfair-lock-checks', fs + '/opt/ios/unfair-lock-checks')
+	copy_file(out + '/pause-checks', fs + '/opt/ios/pause-checks')
+	copy_file(out + '/proc-rusage-checks', fs + '/opt/ios/proc-rusage-checks')
+	copy_file(out + '/raise-checks', fs + '/opt/ios/raise-checks')
+	copy_file(out + '/setrlimit-checks', fs + '/opt/ios/setrlimit-checks')
+	copy_file(out + '/sigaltstack-checks', fs + '/opt/ios/sigaltstack-checks')
+	copy_file(out + '/swscanf-checks', fs + '/opt/ios/swscanf-checks')
+	copy_file(out + '/task-exception-ports-checks', fs + '/opt/ios/task-exception-ports-checks')
+	copy_file(out + '/task-info-checks', fs + '/opt/ios/task-info-checks')
+	copy_file(out + '/task-swap-exception-ports-checks', fs + '/opt/ios/task-swap-exception-ports-checks')
+	copy_file(out + '/task-threads-checks', fs + '/opt/ios/task-threads-checks')
+	copy_file(out + '/thread-exception-ports-checks', fs + '/opt/ios/thread-exception-ports-checks')
+	copy_file(out + '/thread-state-checks', fs + '/opt/ios/thread-state-checks')
+	copy_file(out + '/thread-resume-checks', fs + '/opt/ios/thread-resume-checks')
+	copy_file(out + '/thread-suspend-checks', fs + '/opt/ios/thread-suspend-checks')
+	copy_file(out + '/thread-swap-exception-ports-checks', fs + '/opt/ios/thread-swap-exception-ports-checks')
+	copy_file(out + '/uname-checks', fs + '/opt/ios/uname-checks')
+	copy_file(out + '/vm-read-overwrite-checks', fs + '/opt/ios/vm-read-overwrite-checks')
+	copy_file(out + '/vm-region-64-checks', fs + '/opt/ios/vm-region-64-checks')
+	copy_file(out + '/cf-locale-current-checks', fs + '/opt/ios/cf-locale-current-checks')
+	copy_file(out + '/cf-preferred-languages-checks', fs + '/opt/ios/cf-preferred-languages-checks')
+	copy_file(out + '/cf-locale-value-checks', fs + '/opt/ios/cf-locale-value-checks')
+	copy_file(out + '/cf-preferences-sync-checks', fs + '/opt/ios/cf-preferences-sync-checks')
+	copy_file(out + '/cf-preferences-value-checks', fs + '/opt/ios/cf-preferences-value-checks')
+	copy_file(out + '/cf-preferences-set-checks', fs + '/opt/ios/cf-preferences-set-checks')
+	copy_file(out + '/cf-run-loop-main-checks', fs + '/opt/ios/cf-run-loop-main-checks')
+	copy_file(out + '/cf-string-compare-checks', fs + '/opt/ios/cf-string-compare-checks')
+	copy_file(out + '/cf-uuid-create-checks', fs + '/opt/ios/cf-uuid-create-checks')
+	copy_file(out + '/cf-uuid-string-checks', fs + '/opt/ios/cf-uuid-string-checks')
+	copy_file(out + '/cf-uuid-bytes-checks', fs + '/opt/ios/cf-uuid-bytes-checks')
+	copy_file(out + '/cf-uuid-text-checks', fs + '/opt/ios/cf-uuid-text-checks')
+	copy_file(out + '/cf-uuid-read-checks', fs + '/opt/ios/cf-uuid-read-checks')
+	copy_file(out + '/ns-calendar-iso8601-checks', fs + '/opt/ios/ns-calendar-iso8601-checks')
+	copy_file(out + '/ns-internal-exception-checks', fs + '/opt/ios/ns-internal-exception-checks')
+	copy_file(out + '/ns-invalid-argument-checks', fs + '/opt/ios/ns-invalid-argument-checks')
+	copy_file(out + '/ns-locale-country-checks', fs + '/opt/ios/ns-locale-country-checks')
+	copy_file(out + '/ns-locale-currency-checks', fs + '/opt/ios/ns-locale-currency-checks')
+	copy_file(out + '/ns-locale-currency-symbol-checks', fs + '/opt/ios/ns-locale-currency-symbol-checks')
+	copy_file(out + '/ns-url-creation-date-checks', fs + '/opt/ios/ns-url-creation-date-checks')
+	copy_file(out + '/ns-url-file-size-checks', fs + '/opt/ios/ns-url-file-size-checks')
+	copy_file(out + '/ns-url-backup-exclusion-checks', fs + '/opt/ios/ns-url-backup-exclusion-checks')
+	copy_file(out + '/ns-url-regular-file-checks', fs + '/opt/ios/ns-url-regular-file-checks')
+	copy_file(out + '/ns-url-important-capacity-checks', fs + '/opt/ios/ns-url-important-capacity-checks')
+	copy_file(out + '/ns-url-available-capacity-checks', fs + '/opt/ios/ns-url-available-capacity-checks')
+	copy_file(out + '/ns-url-total-capacity-checks', fs + '/opt/ios/ns-url-total-capacity-checks')
+	copy_file(out + '/ns-exception-type-checks', fs + '/opt/ios/ns-exception-type-checks')
+	copy_file(out + '/ns-empty-array-checks', fs + '/opt/ios/ns-empty-array-checks')
+	copy_file(out + '/swiftui-vstack-checks', fs + '/opt/ios/swiftui-vstack-checks')
+	copy_file(out + '/swiftui-tree-checks', fs + '/opt/ios/swiftui-tree-checks')
+	copy_file(out + '/swiftui-zstack-checks', fs + '/opt/ios/swiftui-zstack-checks')
+	copy_file(out + '/swiftui-opacity-checks', fs + '/opt/ios/swiftui-opacity-checks')
+	copy_file(out + '/swiftui-modified-checks', fs + '/opt/ios/swiftui-modified-checks')
+	copy_file(out + '/swiftui-modified-view-checks', fs + '/opt/ios/swiftui-modified-view-checks')
+	copy_file(out + '/swiftui-localized-key-checks', fs + '/opt/ios/swiftui-localized-key-checks')
+	copy_file(out + '/swiftui-alignment-checks', fs + '/opt/ios/swiftui-alignment-checks')
+	copy_file(out + '/swiftui-dismantle-checks', fs + '/opt/ios/swiftui-dismantle-checks')
+	copy_file(out + '/swiftui-sizing-checks', fs + '/opt/ios/swiftui-sizing-checks')
+	copy_file(out + '/swiftui-view-list-checks', fs + '/opt/ios/swiftui-view-list-checks')
+	copy_file(out + '/swiftui-layout-options-checks', fs + '/opt/ios/swiftui-layout-options-checks')
+	copy_file(out + '/swiftui-identified-tree-checks', fs + '/opt/ios/swiftui-identified-tree-checks')
+	copy_file(out + '/swiftui-layout-traits-checks', fs + '/opt/ios/swiftui-layout-traits-checks')
+	copy_file(out + '/swiftui-size-override-checks', fs + '/opt/ios/swiftui-size-override-checks')
+	copy_file(out + '/swiftui-bridged-inputs-checks', fs + '/opt/ios/swiftui-bridged-inputs-checks')
+	copy_file(out + '/swiftui-body-checks', fs + '/opt/ios/swiftui-body-checks')
+	copy_file(out + '/swiftui-view-factory-checks', fs + '/opt/ios/swiftui-view-factory-checks')
+	copy_file(out + '/swiftui-coordinator-checks', fs + '/opt/ios/swiftui-coordinator-checks')
+	copy_file(out + '/swiftui-environment-transform-checks', fs + '/opt/ios/swiftui-environment-transform-checks')
+	copy_file(out + '/swiftui-environment-conformance-checks', fs + '/opt/ios/swiftui-environment-conformance-checks')
+	copy_file(out + '/swiftui-font-title-checks', fs + '/opt/ios/swiftui-font-title-checks')
+	copy_file(out + '/swiftui-text-bold-checks', fs + '/opt/ios/swiftui-text-bold-checks')
+	copy_file(out + '/swiftui-text-font-checks', fs + '/opt/ios/swiftui-text-font-checks')
+	copy_file(out + '/swiftui-text-view-checks', fs + '/opt/ios/swiftui-text-view-checks')
+	copy_file(out + '/swiftui-text-nominal-checks', fs + '/opt/ios/swiftui-text-nominal-checks')
+	copy_file(out + '/swiftui-text-metadata-checks', fs + '/opt/ios/swiftui-text-metadata-checks')
+	copy_file(out + '/swiftui-text-localized-checks', fs + '/opt/ios/swiftui-text-localized-checks')
+	copy_file(out + '/swiftui-view-defaults-checks', fs + '/opt/ios/swiftui-view-defaults-checks')
+	copy_file(out + '/swiftui-view-opacity-checks', fs + '/opt/ios/swiftui-view-opacity-checks')
+	copy_file(out + '/swiftui-view-disabled-checks', fs + '/opt/ios/swiftui-view-disabled-checks')
+	copy_file(out + '/swiftui-state-value-checks', fs + '/opt/ios/swiftui-state-value-checks')
+	copy_file(out + '/swiftui-state-set-checks', fs + '/opt/ios/swiftui-state-set-checks')
+	copy_file(out + '/swiftui-state-projected-checks', fs + '/opt/ios/swiftui-state-projected-checks')
+	copy_file(out + '/swiftui-state-nominal-checks', fs + '/opt/ios/swiftui-state-nominal-checks')
+	copy_file(out + '/swiftui-button-checks', fs + '/opt/ios/swiftui-button-checks')
+	copy_file(out + '/swiftui-button-nominal-checks', fs + '/opt/ios/swiftui-button-nominal-checks')
+	copy_file(out + '/swiftui-button-view-checks', fs + '/opt/ios/swiftui-button-view-checks')
+	copy_file(out + '/swiftui-vstack-init-checks', fs + '/opt/ios/swiftui-vstack-init-checks')
+	copy_file(out + '/swiftui-vstack-nominal-checks', fs + '/opt/ios/swiftui-vstack-nominal-checks')
+	copy_file(out + '/swiftui-vstack-view-checks', fs + '/opt/ios/swiftui-vstack-view-checks')
+	copy_file(out + '/swiftui-zstack-init-checks', fs + '/opt/ios/swiftui-zstack-init-checks')
+	copy_file(out + '/swiftui-zstack-nominal-checks', fs + '/opt/ios/swiftui-zstack-nominal-checks')
+	copy_file(out + '/swiftui-zstack-view-checks', fs + '/opt/ios/swiftui-zstack-view-checks')
+	copy_file(out + '/swiftui-tuple-nominal-checks', fs + '/opt/ios/swiftui-tuple-nominal-checks')
+	copy_file(out + '/swiftui-tuple-init-checks', fs + '/opt/ios/swiftui-tuple-init-checks')
+	copy_file(out + '/swiftui-tuple-view-checks', fs + '/opt/ios/swiftui-tuple-view-checks')
+	copy_file(out + '/swiftui-never-view-checks', fs + '/opt/ios/swiftui-never-view-checks')
+	copy_file(out + '/objc-personality-checks', fs + '/opt/ios/objc-personality-checks')
+	copy_file(out + '/objc-block-imp-checks', fs + '/opt/ios/objc-block-imp-checks')
+	copy_file(out + '/objc-catch-checks', fs + '/opt/ios/objc-catch-checks')
+	copy_file(out + '/objc-cpp-copy-checks', fs + '/opt/ios/objc-cpp-copy-checks')
+	copy_file(out + '/objc-struct-copy-checks', fs + '/opt/ios/objc-struct-copy-checks')
+	copy_file(out + '/objc-rethrow-checks', fs + '/opt/ios/objc-rethrow-checks')
+	copy_file(out + '/objc-throw-checks', fs + '/opt/ios/objc-throw-checks')
+	copy_file(out + '/objc-terminate-checks', fs + '/opt/ios/objc-terminate-checks')
+	copy_file(out + '/protocol-method-checks', fs + '/opt/ios/protocol-method-checks')
+	copy_file(out + '/sqlite-checks', fs + '/opt/ios/sqlite-checks')
+	copy_file(out + '/bridge-value-checks', fs + '/opt/ios/bridge-value-checks')
+	copy_file(out + '/dictionary-metadata-checks', fs + '/opt/ios/dictionary-metadata-checks')
+	copy_file(out + '/dictionary-encoding-checks', fs + '/opt/ios/dictionary-encoding-checks')
+	copy_file(out + '/dictionary-decoding-checks', fs + '/opt/ios/dictionary-decoding-checks')
+	copy_file(out + '/string-hash-checks', fs + '/opt/ios/string-hash-checks')
+	copy_file(out + '/string-count-checks', fs + '/opt/ios/string-count-checks')
+	copy_file(out + '/string-hashable-checks', fs + '/opt/ios/string-hashable-checks')
+	copy_file(out + '/string-protocol-checks', fs + '/opt/ios/string-protocol-checks')
+	copy_file(out + '/sequence-contents-checks', fs + '/opt/ios/sequence-contents-checks')
+	copy_file(out + '/sequence-storage-checks', fs + '/opt/ios/sequence-storage-checks')
+	copy_file(out + '/raw-integer-encoding-checks', fs + '/opt/ios/raw-integer-encoding-checks')
+	copy_file(out + '/raw-integer-decoding-checks', fs + '/opt/ios/raw-integer-decoding-checks')
+	copy_file(out + '/array-encoding-checks', fs + '/opt/ios/array-encoding-checks')
+	copy_file(out + '/array-decoding-checks', fs + '/opt/ios/array-decoding-checks')
+	copy_file(out + '/bool-metadata-checks', fs + '/opt/ios/bool-metadata-checks')
+	copy_file(out + '/integer-description-checks', fs + '/opt/ios/integer-description-checks')
+	copy_file(out + '/optional-metadata-checks', fs + '/opt/ios/optional-metadata-checks')
+	copy_file(out + '/object-any-checks', fs + '/opt/ios/object-any-checks')
+	copy_file(out + '/hash-previous-hole-checks', fs + '/opt/ios/hash-previous-hole-checks')
+	copy_file(out + '/merge-error-metadata-checks', fs + '/opt/ios/merge-error-metadata-checks')
+	copy_file(out + '/merge-error-conformance-checks', fs + '/opt/ios/merge-error-conformance-checks')
+	copy_file(out + '/string-grow-checks', fs + '/opt/ios/string-grow-checks')
+	copy_file(out + '/static-string-metadata-checks', fs + '/opt/ios/static-string-metadata-checks')
+	copy_file(out + '/print-unlocked-checks', fs + '/opt/ios/print-unlocked-checks')
+	copy_file(out + '/indexing-iterator-metadata-checks', fs + '/opt/ios/indexing-iterator-metadata-checks')
+	copy_file(out + '/dictionary-storage-copy-checks', fs + '/opt/ios/dictionary-storage-copy-checks')
+	copy_file(out + '/dictionary-storage-resize-checks', fs + '/opt/ios/dictionary-storage-resize-checks')
+	copy_file(out + '/dictionary-storage-allocate-checks', fs + '/opt/ios/dictionary-storage-allocate-checks')
+	copy_file(out + '/dictionary-storage-class-checks', fs + '/opt/ios/dictionary-storage-class-checks')
+	copy_file(out + '/string-switch-checks', fs + '/opt/ios/string-switch-checks')
+	copy_file(out + '/keyed-string-decoding-checks', fs + '/opt/ios/keyed-string-decoding-checks')
+	copy_file(out + '/keyed-integer-decoding-checks', fs + '/opt/ios/keyed-integer-decoding-checks')
+	copy_file(out + '/keyed-generic-decoding-checks', fs + '/opt/ios/keyed-generic-decoding-checks')
+	copy_file(out + '/keyed-container-metadata-checks', fs + '/opt/ios/keyed-container-metadata-checks')
+	copy_file(out + '/keyed-container-nominal-checks', fs + '/opt/ios/keyed-container-nominal-checks')
+	copy_file(out + '/keyed-string-encoding-checks', fs + '/opt/ios/keyed-string-encoding-checks')
+	copy_file(out + '/keyed-integer-encoding-checks', fs + '/opt/ios/keyed-integer-encoding-checks')
+	copy_file(out + '/keyed-generic-encoding-checks', fs + '/opt/ios/keyed-generic-encoding-checks')
+	copy_file(out + '/keyed-encoding-metadata-checks', fs + '/opt/ios/keyed-encoding-metadata-checks')
+	copy_file(out + '/keyed-encoding-nominal-checks', fs + '/opt/ios/keyed-encoding-nominal-checks')
+	copy_file(out + '/minimum-merge-run-checks', fs + '/opt/ios/minimum-merge-run-checks')
+	copy_file(out + '/generic-interpolation-checks', fs + '/opt/ios/generic-interpolation-checks')
+	copy_file(out + '/string-compare-checks', fs + '/opt/ios/string-compare-checks')
+	copy_file(out + '/sequence-array-checks', fs + '/opt/ios/sequence-array-checks')
+	copy_file(out + '/dictionary-hashable-checks', fs + '/opt/ios/dictionary-hashable-checks')
+	copy_file(out + '/error-embedded-checks', fs + '/opt/ios/error-embedded-checks')
+	copy_file(out + '/error-code-checks', fs + '/opt/ios/error-code-checks')
+	copy_file(out + '/error-domain-checks', fs + '/opt/ios/error-domain-checks')
+	copy_file(out + '/error-user-info-checks', fs + '/opt/ios/error-user-info-checks')
+	copy_file(out + '/error-self-checks', fs + '/opt/ios/error-self-checks')
+	copy_file(out + '/never-nominal-checks', fs + '/opt/ios/never-nominal-checks')
+	copy_file(out + '/print-console-checks', fs + '/opt/ios/print-console-checks')
+	copy_file(out + '/result-nominal-checks', fs + '/opt/ios/result-nominal-checks')
+	copy_file(out + '/uint64-metadata-checks', fs + '/opt/ios/uint64-metadata-checks')
+	copy_file(out + '/decoder-keyed-dispatch-checks', fs + '/opt/ios/decoder-keyed-dispatch-checks')
+	copy_file(out + '/encoder-keyed-dispatch-checks', fs + '/opt/ios/encoder-keyed-dispatch-checks')
+	copy_file(out + '/coding-key-description-checks', fs + '/opt/ios/coding-key-description-checks')
+	copy_file(out + '/coding-key-debug-description-checks', fs + '/opt/ios/coding-key-debug-description-checks')
+	copy_file(out + '/optional-encoding-checks', fs + '/opt/ios/optional-encoding-checks')
+	copy_file(out + '/optional-decoding-checks', fs + '/opt/ios/optional-decoding-checks')
+	copy_file(out + '/error-allocation-checks', fs + '/opt/ios/error-allocation-checks')
+	copy_file(out + '/generic-value-metadata-checks', fs + '/opt/ios/generic-value-metadata-checks')
+	copy_file(out + '/array-init-copy-checks', fs + '/opt/ios/array-init-copy-checks')
+	copy_file(out + '/array-take-back-checks', fs + '/opt/ios/array-take-back-checks')
+	copy_file(out + '/array-take-front-checks', fs + '/opt/ios/array-take-front-checks')
+	copy_file(out + '/swift-access-checks', fs + '/opt/ios/swift-access-checks')
+	copy_file(out + '/metadata-state-checks', fs + '/opt/ios/metadata-state-checks')
+	copy_file(out + '/partial-class-checks', fs + '/opt/ios/partial-class-checks')
+	copy_file(out + '/enum-case-multi-checks', fs + '/opt/ios/enum-case-multi-checks')
+	copy_file(out + '/enum-tag-single-checks', fs + '/opt/ios/enum-tag-single-checks')
+	copy_file(out + '/generic-metadata-checks', fs + '/opt/ios/generic-metadata-checks')
+	copy_file(out + '/initialized-objc-class-checks', fs + '/opt/ios/initialized-objc-class-checks')
+	copy_file(out + '/objc-class-from-metadata-checks', fs + '/opt/ios/objc-class-from-metadata-checks')
+	copy_file(out + '/opaque-conformance-checks', fs + '/opt/ios/opaque-conformance-checks')
+	copy_file(out + '/singleton-metadata-checks', fs + '/opt/ios/singleton-metadata-checks')
+	copy_file(out + '/tuple-metadata-checks', fs + '/opt/ios/tuple-metadata-checks')
+	copy_file(out + '/context2-checks', fs + '/opt/ios/context2-checks')
+	copy_file(out + '/mangled-state2-checks', fs + '/opt/ios/mangled-state2-checks')
+	copy_file(out + '/static-object-checks', fs + '/opt/ios/static-object-checks')
+	copy_file(out + '/struct-metadata-checks', fs + '/opt/ios/struct-metadata-checks')
+	copy_file(out + '/escaping-closure-checks', fs + '/opt/ios/escaping-closure-checks')
+	copy_file(out + '/isa-mask-checks', fs + '/opt/ios/isa-mask-checks')
+	copy_file(root + '/tests/ios/string-protocol-schema.json', fs + '/opt/ios/string-protocol-schema.json')
+	copy_file(root + '/build/ios/unicode-grapheme/GraphemeBreakTest.txt', fs + '/opt/ios/GraphemeBreakTest.txt')
+	copy_file(root + '/build/ios/unicode-nfc/NormalizationTest.txt', fs + '/opt/ios/NormalizationTest.txt')
 	copy_file(out + '/nslogv-checks', fs + '/opt/ios/nslogv-checks')
 	copy_file(out + '/protocol-lookup-checks', fs + '/opt/ios/protocol-lookup-checks')
 	copy_file(out + '/uncaught-handler-checks', fs + '/opt/ios/uncaught-handler-checks')
@@ -701,7 +1099,7 @@ fn vm(root string, out string, mode string) {
 	} else if mode == 'objc' {
 		for directory in ['sbin', 'proc', 'sys', 'dev', 'tmp', 'opt/ios'] { os.mkdir_all(fs + '/' + directory) or { panic(err) } }
 		copy_file(root + '/build/ios/fortnite/local/Payload/FortniteClient-IOS-Shipping.app/Frameworks/EOSSDK.framework/EOSSDK', fs + '/opt/ios/constant-dictionary-image')
-		for name in ['objc-constant-dictionary', 'layout-constraint', 'json-serialization', 'condition', 'cookie', 'webkit-configuration', 'user-script', 'webview', 'request', 'value', 'response', 'alert', 'set', 'thread', 'auth-session', 'image-view', 'keyboard', 'nsuuid', 'filemanager', 'home-directory', 'temp-directory', 'url-error', 'session-constants', 'foundation-keys', 'audio-services', 'avfoundation-constants', 'corevideo', 'pixel-allocation', 'metal-cache', 'media-format', 'block-buffer', 'sample-buffer', 'cm-time', 'h264-format', 'hevc-format', 'cg-font', 'reachability', 'devicecheck', 'network-path', 'corehaptics-constants', 'media-time', 'video-decode', 'storefront', 'storefront-current', 'storefront-metadata', 'refund', 'storekit-constants', 'zlib-checksum', 'zlib-compress', 'zlib-bound', 'resolver-query', 'pbkdf', 'ndr-record', 'immediate-exit', 'crt-environ', 'executable-path', 'dispatch-timer-type', 'dyld-images', 'dyld-callbacks', 'tlv-atexit', 'inverse-hyperbolic', 'arc4random', 'asl', 'backtrace', 'dispatch-data', 'dispatch-specific', 'dispatch-group', 'dispatch-source', 'dispatch-semaphore', 'division', 'mach-exception', 'flock', 'progname', 'host-page-size', 'host-statistics', 'logb', 'memory-entry', 'mach-message', 'mach-port-set', 'mach-notification', 'madvise', 'malloc-zone', 'mkstemp', 'nextafter', 'nslogv', 'protocol-lookup', 'uncaught-handler', 'protocol-name', 'autopool', 'processinfo', 'date', 'inputstream', 'connection', 'type-encoding', 'oslog', 'secure-memory', 'cf-dictionary', 'objc-storage', 'objc-associated', 'objc-property', 'objc-sync'] {
+		for name in ['objc-constant-dictionary', 'layout-constraint', 'json-serialization', 'condition', 'cookie', 'webkit-configuration', 'user-script', 'webview', 'request', 'value', 'response', 'alert', 'set', 'thread', 'auth-session', 'image-view', 'keyboard', 'nsuuid', 'filemanager', 'home-directory', 'temp-directory', 'url-error', 'session-constants', 'foundation-keys', 'audio-services', 'avfoundation-constants', 'corevideo', 'pixel-allocation', 'metal-cache', 'media-format', 'block-buffer', 'sample-buffer', 'cm-time', 'h264-format', 'hevc-format', 'cg-font', 'reachability', 'devicecheck', 'network-path', 'corehaptics-constants', 'media-time', 'video-decode', 'storefront', 'storefront-current', 'storefront-metadata', 'refund', 'storekit-constants', 'zlib-checksum', 'zlib-compress', 'zlib-bound', 'resolver-query', 'pbkdf', 'ndr-record', 'immediate-exit', 'crt-environ', 'executable-path', 'dispatch-timer-type', 'dyld-images', 'dyld-callbacks', 'tlv-atexit', 'inverse-hyperbolic', 'arc4random', 'asl', 'backtrace', 'dispatch-data', 'dispatch-specific', 'dispatch-group', 'dispatch-source', 'dispatch-semaphore', 'division', 'mach-exception', 'flock', 'progname', 'host-page-size', 'host-statistics', 'logb', 'memory-entry', 'mach-message', 'mach-port-set', 'mach-notification', 'madvise', 'malloc-zone', 'mkstemp', 'nextafter', 'unfair-lock', 'pause', 'proc-rusage', 'raise', 'setrlimit', 'sigaltstack', 'swscanf', 'task-exception-ports', 'task-info', 'task-swap-exception-ports', 'task-threads', 'thread-exception-ports', 'thread-state', 'thread-resume', 'thread-suspend', 'thread-swap-exception-ports', 'uname', 'vm-read-overwrite', 'vm-region-64', 'cf-locale-current', 'cf-preferred-languages', 'cf-locale-value', 'cf-preferences-sync', 'cf-preferences-value', 'cf-preferences-set', 'cf-run-loop-main', 'cf-string-compare', 'cf-uuid-create', 'cf-uuid-string', 'cf-uuid-bytes', 'cf-uuid-text', 'cf-uuid-read', 'ns-calendar-iso8601', 'ns-internal-exception', 'ns-invalid-argument', 'ns-locale-country', 'ns-locale-currency', 'ns-locale-currency-symbol', 'ns-url-creation-date', 'ns-url-file-size', 'ns-url-backup-exclusion', 'ns-url-regular-file', 'ns-url-important-capacity', 'ns-url-available-capacity', 'ns-url-total-capacity', 'ns-exception-type', 'ns-empty-array', 'swiftui-vstack', 'swiftui-tree', 'swiftui-zstack', 'swiftui-opacity', 'swiftui-modified', 'swiftui-modified-view', 'swiftui-localized-key', 'swiftui-alignment', 'swiftui-dismantle', 'swiftui-sizing', 'swiftui-view-list', 'swiftui-layout-options', 'swiftui-identified-tree', 'swiftui-layout-traits', 'swiftui-size-override', 'swiftui-bridged-inputs', 'swiftui-body', 'swiftui-view-factory', 'swiftui-coordinator', 'swiftui-environment-transform', 'swiftui-environment-conformance', 'swiftui-font-title', 'swiftui-text-bold', 'swiftui-text-font', 'swiftui-text-view', 'swiftui-text-nominal', 'swiftui-text-metadata', 'swiftui-text-localized', 'swiftui-view-defaults', 'swiftui-view-opacity', 'swiftui-view-disabled', 'swiftui-state-value', 'swiftui-state-set', 'swiftui-state-projected', 'swiftui-state-nominal', 'swiftui-button', 'swiftui-button-nominal', 'swiftui-button-view', 'swiftui-vstack-init', 'swiftui-vstack-nominal', 'swiftui-vstack-view', 'swiftui-zstack-init', 'swiftui-zstack-nominal', 'swiftui-zstack-view', 'swiftui-tuple-nominal', 'swiftui-tuple-init', 'swiftui-tuple-view', 'swiftui-never-view', 'objc-personality', 'objc-block-imp', 'objc-catch', 'objc-cpp-copy', 'objc-struct-copy', 'objc-rethrow', 'objc-throw', 'objc-terminate', 'protocol-method', 'sqlite', 'bridge-value', 'dictionary-metadata', 'dictionary-encoding', 'dictionary-decoding', 'string-hash', 'string-count', 'string-hashable', 'string-protocol', 'sequence-contents', 'sequence-storage', 'raw-integer-encoding', 'raw-integer-decoding', 'array-encoding', 'array-decoding', 'bool-metadata', 'integer-description', 'optional-metadata', 'object-any', 'hash-previous-hole', 'merge-error-metadata', 'merge-error-conformance', 'string-grow', 'static-string-metadata', 'print-unlocked', 'indexing-iterator-metadata', 'dictionary-storage-copy', 'dictionary-storage-resize', 'dictionary-storage-allocate', 'dictionary-storage-class', 'string-switch', 'keyed-string-decoding', 'keyed-integer-decoding', 'keyed-generic-decoding', 'keyed-container-metadata', 'keyed-container-nominal', 'keyed-string-encoding', 'keyed-integer-encoding', 'keyed-generic-encoding', 'keyed-encoding-metadata', 'keyed-encoding-nominal', 'minimum-merge-run', 'generic-interpolation', 'string-compare', 'sequence-array', 'dictionary-hashable', 'error-embedded', 'error-code', 'error-domain', 'error-user-info', 'error-self', 'never-nominal', 'print-console', 'result-nominal', 'uint64-metadata', 'decoder-keyed-dispatch', 'encoder-keyed-dispatch', 'coding-key-description', 'coding-key-debug-description', 'optional-encoding', 'optional-decoding', 'error-allocation', 'generic-value-metadata', 'array-init-copy', 'array-take-back', 'array-take-front', 'swift-access', 'metadata-state', 'partial-class', 'enum-case-multi', 'enum-tag-single', 'generic-metadata', 'initialized-objc-class', 'objc-class-from-metadata', 'opaque-conformance', 'singleton-metadata', 'tuple-metadata', 'context2', 'mangled-state2', 'static-object', 'struct-metadata', 'escaping-closure', 'isa-mask', 'nslogv', 'protocol-lookup', 'uncaught-handler', 'protocol-name', 'autopool', 'processinfo', 'date', 'inputstream', 'connection', 'type-encoding', 'oslog', 'secure-memory', 'cf-dictionary', 'objc-storage', 'objc-associated', 'objc-property', 'objc-sync'] {
 			copy_file(out + '/' + name + '-checks', fs + '/opt/ios/' + name + '-checks')
 		}
 		tree(root + '/build/ios/fortnite/staging/usr/lib/vinix/ios-gles', fs + '/usr/lib/vinix/ios-gles')
@@ -793,7 +1191,7 @@ fn vm(root string, out string, mode string) {
 
 fn main() {
 	if os.args.len < 2 {
-		panic('usage: native-checks build|build-init|build-select|build-semaphore|build-signal|build-error|build-sysctl|build-terminal|build-thread-policy|build-file-time|build-uuid|build-audio-session|build-cf-dictionary|build-objc-storage|build-objc-associated|build-objc-property|build-objc-sync|build-objc-constant-dictionary|build-layout-constraint|build-json-serialization|build-condition|build-cookie|build-webkit-configuration|build-user-script|build-webview|build-request|build-value|build-response|build-alert|build-set|build-thread|build-auth-session|build-image-view|build-keyboard|build-nsuuid|build-filemanager|build-temp-directory|build-url-error|build-session-constants|build-foundation-keys|build-audio-services|build-avfoundation-constants|build-corevideo|build-pixel-allocation|build-metal-cache|build-media-format|build-block-buffer|build-sample-buffer|build-cm-time|build-h264-format|build-hevc-format|build-cg-font|build-reachability|build-devicecheck|build-network-path|build-corehaptics-constants|build-media-time|build-video-decode|build-storefront|build-storefront-current|build-storefront-metadata|build-refund|build-storekit-constants|build-zlib-checksum|build-zlib-compress|build-zlib-bound|build-resolver-query|build-pbkdf|build-ndr-record|build-immediate-exit|build-crt-environ|build-executable-path|build-dispatch-timer-type|build-dyld-images|build-dyld-callbacks|build-tlv-atexit|build-inverse-hyperbolic|build-arc4random|build-asl|build-backtrace|build-dispatch-data|build-dispatch-specific|build-dispatch-group|build-dispatch-source|build-dispatch-semaphore|build-division|build-mach-exception|build-flock|build-progname|build-host-page-size|build-host-statistics|build-logb|build-memory-entry|build-mach-message|build-mach-port-set|build-mach-notification|build-madvise|build-malloc-zone|build-mkstemp|build-nextafter|build-nslogv|build-protocol-lookup|build-uncaught-handler|build-protocol-name|build-autopool|build-processinfo|build-date|build-inputstream|build-connection|build-type-encoding|build-dispatch-queue-class|build-oslog|build-secure-memory|build-swift-unknown-value|build-swift-string|build-swift-empty-string|build-swift-describing|build-swift-cstring|build-swift-foreign-count|build-swift-foreign-index|build-swift-foreign-offset|build-swift-foreign-subscript|build-swift-utf16-offset|build-swift-sequence|build-swift-array-sequence|build-swift-collection|build-swift-set|build-swift-metadata|build-swift-protocol|build-swift-hash|build-swift-hasher|build-swift-raw-representable|build-swift-array|build-swift-integer|build-swift-integer-hash|build-swift-fatal|build-swift-interpolation|build-swift-array-storage|build-swift-vararg|build-swift-void|build-swift-version|build-swift-initializer|build-swift-empty-array|build-swift-any|build-swift-byte-metadata|build-swift-raw-equality|build-swift-array-class|build-swift-shared-utf8|build-swift-string-guts|build-swift-foreign-copy|build-swift-set-algebra|build-swift-raw-copy|build-swift-pointer-alloc|build-swift-pointer-deinit|build-swift-raw-alloc|build-swift-dispatch-async|build-swift-dispatch-main|build-swift-dispatch-scheduler|build-swift-dispatch-qos|build-swift-dispatch-algebra|build-swift-dispatch-flags|build-swift-stack|build-swift-heap|build-swift-calendar-case|build-swift-locale|build-swift-date|build-swift-data-write|build-swift-data-unbridge|build-swift-data-base64|build-swift-data-bridge|build-swift-data|build-swift-url-metadata|build-swift-url-path|build-swift-url-bridge|build-swift-error-bridge|build-swift-error|build-swift-error-value|build-swift-dynamic-cast|build-swift-objc-cast|build-swift-foreign-metadata|build-swift-object-type|build-swift-mangled-state|build-swift-mangled|build-swift-witness|build-swift-once|build-swift-set-bridge|build-swift-logger|build-swift-main-actor-witness|build-swift-main-actor|build-swift-nsobject-hashable|build-swift-objc-bool-metadata|build-swift-objc-bool|build-swift-actor-executor|build-swift-task-priority|build-swift-task-alloc|build-swift-task-create|build-swift-task-switch|build-swift-json-encoder-initializer|build-swift-json-encoder-dispatch|build-swift-json-encoder-date-dispatch|build-swift-json-date-strategy|build-swift-json-encoder-date-case|build-swift-json-decoder-initializer|build-swift-json-decoder-dispatch|build-swift-cocoa-error-protocol|build-swift-cocoa-error-code|build-swift-nslog|build-swift-string-unbridge|build-swift-localized-error|build-swift-error-description|build-module-lookup|verify-monitor|regression|swift|objc|probe|audit|static-audit|hash FILE')
+		panic('usage: native-checks build|build-init|build-select|build-semaphore|build-signal|build-error|build-sysctl|build-terminal|build-thread-policy|build-file-time|build-uuid|build-audio-session|build-cf-dictionary|build-objc-storage|build-objc-associated|build-objc-property|build-objc-sync|build-objc-constant-dictionary|build-layout-constraint|build-json-serialization|build-condition|build-cookie|build-webkit-configuration|build-user-script|build-webview|build-request|build-value|build-response|build-alert|build-set|build-thread|build-auth-session|build-image-view|build-keyboard|build-nsuuid|build-filemanager|build-temp-directory|build-url-error|build-session-constants|build-foundation-keys|build-audio-services|build-avfoundation-constants|build-corevideo|build-pixel-allocation|build-metal-cache|build-media-format|build-block-buffer|build-sample-buffer|build-cm-time|build-h264-format|build-hevc-format|build-cg-font|build-reachability|build-devicecheck|build-network-path|build-corehaptics-constants|build-media-time|build-video-decode|build-storefront|build-storefront-current|build-storefront-metadata|build-refund|build-storekit-constants|build-zlib-checksum|build-zlib-compress|build-zlib-bound|build-resolver-query|build-pbkdf|build-ndr-record|build-immediate-exit|build-crt-environ|build-executable-path|build-dispatch-timer-type|build-dyld-images|build-dyld-callbacks|build-tlv-atexit|build-inverse-hyperbolic|build-arc4random|build-asl|build-backtrace|build-dispatch-data|build-dispatch-specific|build-dispatch-group|build-dispatch-source|build-dispatch-semaphore|build-division|build-mach-exception|build-flock|build-progname|build-host-page-size|build-host-statistics|build-logb|build-memory-entry|build-mach-message|build-mach-port-set|build-mach-notification|build-madvise|build-malloc-zone|build-mkstemp|build-nextafter|build-unfair-lock|build-pause|build-proc-rusage|build-raise|build-setrlimit|build-sigaltstack|build-swscanf|build-task-exception-ports|build-task-info|build-task-swap-exception-ports|build-task-threads|build-thread-exception-ports|build-thread-state|build-thread-resume|build-thread-suspend|build-thread-swap-exception-ports|build-uname|build-vm-read-overwrite|build-vm-region-64|build-cf-locale-current|build-cf-preferred-languages|build-cf-locale-value|build-cf-preferences-sync|build-cf-preferences-value|build-cf-preferences-set|build-cf-run-loop-main|build-cf-string-compare|build-cf-uuid-create|build-cf-uuid-string|build-cf-uuid-bytes|build-cf-uuid-text|build-cf-uuid-read|build-ns-calendar-iso8601|build-ns-internal-exception|build-ns-invalid-argument|build-ns-locale-country|build-ns-locale-currency|build-ns-locale-currency-symbol|build-ns-url-creation-date|build-ns-url-file-size|build-ns-url-backup-exclusion|build-ns-url-regular-file|build-ns-url-important-capacity|build-ns-url-available-capacity|build-ns-url-total-capacity|build-ns-exception-type|build-ns-empty-array|build-swiftui-vstack|build-swiftui-tree|build-swiftui-zstack|build-swiftui-opacity|build-swiftui-modified|build-swiftui-modified-view|build-swiftui-localized-key|build-swiftui-alignment|build-swiftui-dismantle|build-swiftui-sizing|build-swiftui-view-list|build-swiftui-layout-options|build-swiftui-identified-tree|build-swiftui-layout-traits|build-swiftui-size-override|build-swiftui-bridged-inputs|build-swiftui-body|build-swiftui-view-factory|build-swiftui-coordinator|build-swiftui-environment-transform|build-swiftui-environment-conformance|build-swiftui-font-title|build-swiftui-text-bold|build-swiftui-text-font|build-swiftui-text-view|build-swiftui-text-nominal|build-swiftui-text-metadata|build-swiftui-text-localized|build-swiftui-view-defaults|build-swiftui-view-opacity|build-swiftui-view-disabled|build-swiftui-state-value|build-swiftui-state-set|build-swiftui-state-projected|build-swiftui-state-nominal|build-swiftui-button|build-swiftui-button-nominal|build-swiftui-button-view|build-swiftui-vstack-init|build-swiftui-vstack-nominal|build-swiftui-vstack-view|build-swiftui-zstack-init|build-swiftui-zstack-nominal|build-swiftui-zstack-view|build-swiftui-tuple-nominal|build-swiftui-tuple-init|build-swiftui-tuple-view|build-swiftui-never-view|build-objc-personality|build-objc-block-imp|build-objc-catch|build-objc-cpp-copy|build-objc-struct-copy|build-objc-rethrow|build-objc-throw|build-objc-terminate|build-protocol-method|build-sqlite|build-bridge-value|build-dictionary-metadata|build-dictionary-encoding|build-dictionary-decoding|build-string-hash|build-string-count|build-string-hashable|build-string-protocol|build-sequence-contents|build-sequence-storage|build-raw-integer-encoding|build-raw-integer-decoding|build-array-encoding|build-array-decoding|build-bool-metadata|build-integer-description|build-optional-metadata|build-object-any|build-hash-previous-hole|build-merge-error-metadata|build-merge-error-conformance|build-string-grow|build-static-string-metadata|build-print-unlocked|build-indexing-iterator-metadata|build-dictionary-storage-copy|build-dictionary-storage-resize|build-dictionary-storage-allocate|build-dictionary-storage-class|build-string-switch|build-keyed-string-decoding|build-keyed-integer-decoding|build-keyed-generic-decoding|build-keyed-container-metadata|build-keyed-container-nominal|build-keyed-string-encoding|build-keyed-integer-encoding|build-keyed-generic-encoding|build-keyed-encoding-metadata|build-keyed-encoding-nominal|build-minimum-merge-run|build-generic-interpolation|build-string-compare|build-sequence-array|build-dictionary-hashable|build-error-embedded|build-error-code|build-error-domain|build-error-user-info|build-error-self|build-never-nominal|build-print-console|build-result-nominal|build-uint64-metadata|build-decoder-keyed-dispatch|build-encoder-keyed-dispatch|build-coding-key-description|build-coding-key-debug-description|build-optional-encoding|build-optional-decoding|build-error-allocation|build-generic-value-metadata|build-array-init-copy|build-array-take-back|build-array-take-front|build-swift-access|build-metadata-state|build-partial-class|build-enum-case-multi|build-enum-tag-single|build-generic-metadata|build-initialized-objc-class|build-objc-class-from-metadata|build-opaque-conformance|build-singleton-metadata|build-tuple-metadata|build-context2|build-mangled-state2|build-static-object|build-struct-metadata|build-escaping-closure|build-isa-mask|build-class-method|build-nslogv|build-protocol-lookup|build-uncaught-handler|build-protocol-name|build-autopool|build-processinfo|build-date|build-inputstream|build-connection|build-type-encoding|build-dispatch-queue-class|build-oslog|build-secure-memory|build-swift-unknown-value|build-swift-string|build-swift-empty-string|build-swift-describing|build-swift-cstring|build-swift-foreign-count|build-swift-foreign-index|build-swift-foreign-offset|build-swift-foreign-subscript|build-swift-utf16-offset|build-swift-sequence|build-swift-array-sequence|build-swift-collection|build-swift-set|build-swift-metadata|build-swift-protocol|build-swift-hash|build-swift-hasher|build-swift-raw-representable|build-swift-array|build-swift-integer|build-swift-integer-hash|build-swift-fatal|build-swift-interpolation|build-swift-array-storage|build-swift-vararg|build-swift-void|build-swift-version|build-swift-initializer|build-swift-empty-array|build-swift-any|build-swift-byte-metadata|build-swift-raw-equality|build-swift-array-class|build-swift-shared-utf8|build-swift-string-guts|build-swift-foreign-copy|build-swift-set-algebra|build-swift-raw-copy|build-swift-pointer-alloc|build-swift-pointer-deinit|build-swift-raw-alloc|build-swift-dispatch-async|build-swift-dispatch-main|build-swift-dispatch-scheduler|build-swift-dispatch-qos|build-swift-dispatch-algebra|build-swift-dispatch-flags|build-swift-stack|build-swift-heap|build-swift-calendar-case|build-swift-locale|build-swift-date|build-swift-data-write|build-swift-data-unbridge|build-swift-data-base64|build-swift-data-bridge|build-swift-data|build-swift-url-metadata|build-swift-url-path|build-swift-url-bridge|build-swift-error-bridge|build-swift-error|build-swift-error-value|build-swift-dynamic-cast|build-swift-objc-cast|build-swift-foreign-metadata|build-swift-object-type|build-swift-mangled-state|build-swift-mangled|build-swift-witness|build-swift-once|build-swift-set-bridge|build-swift-logger|build-swift-main-actor-witness|build-swift-main-actor|build-swift-nsobject-hashable|build-swift-objc-bool-metadata|build-swift-objc-bool|build-swift-actor-executor|build-swift-task-priority|build-swift-task-alloc|build-swift-task-create|build-swift-task-switch|build-swift-json-encoder-initializer|build-swift-json-encoder-dispatch|build-swift-json-encoder-date-dispatch|build-swift-json-date-strategy|build-swift-json-encoder-date-case|build-swift-json-decoder-initializer|build-swift-json-decoder-dispatch|build-swift-cocoa-error-protocol|build-swift-cocoa-error-code|build-swift-nslog|build-swift-string-unbridge|build-swift-localized-error|build-swift-error-description|build-module-lookup|verify-monitor|regression|swift|objc|probe|audit|static-audit|hash FILE')
 	}
 	root := os.real_path(os.getwd())
 	requested := os.getenv('VINIX_IOS_CHECK_NAME')

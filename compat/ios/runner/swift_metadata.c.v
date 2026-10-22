@@ -155,7 +155,8 @@ fn swift_string_metadata() u64 {
 		swift_string_protocols_emit(base, data)
 		swift_raw_protocol_emit(data)
 		swift_string_guts_emit(base,data,witness,module_descriptor)
-		C.__builtin___clear_cache(arena, unsafe { voidptr(base + 216) })
+		swift_string_hashable_emit(base, data)
+		C.__builtin___clear_cache(arena, unsafe { voidptr(base + 320) })
 		if C.mprotect(arena, usize(page), C.PROT_READ | C.PROT_EXEC) != 0
 			|| C.mprotect(unsafe { voidptr(data) }, usize(page), C.PROT_READ) != 0 {
 			C.munmap(arena, usize(page * 2))
@@ -169,17 +170,44 @@ fn swift_string_metadata() u64 {
 fn swift_string_guts_metadata() u64 { return swift_string_metadata() - 16 + 648 }
 
 fn swift_metadata_stop() {
+	swift_tuple_metadata_stop()
+	swift_generic_metadata_stop()
+	swift_generic_value_metadata_stop()
+	swift_keyed_container_metadata_stop()
+	swift_string_protocol_stop()
 	swift_objc_bool_metadata_stop()
 	swift_dispatch_flags_stop()
 	swift_foreign_metadata_stop()
 	// Like ARC thunks, metadata is retired only after all workers/callbacks and
 	// owned buffers have drained.
 	swift_array_stop()
+	swift_optional_stop()
+	swift_object_any_stop()
+	swift_dictionary_metadata_stop()
+	swiftui_vstack_stop()
+	swiftui_vstack_nominal_stop()
+	swiftui_tree_stop()
+	swiftui_zstack_stop()
+	swiftui_zstack_nominal_stop()
+	swiftui_tuple_nominal_stop()
+	swiftui_tuple_init_stop()
+	swiftui_opacity_stop()
+	swiftui_state_value_stop()
+	swiftui_state_set_stop()
+	swiftui_state_nominal_stop()
+	swiftui_button_nominal_stop()
+	swiftui_modified_stop()
+	swiftui_environment_transform_stop()
+	swiftui_text_view_stop()
 	swift_nsobject_hashable_stop()
+	swift_bool_metadata_stop()
+	swift_static_string_metadata_stop()
+	swift_merge_error_metadata_stop()
 	swift_integer_stop()
 	swift_void_stop()
 	swift_unknown_value_stop()
 	swift_interpolation_stop()
+	ios_runtime.swift_print_unlocked_retired = true
 	swift_error_metadata_stop()
 	if ios_runtime.swift_metadata_arena != 0 {
 		if C.munmap(unsafe { voidptr(ios_runtime.swift_metadata_arena) }, usize(C.getpagesize()) * 2) != 0 {

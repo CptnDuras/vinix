@@ -5225,3 +5225,48 @@ studio.bad_file
 -----
 studio.bad_colour
 Цвета: #rrggbb или none.
+-----
+start.xp.documents
+Мои документы
+-----
+start.xp.recent
+Недавние документы
+-----
+start.xp.pictures
+Мои рисунки
+-----
+start.xp.music
+Моя музыка
+-----
+start.xp.computer
+Мой компьютер
+-----
+start.xp.network
+Сетевое окружение
+-----
+start.xp.control_panel
+Панель управления
+-----
+start.xp.defaults
+Выбор программ по умолчанию
+-----
+start.xp.connect
+Подключение
+-----
+start.xp.printers
+Принтеры и факсы
+-----
+start.xp.help
+Справка и поддержка
+-----
+start.xp.run
+Выполнить...
+-----
+start.xp.turn_off
+Выключение
+-----
+start.xp.log_off
+Выход из системы
+-----
+start.xp.internet
+Интернет

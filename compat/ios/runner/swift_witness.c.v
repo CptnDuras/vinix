@@ -5,9 +5,45 @@ module main
 // or our existing metadata arenas. This is the ordinary C runtime entry, not a
 // Swift context call. Metadata and instantiation arguments are unused on this
 // path. Resilient/generic tables must be instantiated, never returned as-is.
-fn swift_witness_table_checked(conformance u64, metadata u64, _arguments u64) !u64 {
+fn swift_witness_table_checked(conformance u64, metadata u64, arguments u64) !u64 {
+	if ios_runtime != unsafe { nil } && conformance != 0
+		&& conformance == ios_runtime.swift_optional_decoding_descriptor {
+		return swift_optional_decoding_table_checked(metadata, arguments)
+	}
+	if ios_runtime != unsafe { nil } && conformance != 0
+		&& conformance == ios_runtime.swift_optional_encoding_descriptor {
+		return swift_optional_encoding_table_checked(metadata, arguments)
+	}
+	if ios_runtime != unsafe { nil } && conformance != 0
+		&& conformance == ios_runtime.swift_indexing_iterator_conformance_descriptor {
+		return swift_indexing_iterator_table_checked(metadata)
+	}
+	if ios_runtime != unsafe { nil } && conformance != 0
+		&& conformance == ios_runtime.swift_merge_error_conformance_descriptor {
+		return swift_merge_error_table_checked(metadata)
+	}
+	if ios_runtime != unsafe { nil } && conformance != 0
+		&& conformance == ios_runtime.swift_array_decoding_descriptor {
+		return swift_array_decoding_table_checked(metadata, arguments)
+	}
+	if ios_runtime != unsafe { nil } && conformance != 0
+		&& conformance == ios_runtime.swift_array_encoding_descriptor {
+		return swift_array_encoding_table_checked(metadata, arguments)
+	}
+	if ios_runtime != unsafe { nil } && conformance != 0
+		&& conformance == ios_runtime.swift_string_protocol_descriptor {
+		return swift_string_protocol_table_checked(metadata, arguments)
+	}
 	if conformance == 0 || conformance & 3 != 0 || conformance > ~u64(0) - 15 {
 		return error('iOS: invalid Swift conformance descriptor')
+	}
+	if ios_runtime != unsafe { nil }
+		&& conformance == ios_runtime.swift_dictionary_decoding_descriptor {
+		return swift_dictionary_decoding_table_checked(metadata, arguments)
+	}
+	if ios_runtime != unsafe { nil }
+		&& conformance == ios_runtime.swift_dictionary_encoding_descriptor {
+		return swift_dictionary_encoding_table_checked(metadata, arguments)
 	}
 	if ios_runtime != unsafe { nil } && ios_runtime.swift_cocoa_error_retired_arena != 0 {
 		data := ios_runtime.swift_cocoa_error_retired_arena + u64(C.getpagesize())
@@ -82,6 +118,13 @@ fn swift_witness_table(conformance u64, metadata u64, arguments u64) u64 {
 }
 
 fn swift_witness_symbol(symbol string) ?u64 {
+	if address := swift_optional_decoding_symbol(symbol) { return address }
+	if address := swift_optional_encoding_symbol(symbol) { return address }
+	if address := swift_array_decoding_symbol(symbol) { return address }
+	if address := swift_array_encoding_symbol(symbol) { return address }
+	if symbol == '_$sSSSysMc' { return swift_string_protocol_descriptor_checked() or { panic(err) } }
+	if address := swift_dictionary_decoding_symbol(symbol) { return address }
+	if address := swift_dictionary_encoding_symbol(symbol) { return address }
 	if address := swift_date_encoding_protocol_symbol(symbol) { return address }
 	if address := swift_date_decoding_protocol_symbol(symbol) { return address }
 	if symbol == '_swift_getWitnessTable' { return u64(unsafe { voidptr(swift_witness_table) }) }
